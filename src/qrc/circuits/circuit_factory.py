@@ -1,17 +1,10 @@
-"""
-# Implement a factory that returns a single parametrized big quantum circuit that contains R blocks of n qubits
-# each. Each block must implement in a parametrized way the data injection followed by Ising unitary W_r, then
-# contraction.
-"""
 from __future__ import annotations
-
-from typing import List
 
 import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector, Parameter
 
-from src.configs import RingQRConfig
+from src.qrc.circuits.configs import RingQRConfig
 
 
 class CircuitFactory:
@@ -194,6 +187,8 @@ class CircuitFactory:
                                           angle_positioning: callable,
                                           x_window: np.ndarray, ) -> QuantumCircuit:
         """
+        Binds circuit to x_window and returns a variational QC parametrized on parameters of the unitary and lambda.
+
         :param cfg:
         :param angle_positioning:
         :param x_window: this is a window of shape (w, d), where by convention x_window[0] <=> x_{-w + 1}.
@@ -232,37 +227,26 @@ class CircuitFactory:
         return qc
 
     @staticmethod
-    def create_pub_reservoir_IsingRingSWAP(
-            cfg: RingQRConfig,
-            angle_positioning: callable,
-            x_window: np.ndarray,
-            lam_0: float,
-            num_reservoirs: int,
-            seed: int = 12354,
-            eps: float = 1e-8,
-    ):
+    def set_reservoirs_parameterizationSWAP(cfg: RingQRConfig, angle_positioning: callable, num_reservoirs: int,
+                                            lam_0: float, seed: float = 12345, eps: float = 1e-8) -> np.ndarray:
         """
-        Returns a single "pub" (qc, param_values) where param_values contains R different
-        parameterizations (J, h_x, h_z, lam) for the SAME circuit qc corresponding to the
-        provided input window x_window.
+        Set different reservoir parameters where those of W_r are uniformly sampled from -pi and pi and the last R-1
+        lambdas are uniformly sampled from (0,1).
 
-        - First reservoir uses lam_0
-        - Remaining R-1 reservoirs use iid Uniform(eps, 1-eps)
-        - All random draws are deterministic via `seed`.
+        :param cfg:
+        :param angle_positioning:
+        :param num_reservoirs:
+        :param lam_0:
+        :param seed:
+        :param eps:
+        :return:
         """
-        # --- sanitize / determinism
         R = num_reservoirs
         assert R >= 1, f"num_reservoirs must be >= 1, got {num_reservoirs}"
         assert eps < lam_0 < 1 - eps, f"lam_0 must be in (eps, 1-eps); got lam_0={lam_0}, eps={eps}"
 
+        qc = CircuitFactory.createIsingRingCircuitSWAP(cfg=cfg, angle_positioning=angle_positioning)
         rng = np.random.default_rng(seed)
-
-        # Build the FULL window circuit (z already bound inside instantiateFullIsingRingEvolution)
-        qc = CircuitFactory.instantiateFullIsingRingEvolution(
-            cfg=cfg,
-            angle_positioning=angle_positioning,
-            x_window=x_window,
-        )
 
         # Parameters that remain free in qc
         rzz_params = qc.metadata["J"]
@@ -281,7 +265,7 @@ class CircuitFactory:
             lam_values[1:] = rng.uniform(eps, 1 - eps, size=R - 1)
 
         # IMPORTANT: parameter values must follow the circuit's parameter order
-        param_order = list(qc.parameters)  # Qiskit’s canonical order used by primitives
+        param_order = list(rzz_params) + list(rx_params) + list(rz_params) + [lam_param]
         P = len(param_order)
 
         param_values = np.empty((R, P), dtype=float)
@@ -296,9 +280,66 @@ class CircuitFactory:
             # row in qc.parameters order
             param_values[r, :] = [bind[p] for p in param_order]
 
-        # Optional: store order + sampled lambdas for debugging/repro
-        qc.metadata["param_order"] = param_order
-        qc.metadata["lam_values"] = lam_values.tolist()
+        return param_values
 
+    @staticmethod
+    def create_pub_reservoirs_IsingRingSWAP(
+            cfg: RingQRConfig,
+            angle_positioning: callable,
+            x_window: np.ndarray,
+            num_reservoirs: int,
+            param_values: np.ndarray,
+    ):
+        """
+        Returns a single "pub" (qc, param_values) where param_values contains R different
+        parameterizations (J, h_x, h_z, lam) for the SAME circuit qc corresponding to the
+        provided input window x_window.
+
+        - First reservoir uses lam_0
+        - Remaining R-1 reservoirs use iid Uniform(eps, 1-eps)
+        - All random draws are deterministic via `seed`.
+        """
+        # --- sanitize / determinism
+        R = num_reservoirs
+        assert R >= 1, f"num_reservoirs must be >= 1, got {num_reservoirs}"
+
+        # Build the FULL window circuit (z already bound inside instantiateFullIsingRingEvolution)
+        qc = CircuitFactory.instantiateFullIsingRingEvolution(
+            cfg=cfg,
+            angle_positioning=angle_positioning,
+            x_window=x_window,
+        )
+
+        # # Optional: store order + sampled lambdas for debugging/repro
         pub = (qc, param_values)
         return pub
+
+    @staticmethod
+    def create_pubs_dataset_reservoirs_IsingRingSWAP(
+            cfg: RingQRConfig,
+            angle_positioning: callable,
+            X: np.ndarray,
+            lam_0: float,
+            num_reservoirs: int,
+            seed: int = 12354,
+            eps: float = 1e-8,
+    ):
+        assert X.ndim == 3, f"X should be an array of shape (N, w, d), got X.shape = {X.shape}"
+        param_values = CircuitFactory.set_reservoirs_parameterizationSWAP(cfg=cfg,
+                                                                          angle_positioning=angle_positioning,
+                                                                          num_reservoirs=num_reservoirs,
+                                                                          lam_0=lam_0,
+                                                                          seed=seed,
+                                                                          eps=eps)
+
+        pubs = []
+        for x_window in X:
+            # Provide the same seed so that the same reservoirs are shared across all input windows.
+            pub = CircuitFactory.create_pub_reservoirs_IsingRingSWAP(cfg=cfg,
+                                                                     angle_positioning=angle_positioning,
+                                                                     x_window=x_window,
+                                                                     param_values=param_values,
+                                                                     num_reservoirs=num_reservoirs, )
+            pubs.append(pub)
+
+        return pubs

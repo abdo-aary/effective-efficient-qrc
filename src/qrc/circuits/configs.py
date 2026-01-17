@@ -1,3 +1,4 @@
+from abc import ABC
 from dataclasses import dataclass
 from typing import Sequence, Tuple
 
@@ -34,7 +35,15 @@ class QRTopologyConfig:
     edges: Sequence[Tuple[int, int]]
 
 
-class RingQRConfig:
+class BaseQRConfig(ABC):
+    topology: QRTopologyConfig
+    input_dim: int
+    num_qubits: int
+    projection: np.ndarray
+    seed: int
+
+
+class RingQRConfig(BaseQRConfig):
     def __init__(self, input_dim, num_qubits: int, seed: int = 12345):
         """
         :param input_dim:

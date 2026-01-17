@@ -4,9 +4,9 @@ from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from qiskit.quantum_info import DensityMatrix, partial_trace
 
-from src.configs import RingQRConfig
-from src.circuit_factory import CircuitFactory
-from src.utils import angle_positioning_linear
+from src.qrc.circuits.configs import RingQRConfig
+from src.qrc.circuits.circuit_factory import CircuitFactory
+from src.qrc.circuits.utils import angle_positioning_linear
 
 
 # -------------------------
