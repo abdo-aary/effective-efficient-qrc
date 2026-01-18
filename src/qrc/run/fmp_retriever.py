@@ -8,7 +8,7 @@ from typing import Sequence
 import numpy as np
 
 from src.qrc.circuits.configs import BaseQRConfig
-from .circuit_run import Results, ExactResults
+from .circuit_run import Results
 
 from qiskit.quantum_info import Operator, SparsePauliOp
 
@@ -64,7 +64,7 @@ class BaseFeatureMapsRetriever(ABC):
 
 class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
     """
-    Compute exact feature maps from ExactResults (density matrices).
+    Compute exact feature maps from Results (density matrices).
 
     Input:
       - results.states: shape (N, R, 2**n, 2**n)
@@ -142,7 +142,7 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
         if self._dense_cache is None:
             self._dense_cache = np.stack([op.to_matrix() for op in self.observables], axis=0)
 
-    def get_feature_maps(self, results: ExactResults) -> np.ndarray:
+    def get_feature_maps(self, results: Results) -> np.ndarray:
         states = np.asarray(results.states)
         if states.ndim != 4:
             raise ValueError(f"Expected states shape (N,R,dim,dim), got {states.shape}")
