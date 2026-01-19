@@ -22,7 +22,7 @@ class BaseFeatureMapsRetriever(ABC):
     observables: Sequence[Operator]
 
     @abstractmethod
-    def get_feature_maps(self, results: Results):
+    def get_feature_maps(self, results: Results, **kwargs):
         ...
 
     # ------------------------------------------------------------------
@@ -142,7 +142,7 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
         if self._dense_cache is None:
             self._dense_cache = np.stack([op.to_matrix() for op in self.observables], axis=0)
 
-    def get_feature_maps(self, results: Results) -> np.ndarray:
+    def get_feature_maps(self, results: Results, **kwargs) -> np.ndarray:
         states = np.asarray(results.states)
         if states.ndim != 4:
             raise ValueError(f"Expected states shape (N,R,dim,dim), got {states.shape}")

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import src.kernel.finetuning as ft
+import src.models.kernel as ft
 from scipy.optimize import minimize
 
 

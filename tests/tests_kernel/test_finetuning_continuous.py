@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from src.kernel.finetuning import (
+from src.models.kernel import (
     tune_matern_continuous_train_val,
     krr_val_mse_for_params,
 )

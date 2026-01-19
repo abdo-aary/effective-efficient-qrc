@@ -88,15 +88,15 @@ def tune_matern_continuous_train_val(
 
 
 def tune_matern_grid_train_val(
-    X: np.ndarray,
-    y: np.ndarray,
-    *,
-    val_ratio: float = 0.2,
-    seed: int = 0,
-    reg: float = 1e-6,
-    xi_bounds: Tuple[float, float] = (1e-3, 1e3),
-    nu_grid: Sequence[float] = (0.5, 1.5, 2.5, 5.0),
-    xi_maxiter: int = 80,
+        X: np.ndarray,
+        y: np.ndarray,
+        *,
+        val_ratio: float = 0.2,
+        seed: int = 0,
+        reg: float = 1e-6,
+        xi_bounds: Tuple[float, float] = (1e-3, 1e3),
+        nu_grid: Sequence[float] = (0.5, 1.5, 2.5, 5.0),
+        xi_maxiter: int = 80,
 ) -> Tuple[Dict, float]:
     """
     Grid search over nu, and 1D bounded optimization over log(xi), to minimize

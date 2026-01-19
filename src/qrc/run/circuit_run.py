@@ -23,6 +23,7 @@ def _to_array(dm_obj):
 @dataclass
 class Results(ABC):
     cfg: BaseQRConfig
+    states: np.ndarray
 
     @abstractmethod
     def save(self, file: str | Path) -> None:
