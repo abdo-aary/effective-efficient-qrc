@@ -1,15 +1,63 @@
+"""
+Hydra entrypoint to generate and persist a synthetic dataset.
+
+This script composes a dataset configuration from `experiment/conf/data/`
+and calls :func:`src.data.factory.generate_and_save_dataset`.
+
+Usage
+-----
+From the project root:
+
+    python -m src.experiment.scripts.generate_data sampling=tiny process=varma functionals=one_step noise=none
+
+You can also run Hydra multiruns (sweeps):
+
+    python -m src.experiment.scripts.generate_data -m sampling.N=64,256 sampling.w=10,25
+
+Notes
+-----
+- We set `hydra.job.chdir=false` in the config to keep the working directory stable.
+- This module defines :func:`run` as a pure entrypoint for unit tests.
+"""
+
 import hydra
 from omegaconf import DictConfig
+
 from src.data.factory import generate_and_save_dataset
 
 
 def run(cfg: DictConfig):
-    """Pure entrypoint for unit tests."""
+    """
+    Generate and save a dataset from a composed Hydra config.
+
+    Parameters
+    ----------
+    cfg : omegaconf.DictConfig
+        Fully composed dataset config (typically from Hydra composition).
+
+    Returns
+    -------
+    (src.data.generate.base.WindowsDataset, src.data.factory.DatasetArtifact)
+        The in-memory dataset and the saved artifact descriptor.
+    """
     return generate_and_save_dataset(cfg)
 
 
 @hydra.main(version_base=None, config_path="../conf/data", config_name="config")
 def main(cfg: DictConfig) -> None:
+    """
+    CLI entrypoint (Hydra main).
+
+    Parameters
+    ----------
+    cfg : omegaconf.DictConfig
+        Hydra-composed config provided by the decorator.
+
+    Returns
+    -------
+    None
+        Writes dataset files to disk and prints a short confirmation message.
+    """
     ds, art = run(cfg)
     print(f"Saved X{ds.X.shape}, y{ds.y.shape} -> {art.data_path}")
 
