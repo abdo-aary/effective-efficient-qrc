@@ -1,49 +1,91 @@
+"""src.qrc.run.fmp_retriever
+
+Feature-map retrievers for QRC outputs.
+
+A *feature-map retriever* converts circuit execution results into a classical
+feature matrix suitable for kernel methods / regression.
+
+Two common cases are supported:
+
+- **Exact** feature maps from density matrices:
+  ``phi(i,r,k) = Tr(rho_{i,r} O_k)``
+- **Approximate / noisy** feature maps (e.g., classical shadows) can be built on top
+  of exact expectations; see :mod:`src.qrc.run.cs_fmp_retriever`.
+
+This module defines a persistence API (`save` / `load`) to make retrievers
+easy to cache and reuse across experiments.
+"""
+
 from __future__ import annotations
 
 import pickle
 from abc import ABC, abstractmethod
-
 from typing import Sequence
 
 import numpy as np
+from qiskit.quantum_info import Operator, SparsePauliOp
 
 from src.qrc.circuits.configs import BaseQRConfig
 from .circuit_run import Results
 
-from qiskit.quantum_info import Operator, SparsePauliOp
-
 
 class BaseFeatureMapsRetriever(ABC):
+    """Abstract base class for mapping :class:`~src.qrc.run.circuit_run.Results` to features.
+
+    Attributes
+    ----------
+    cfg : BaseQRConfig
+        Circuit configuration (num qubits, projection, topology).
+    observables : Sequence[Operator]
+        Observables used to compute features. Each feature is an expectation value
+        ``Tr(rho O)`` for a state ``rho``.
+    fmps : np.ndarray or None
+        Cached feature matrix produced by the last call to :meth:`get_feature_maps`.
     """
-    Base class for retrieving feature maps
-    """
+
     cfg: BaseQRConfig
     fmps: np.ndarray = None
     observables: Sequence[Operator]
 
     @abstractmethod
-    def get_feature_maps(self, results: Results, **kwargs):
+    def get_feature_maps(self, results: Results, **kwargs) -> np.ndarray:
+        """Compute feature maps from execution results.
+
+        Parameters
+        ----------
+        results : Results
+            Circuit execution results.
+        **kwargs
+            Implementation-specific options (e.g., number of shots for noisy methods).
+
+        Returns
+        -------
+        np.ndarray
+            Feature matrix, typically shape ``(N, D)``.
+        """
         ...
 
     # ------------------------------------------------------------------
     # Persistence API
     # ------------------------------------------------------------------
     def save(self, path: str) -> None:
-        """
-        Save the MKLearner (including any precomputed approximations) to disk.
+        """Serialize this retriever to disk.
 
         Parameters
         ----------
         path : str
             Destination path for the pickle file.
+
+        Notes
+        -----
+        This is intended for experiment reproducibility and caching.
         """
         with open(path, "wb") as f:
             pickle.dump(self, f)
 
     @staticmethod
     def load(path: str) -> "BaseFeatureMapsRetriever":
-        """
-        Load a previously saved BaseFeatureMapsRetriever from disk.
+        """Load a previously saved retriever from disk.
 
         Parameters
         ----------
@@ -52,8 +94,13 @@ class BaseFeatureMapsRetriever(ABC):
 
         Returns
         -------
-        MKLearner
-            The reconstructed learner instance.
+        BaseFeatureMapsRetriever
+            The reconstructed retriever instance.
+
+        Raises
+        ------
+        TypeError
+            If the loaded object is not a :class:`BaseFeatureMapsRetriever`.
         """
         with open(path, "rb") as f:
             obj = pickle.load(f)
@@ -63,42 +110,86 @@ class BaseFeatureMapsRetriever(ABC):
 
 
 class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
-    """
-    Compute exact feature maps from Results (density matrices).
+    """Compute *exact* expectation-value feature maps from density matrices.
 
-    Input:
-      - results.states: shape (N, R, 2**n, 2**n)
+    Given results with ``states`` of shape ``(N, R, 2**n, 2**n)``, this retriever computes:
 
-    Output:
-      - feature maps: shape (N, R * K) where K = len(observables)
-        ordering is: [obs_0..obs_{K-1} for r=0] then [obs_0..obs_{K-1} for r=1] ...
+    ``phi[i, r*K + k] = Tr( rho[i, r] * O_k )``
+
+    where:
+    - ``K = len(observables)``
+    - ``R`` is the number of reservoir parameterizations per window (spatial multiplexing)
+    - ordering is: ``[obs_0..obs_{K-1} for r=0]`` then ``[obs_0..obs_{K-1} for r=1]`` etc.
+
+    Two evaluation paths are supported:
+
+    1. **Fast Pauli path**: if all observables are single-term :class:`SparsePauliOp`,
+       expectations are computed using bitmask tricks without forming dense matrices.
+    2. **Generic fallback**: computes ``Tr(rho O)`` using dense matrices (fine for small ``n``).
+
+    Parameters
+    ----------
+    cfg : BaseQRConfig
+        Circuit configuration. Only ``cfg.num_qubits`` is required for shape validation.
+    observables : Sequence[Operator | SparsePauliOp]
+        Observables to measure.
+
+    Raises
+    ------
+    ValueError
+        If the observable labels do not match ``num_qubits`` (Pauli fast path).
     """
 
     def __init__(self, cfg: BaseQRConfig, observables: Sequence[Operator | SparsePauliOp]):
         self.cfg = cfg
         self.observables = observables
-        self._pauli_cache = None  # list of (xmask:int, zmask:int, ny:int) or None
+        self._pauli_cache = None  # list[(xmask:int, zmask:int, ny:int)] or None
         self._dense_cache = None  # obs_mat (K,dim,dim) if needed
 
     @staticmethod
     def _pauli_label(op: Operator | SparsePauliOp) -> str | None:
-        """Return a single-Pauli label like 'IXYZ' if op is a 1-term SparsePauliOp; else None."""
+        """Return a Pauli label like ``'IXYZ'`` if `op` is a single-term SparsePauliOp.
+
+        Parameters
+        ----------
+        op : Operator or SparsePauliOp
+            Observable.
+
+        Returns
+        -------
+        str or None
+            Pauli string label if supported by the fast path; otherwise ``None``.
+        """
         if isinstance(op, SparsePauliOp):
-            # generate_k_local_paulis returns single-term ops; accept that case
             if len(op.paulis) == 1:
                 return op.paulis[0].to_label()
         return None
 
     @staticmethod
     def _masks_from_label(label: str) -> tuple[int, int, int]:
-        """
-        Convert a Pauli label (leftmost = qubit n-1, rightmost = qubit 0) into bitmasks.
-        Uses Qiskit little-endian: qubit q corresponds to bit (1<<q).
+        """Convert a Pauli label into bitmasks for fast expectation evaluation.
 
-        Returns: (xmask, zmask, ny) where:
-          - xmask has 1s on qubits with X or Y
-          - zmask has 1s on qubits with Z or Y
-          - ny = number of Y's (global phase i^ny)
+        The label follows Qiskit's convention:
+
+        - leftmost character corresponds to qubit ``n-1``
+        - rightmost character corresponds to qubit ``0``
+
+        We convert this to (xmask, zmask, ny) such that the Pauli operator acts as:
+
+        ``P |x⟩ = i^{ny} (-1)^{popcount(zmask & x)} |x ⊕ xmask⟩``
+
+        Parameters
+        ----------
+        label : str
+            Pauli string composed of characters in {'I','X','Y','Z'}.
+
+        Returns
+        -------
+        tuple[int, int, int]
+            ``(xmask, zmask, ny)``, where:
+            - ``xmask`` has 1s on qubits with X or Y
+            - ``zmask`` has 1s on qubits with Z or Y
+            - ``ny`` is the number of Y's (phase factor ``i^{ny}``)
         """
         n = len(label)
         xmask = 0
@@ -118,14 +209,36 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
 
     @staticmethod
     def _bitcount_parity(arr: np.ndarray) -> np.ndarray:
-        """Return parity (0/1) of bitcounts for each entry of arr (uint)."""
+        """Compute parity (0/1) of the population count for each element in `arr`.
+
+        Parameters
+        ----------
+        arr : np.ndarray
+            Unsigned integer array.
+
+        Returns
+        -------
+        np.ndarray
+            Integer array with entries in {0,1} giving parity of bit-counts.
+        """
         if hasattr(np, "bit_count"):
             return (np.bit_count(arr) & 1).astype(np.int8)
-        # fallback
         v = np.vectorize(lambda x: int(x).bit_count() & 1, otypes=[np.int8])
         return v(arr)
 
-    def _ensure_pauli_cache(self, n: int):
+    def _ensure_pauli_cache(self, n: int) -> None:
+        """Build cached bitmask representations for Pauli observables.
+
+        Parameters
+        ----------
+        n : int
+            Number of qubits.
+
+        Raises
+        ------
+        ValueError
+            If any label length differs from ``n``.
+        """
         labels = []
         for op in self.observables:
             lab = self._pauli_label(op)
@@ -137,12 +250,29 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
             labels.append(lab)
         self._pauli_cache = [self._masks_from_label(lab) for lab in labels]
 
-    def _ensure_dense_cache(self):
-        # Only build dense matrices if we cannot use Pauli-optimized path.
+    def _ensure_dense_cache(self) -> None:
+        """Materialize dense observable matrices for the generic fallback."""
         if self._dense_cache is None:
             self._dense_cache = np.stack([op.to_matrix() for op in self.observables], axis=0)
 
     def get_feature_maps(self, results: Results, **kwargs) -> np.ndarray:
+        """Compute exact feature maps from results.
+
+        Parameters
+        ----------
+        results : Results
+            Results object with a ``states`` attribute of shape ``(N, R, 2**n, 2**n)``.
+
+        Returns
+        -------
+        np.ndarray
+            Feature matrix of shape ``(N, R*K)`` where ``K=len(observables)``.
+
+        Raises
+        ------
+        ValueError
+            If ``results.states`` has an unexpected shape or does not match ``cfg.num_qubits``.
+        """
         states = np.asarray(results.states)
         if states.ndim != 4:
             raise ValueError(f"Expected states shape (N,R,dim,dim), got {states.shape}")
@@ -161,10 +291,9 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
             self.fmps = out
             return out
 
-        # Flatten batch: (B,dim,dim) with B=N*R
-        rho = states.reshape(N * R, dim, dim)
+        rho = states.reshape(N * R, dim, dim)  # (B,dim,dim), B=N*R
 
-        # --- Fast path for Pauli strings (SparsePauliOp) ---
+        # --- Fast path for Pauli strings ---
         if self._pauli_cache is None and all(isinstance(op, SparsePauliOp) for op in self.observables):
             self._ensure_pauli_cache(n)
 
@@ -174,13 +303,10 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
 
             for k, (xmask, zmask, ny) in enumerate(self._pauli_cache):
                 cols = rows ^ np.uint32(xmask)
-
-                # vals[b, x] = rho_b[x, x^xmask]
                 vals = rho[:, rows, cols]  # (B,dim)
 
-                # phase(x) = i^{ny} * (-1)^{popcount(zmask & x)}
                 parity = self._bitcount_parity(np.bitwise_and(rows, np.uint32(zmask)))
-                sign = 1.0 - 2.0 * parity.astype(np.float64)  # +1 for even, -1 for odd
+                sign = 1.0 - 2.0 * parity.astype(np.float64)
                 phase = (1j ** ny) * sign  # (dim,)
 
                 exp = np.sum(vals * phase[None, :], axis=1)  # (B,)
@@ -190,11 +316,9 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
             self.fmps = fmps
             return fmps
 
-        # --- Generic fallback: Tr(rho O) with dense matrices (OK for small n) ---
+        # --- Generic fallback ---
         self._ensure_dense_cache()
         obs_mat = self._dense_cache  # (K,dim,dim)
-
-        # exp[b,k] = Tr(rho_b @ O_k) = sum_{i,j} rho_{i,j} O_{j,i}
         exp = np.einsum("bij,kji->bk", rho, obs_mat).real  # (B,K)
         fmps = exp.reshape(N, R, K).reshape(N, R * K)
 

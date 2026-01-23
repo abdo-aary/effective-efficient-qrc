@@ -10,7 +10,7 @@ except Exception:
     from src.qrc.circuits.configs import RingQRCConfig as Config
 
 from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.utils import angle_positioning_linear
+from src.qrc.circuits.utils import angle_positioning_tanh
 
 qiskit_aer = pytest.importorskip("qiskit_aer")
 from qiskit_aer import AerSimulator
@@ -116,7 +116,7 @@ def test_dataset_pubs_runtime_expected_state_single_reservoir(cfg1, X_zero, monk
     R = 1
     w = X_zero.shape[1]
 
-    qc_step = CircuitFactory.createIsingRingCircuitSWAP(cfg1, angle_positioning_linear)
+    qc_step = CircuitFactory.createIsingRingCircuitSWAP(cfg1, angle_positioning_tanh)
     forced_param_values = make_param_values_for_step_order(qc_step, hx=0.0, hz=np.pi, lam=lam0, R=R)
 
     def patched_set_reservoirs_parameterizationSWAP(*args, **kwargs):
@@ -130,7 +130,7 @@ def test_dataset_pubs_runtime_expected_state_single_reservoir(cfg1, X_zero, monk
 
     pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
         cfg=cfg1,
-        angle_positioning=angle_positioning_linear,
+        angle_positioning=angle_positioning_tanh,
         X=X_zero,
         lam_0=lam0,
         num_reservoirs=R,
@@ -157,7 +157,7 @@ def test_dataset_pubs_runtime_expected_state_multiple_reservoirs(cfg1, X_zero, m
     w = X_zero.shape[1]
     lams = [0.15, 0.37, 0.63]
 
-    qc_step = CircuitFactory.createIsingRingCircuitSWAP(cfg1, angle_positioning_linear)
+    qc_step = CircuitFactory.createIsingRingCircuitSWAP(cfg1, angle_positioning_tanh)
     forced_param_values = make_param_values_for_step_order(qc_step, hx=0.0, hz=np.pi, lam=lams[0], R=R)
     # overwrite lam column per row
     lam_col = forced_param_values.shape[1] - 1
@@ -175,7 +175,7 @@ def test_dataset_pubs_runtime_expected_state_multiple_reservoirs(cfg1, X_zero, m
 
     pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
         cfg=cfg1,
-        angle_positioning=angle_positioning_linear,
+        angle_positioning=angle_positioning_tanh,
         X=X_zero,
         lam_0=lams[0],
         num_reservoirs=R,
@@ -203,7 +203,7 @@ def test_dataset_pubs_runtime_consistency_row_vs_name_binding(cfg1, X_zero, monk
     lam0 = 0.41
     R = 1
 
-    qc_step = CircuitFactory.createIsingRingCircuitSWAP(cfg1, angle_positioning_linear)
+    qc_step = CircuitFactory.createIsingRingCircuitSWAP(cfg1, angle_positioning_tanh)
     forced_param_values = make_param_values_for_step_order(qc_step, hx=0.0, hz=np.pi, lam=lam0, R=R)
 
     def patched_set_reservoirs_parameterizationSWAP(*args, **kwargs):
@@ -217,7 +217,7 @@ def test_dataset_pubs_runtime_consistency_row_vs_name_binding(cfg1, X_zero, monk
 
     pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
         cfg=cfg1,
-        angle_positioning=angle_positioning_linear,
+        angle_positioning=angle_positioning_tanh,
         X=X_zero[:1],  # one window is enough
         lam_0=lam0,
         num_reservoirs=R,

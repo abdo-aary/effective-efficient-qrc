@@ -1,0 +1,271 @@
+# `src.qrc.run` package overview
+
+This package contains the **execution** and **featurization** layer that sits between:
+
+- `src.qrc.circuits` (which builds **PUBs**: circuits + parameter matrices), and
+- downstream models (which consume classical features `Φ`).
+
+Concretely, the package provides:
+
+- **Runners**: execute PUBS datasets on backends such as Qiskit Aer.
+- **Results** containers: standardized shapes for simulator outputs.
+- **Feature-map retrievers**: convert results into classical feature matrices, either exactly
+  (expectation values) or with a shot-noise model (classical-shadow-like).
+
+---
+
+## Big picture: data flow
+
+1. `CircuitFactory` (from `src.qrc.circuits`) builds a PUBS dataset from windows `X ∈ R^{N×w×d}`:
+   - `pubs = [(qc_i, vals_i)]_{i=1..N}`, where `vals_i ∈ R^{R×P}` contains **R** reservoir parameterizations.
+2. A `BaseCircuitsRunner` executes `pubs` and returns a `Results` object (typically `ExactResults`).
+3. A `BaseFeatureMapsRetriever` converts `Results` into classical features:
+   - `Φ ∈ R^{N×(R·K)}` where `K = len(observables)`.
+4. Downstream models (KRR / GP / etc.) train on `Φ` and labels `y`.
+
+---
+
+## Mermaid class diagram
+
+```mermaid
+classDiagram
+direction LR
+
+%% =========================
+%% Circuits side (producer)
+%% =========================
+class BaseQRConfig {
+  <<abstract>>
+  +int input_dim
+  +int num_qubits
+  +ndarray projection
+}
+
+class CircuitFactory {
+  <<static>>
+  +create_pubs_dataset_reservoirs_IsingRingSWAP(cfg, angle_positioning, X, lam_0, num_reservoirs, seed, eps) List~Pub~
+}
+
+class Pub {
+  <<tuple>>
+  +QuantumCircuit qc
+  +ndarray param_values  # (R,P)
+}
+
+class QuantumCircuit {
+  +metadata : dict
+}
+
+class QcMetadataContract {
+  +J : ParameterVector
+  +h_x : ParameterVector
+  +h_z : ParameterVector
+  +lam : Parameter
+  +z : ParameterVector
+}
+
+CircuitFactory --> BaseQRConfig : consumes
+CircuitFactory --> Pub : produces
+Pub --> QuantumCircuit
+QuantumCircuit --> QcMetadataContract : metadata keys
+
+
+%% =========================
+%% Run side (executor)
+%% =========================
+class Results {
+  <<abstract>>
+  +BaseQRConfig cfg
+  +ndarray states
+  +save(file)
+  +load(file)
+}
+
+class ExactResults {
+  +ndarray states  # (N,R,2^n,2^n)
+}
+
+Results <|-- ExactResults
+
+class BaseCircuitsRunner {
+  <<abstract>>
+  +run_pubs(pubs, **kwargs) Results
+}
+
+class ExactAerCircuitsRunner {
+  +AerSimulator backend
+  +run_pubs(pubs, device, optimization_level, seed_simulator, ...) ExactResults
+}
+
+BaseCircuitsRunner <|-- ExactAerCircuitsRunner
+
+%% runner interactions
+BaseCircuitsRunner --> Pub : runs pubs
+ExactAerCircuitsRunner --> BaseQRConfig : uses
+ExactAerCircuitsRunner --> QuantumCircuit : executes
+ExactAerCircuitsRunner --> QcMetadataContract : reads metadata for param order
+ExactAerCircuitsRunner --> ExactResults : produces
+
+
+%% =========================
+%% Run side (featurization)
+%% =========================
+class FeatureMatrix {
+  +ndarray Phi  # (N, R*K)
+}
+
+class BaseFeatureMapsRetriever {
+  <<abstract>>
+  +Sequence observables
+  +ndarray fmps  # cached Phi (optional)
+  +get_feature_maps(results, **kwargs) ndarray
+  +save(path)
+  +load(path)
+}
+
+class ExactFeatureMapsRetriever {
+  +get_feature_maps(results) ndarray  # (N,R*K)
+}
+
+class CSFeatureMapsRetriever {
+  +get_feature_maps(results, shots, seed, n_groups) ndarray
+}
+
+BaseFeatureMapsRetriever <|-- ExactFeatureMapsRetriever
+BaseFeatureMapsRetriever <|-- CSFeatureMapsRetriever
+
+%% retriever consumes Results and produces Phi
+BaseFeatureMapsRetriever --> Results : consumes
+BaseFeatureMapsRetriever --> FeatureMatrix : produces Φ
+
+%% specific expectations / composition
+ExactFeatureMapsRetriever --> ExactResults : expects density matrices
+CSFeatureMapsRetriever --> ExactResults : expects density matrices
+CSFeatureMapsRetriever --> ExactFeatureMapsRetriever : uses for μ
+CircuitFactory --> BaseCircuitsRunner : provides pubs
+BaseCircuitsRunner --> BaseFeatureMapsRetriever : provides results
+
+```
+
+---
+
+## Modules and main objects
+
+## `circuit_run.py`
+
+### `Results` (abstract) and `ExactResults`
+- `Results` defines a minimal persistence interface (`save` / `load`).
+- `ExactResults` stores reduced reservoir density matrices with shape:
+
+  - `results.states`: `(N, R, 2**n, 2**n)`
+
+  where:
+  - `N` = number of windows (PUBs),
+  - `R` = number of reservoir parameterizations per window,
+  - `n` = `cfg.num_qubits`.
+
+### `BaseCircuitsRunner`
+Abstract interface: `run_pubs(...) -> Results`.
+
+### `ExactAerCircuitsRunner`
+Executes PUBs on Qiskit Aer (`AerSimulator(method="density_matrix")`).
+
+**Key convention (parameter order):**
+The runner binds parameters in the order:
+
+`list(J) + list(h_x) + list(h_z) + [lam]`
+
+and reconstructs this list from `qc.metadata`. That makes binding robust to transpilation
+re-ordering of `qc.parameters`.
+
+**GPU support:**
+If Aer exposes `available_devices()` and reports `"GPU"`, you can pass `device="GPU"` to
+`run_pubs`, and the runner will call `backend.set_options(device="GPU", ...)`.
+
+---
+
+## `fmp_retriever.py`
+
+### `BaseFeatureMapsRetriever`
+Abstract interface turning `Results` into a classical feature matrix `Φ`.
+
+Includes a simple persistence API:
+- `save(path)` pickles the retriever,
+- `load(path)` restores it.
+
+### `ExactFeatureMapsRetriever`
+Computes exact features:
+
+`Φ[i, r*K + k] = Tr( ρ[i,r] O_k )`
+
+Two evaluation paths:
+- **Fast Pauli path** when all observables are single-term Pauli strings (`SparsePauliOp`),
+- **Dense fallback** (`Tr(rho O)` via dense matrices) for generic `Operator`s.
+
+Output shape: `Φ ∈ R^{N×(R·K)}`.
+
+---
+
+## `cs_fmp_retriever.py`
+
+### `CSFeatureMapsRetriever`
+A simulation-only noisy retriever that mimics shot noise:
+
+1. Uses `ExactFeatureMapsRetriever` to compute exact expectations `μ = Tr(ρ O)`.
+2. Simulates `shots` outcomes in `{±1}` with `P(+1)=(1+μ)/2`.
+3. Aggregates using **median-of-means** with `n_groups`.
+
+This yields a feature matrix with the same shape/order as the exact retriever.
+
+---
+
+## Shapes & conventions (quick reference)
+
+- `pubs`: list of length `N`
+  - `pub = (qc, vals)`
+  - `vals`: `(R, P)`
+- `ExactResults.states`: `(N, R, 2**n, 2**n)`
+- `Φ` (features): `(N, R*K)` with `K = len(observables)`
+
+---
+
+## Minimal usage example
+
+```python
+import numpy as np
+from src.qrc.circuits.configs import RingQRConfig
+from src.qrc.circuits.circuit_factory import CircuitFactory
+from src.qrc.circuits.utils import angle_positioning_tanh
+from src.qrc.run.circuit_run import ExactAerCircuitsRunner
+from src.qrc.run.fmp_retriever import ExactFeatureMapsRetriever
+from src.qrc.circuits.utils import generate_k_local_paulis
+
+cfg = RingQRConfig(input_dim=3, num_qubits=3, seed=0)
+
+X = np.random.default_rng(0).normal(size=(10, 20, 3))
+pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
+    cfg=cfg,
+    angle_positioning=angle_positioning_tanh,
+    X=X,
+    lam_0=0.2,
+    num_reservoirs=4,
+    seed=0,
+)
+
+runner = ExactAerCircuitsRunner(cfg)
+results = runner.run_pubs(pubs, device="CPU", optimization_level=1)
+
+observables = generate_k_local_paulis(locality=1, num_qubits=cfg.num_qubits)
+retriever = ExactFeatureMapsRetriever(cfg, observables)
+Phi = retriever.get_feature_maps(results)  # (N, R*K)
+```
+
+---
+
+## Common pitfalls
+
+- **Metadata contract**: `ExactAerCircuitsRunner` requires `qc.metadata["J","h_x","h_z","lam"]`.
+  Circuits not built by your `CircuitFactory` usually won’t satisfy this.
+- **Observable label length** (exact Pauli path): each Pauli string must have length `num_qubits`,
+  e.g. `"ZII"` for `n=3`.
+- **GPU tests** should skip gracefully if Aer does not report GPU availability.

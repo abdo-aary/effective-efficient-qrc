@@ -1,6 +1,23 @@
+"""End-to-end regression: QRC features + Matérn kernel ridge regression.
+
+This module defines :class:`src.models.qrc_matern_krr.QRCMaternKRRRegressor`, an sklearn-like estimator that:
+
+- computes quantum features ``Phi`` once from inputs ``X`` via :class:`src.models.qrc_featurizer.QRCFeaturizer`,
+- tunes Matérn hyperparameters on a train/validation split of the training set,
+- fits kernel ridge regression (KRR) in dual form,
+- predicts by evaluating ``K(Phi_test, Phi_train) @ alpha``.
+
+Multi-output labels
+-------------------
+Labels are accepted as ``(N,)`` (single output), ``(L, N)`` or ``(N, L)`` (multi-output).
+When ``L > 1``, tuning and KRR fitting can be parallelized across outputs with multiprocessing using
+the ``num_workers`` argument of :meth:`QRCMaternKRRRegressor.fit` (feature extraction remains a single call).
+"""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import multiprocessing as mp
 
 import numpy as np
 import yaml
@@ -9,10 +26,7 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.preprocessing import StandardScaler
 from sklearn.gaussian_process.kernels import Matern as SkMatern, ConstantKernel
 
-from src.models.kernel import (
-    tune_matern_grid_train_val,
-    tune_matern_continuous_train_val,
-)
+from src.models.kernel import tune_matern_grid_train_val, tune_matern_continuous_train_val
 from src.models.qrc_featurizer import QRCFeaturizer
 
 from src.qrc.circuits.configs import RingQRConfig
@@ -42,6 +56,27 @@ _FMP_REGISTRY = {
 
 
 def _train_test_split_indices(N: int, test_ratio: float, seed: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Create a random train/test split.
+
+    Parameters
+    ----------
+    N : int
+        Number of samples.
+    test_ratio : float
+        Fraction assigned to the test set.
+    seed : int
+        RNG seed.
+
+    Returns
+    -------
+    train_idx, test_idx : numpy.ndarray
+        Index arrays defining the split.
+
+    Notes
+    -----
+    Guarantees at least one test sample and at least one train sample.
+    """
     rng = np.random.default_rng(seed)
     idx = rng.permutation(N)
     n_test = max(1, int(test_ratio * N))
@@ -53,6 +88,21 @@ def _train_test_split_indices(N: int, test_ratio: float, seed: int) -> Tuple[np.
 
 
 def _build_kernel(xi: float, nu: float) -> Any:
+    """
+    Build a fixed-amplitude Matérn kernel.
+
+    Parameters
+    ----------
+    xi : float
+        Matérn length-scale.
+    nu : float
+        Matérn smoothness parameter.
+
+    Returns
+    -------
+    sklearn.gaussian_process.kernels.Kernel
+        Kernel object usable as ``K = kernel(X, X')``.
+    """
     # fixed amplitude=1.0; we can expose this if we want
     return ConstantKernel(1.0, constant_value_bounds="fixed") * SkMatern(
         length_scale=float(xi),
@@ -61,15 +111,120 @@ def _build_kernel(xi: float, nu: float) -> Any:
     )
 
 
+# -----------------------------------------------------------------------------
+# Multiprocessing helpers (module-level for pickling)
+# -----------------------------------------------------------------------------
+
+_MP_PHI_TR: Optional[np.ndarray] = None
+_MP_TUNING: Optional[Dict[str, Any]] = None
+
+
+def _mp_init(phi_tr: np.ndarray, tuning: Dict[str, Any]) -> None:
+    """Initializer that stores read-only data in each worker process."""
+    global _MP_PHI_TR, _MP_TUNING
+    _MP_PHI_TR = phi_tr
+    _MP_TUNING = tuning
+
+
+def _tune_and_fit_one_output(args: Tuple[int, np.ndarray]) -> Tuple[int, Dict[str, float], np.ndarray]:
+    """Tune Matérn params and solve KRR for one output.
+
+    Notes
+    -----
+    This runs in a worker process. It relies on `_MP_PHI_TR` and `_MP_TUNING` being
+    set via `_mp_init`.
+    """
+    out_idx, y_tr = args
+    if _MP_PHI_TR is None or _MP_TUNING is None:
+        raise RuntimeError("Multiprocessing globals not initialized.")
+
+    Phi_tr = _MP_PHI_TR
+    tuning = _MP_TUNING
+
+    # tune Matérn hyperparameters on train_val
+    strategy = tuning.get("strategy", "grid")
+    val_ratio = float(tuning.get("val_ratio", 0.2))
+    tune_seed = int(tuning.get("seed", 0))
+    reg = float(tuning.get("reg", 1e-6))
+    xi_bounds = tuple(tuning.get("xi_bounds", (1e-3, 1e3)))
+
+    if strategy == "grid":
+        nu_grid = tuning.get("nu_grid", (0.5, 1.5, 2.5, 5.0))
+        xi_maxiter = int(tuning.get("xi_maxiter", 80))
+        best_params, _ = tune_matern_grid_train_val(
+            Phi_tr,
+            y_tr,
+            val_ratio=val_ratio,
+            seed=tune_seed,
+            reg=reg,
+            xi_bounds=xi_bounds,
+            nu_grid=nu_grid,
+            xi_maxiter=xi_maxiter,
+        )
+    elif strategy == "powell":
+        nu_bounds = tuple(tuning.get("nu_bounds", (0.2, 5.0)))
+        n_restarts = int(tuning.get("n_restarts", 8))
+        best_params, _ = tune_matern_continuous_train_val(
+            Phi_tr,
+            y_tr,
+            val_ratio=val_ratio,
+            seed=tune_seed,
+            reg=reg,
+            xi_bounds=xi_bounds,
+            nu_bounds=nu_bounds,
+            n_restarts=n_restarts,
+        )
+    else:
+        raise ValueError(f"Unknown tuning.strategy={strategy!r}")
+
+    xi = float(best_params["xi"])
+    nu = float(best_params["nu"])
+    reg = float(best_params["reg"])
+
+    # fit KRR (dual) on all train_val
+    kernel = _build_kernel(xi=xi, nu=nu)
+    Ktt = kernel(Phi_tr, Phi_tr)
+    A = Ktt + reg * np.eye(Ktt.shape[0])
+    alpha = np.linalg.solve(A, y_tr)
+
+    return out_idx, dict(best_params), alpha
+
+
 class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
     """
-    End-to-end: windows -> quantum features -> Matérn KRR.
+    Quantum feature + Matérn KRR regressor (single- or multi-output).
 
-    - fit(X,y): computes features once, does split + tuning on train-val, fits KRR on train-val,
-                stores test split so we can call predict() with X=None.
-    - predict(X=None): if X None, predicts on stored test set windows (from fit).
+    Parameters
+    ----------
+    featurizer : src.models.qrc_featurizer.QRCFeaturizer
+        Object used to compute quantum features ``Phi`` from window datasets.
+    standardize : bool, default=True
+        If True, standardize ``Phi`` before tuning and fitting.
+    test_ratio : float, default=0.2
+        Fraction of samples used as held-out test set.
+    split_seed : int, default=0
+        RNG seed controlling the train/test split.
+    tuning : dict, optional
+        Matérn tuner configuration. Common keys:
+
+        - ``strategy``: ``"grid"`` or ``"powell"``
+        - ``val_ratio``: validation ratio inside the training set
+        - ``seed``: tuning split seed
+        - ``reg``: ridge regularization parameter
+        - ``xi_bounds``: bounds for length-scale
+
+        Grid strategy keys:
+        - ``nu_grid``, ``xi_maxiter``
+
+        Powell strategy keys:
+        - ``nu_bounds``, ``n_restarts``
+
+    Notes
+    -----
+    For multi-output labels (``L > 1``), this estimator fits one kernel+KRR model per output while reusing
+    the same feature matrix. Per-output tuning+fit can be parallelized with multiprocessing using
+    ``num_workers`` passed to :meth:`fit`.
     """
-
     def __init__(
             self,
             featurizer: QRCFeaturizer,
@@ -87,6 +242,8 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
 
         # learned attrs
         self.scaler_: Optional[StandardScaler] = None
+        # If single-output: kernel_ is a sklearn kernel, alpha_ is (n_train,).
+        # If multi-output: kernel_ is List[kernel], alpha_ is (L, n_train).
         self.kernel_: Any = None
         self.alpha_: Optional[np.ndarray] = None
         self.X_train_features_: Optional[np.ndarray] = None
@@ -95,10 +252,31 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
         self.y_test_: Optional[np.ndarray] = None
         self.y_pred_test_: Optional[np.ndarray] = None
 
-        self.best_params_: Optional[Dict[str, float]] = None
+        # If single-output: Dict[str,float]. If multi-output: List[Dict[str,float]].
+        self.best_params_: Optional[Union[Dict[str, float], List[Dict[str, float]]]] = None
+        self.n_outputs_: Optional[int] = None
 
     @staticmethod
     def from_yaml(path: str) -> "QRCMaternKRRRegressor":
+        """
+        Construct a model from a YAML configuration file.
+
+        Parameters
+        ----------
+        path : str
+            Path to a YAML file describing the QRC config, runner, feature retriever, pubs parameters,
+            and model hyperparameters.
+
+        Returns
+        -------
+        QRCMaternKRRRegressor
+            A fully wired estimator (ready to call ``fit``).
+
+        Notes
+        -----
+        This method is primarily used by smoke tests and experiments to ensure that kwargs (e.g. ``device="GPU"``)
+        are properly forwarded from YAML into the runner configuration.
+        """
         with open(path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
 
@@ -184,22 +362,74 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
             tuning=tuning,
         )
 
-    def fit(self, X: np.ndarray, y: np.ndarray):
+    def fit(self, X: np.ndarray, y: np.ndarray, *, num_workers: int = 1):
+        """
+        Fit the model.
+
+        Parameters
+        ----------
+        X : numpy.ndarray
+            Window dataset with shape ``(N, w, d)``.
+        y : numpy.ndarray
+            Labels as ``(N,)`` (single output), ``(L, N)`` (multi-output), or ``(N, L)`` (multi-output).
+        num_workers : int, default=1
+            Reserved for multi-output parallelism. If num_workers=1, outputs are fit sequentially.
+
+        Returns
+        -------
+        self : QRCMaternKRRRegressor
+            Fitted estimator.
+
+        Notes
+        -----
+        Quantum feature extraction ``Phi = featurizer.transform(X)`` is executed exactly once, and
+        the resulting feature matrix is reused for all outputs.
+        """
         X = np.asarray(X)
-        y = np.asarray(y).reshape(-1)
+        y_arr = np.asarray(y)
 
         if X.ndim != 3:
             raise ValueError(f"X must be (N,w,d). Got {X.shape}.")
-        if y.shape[0] != X.shape[0]:
-            raise ValueError(f"y must have shape (N,), got {y.shape} for X {X.shape}.")
+
+        N = int(X.shape[0])
+
+        # Accept labels in any of:
+        #   - (N,) (single output)
+        #   - (L,N) (preferred internal layout)
+        #   - (N,L) (sklearn-like); we transpose into (L,N)
+        if y_arr.ndim == 1:
+            y2d = y_arr.reshape(1, -1)
+        elif y_arr.ndim == 2:
+            if y_arr.shape[1] == N:
+                y2d = y_arr
+            elif y_arr.shape[0] == N and y_arr.shape[1] != N:
+                y2d = y_arr.T
+            else:
+                raise ValueError(
+                    f"y must have shape (N,), (L,N) or (N,L). Got {y_arr.shape} for X {X.shape}."
+                )
+        else:
+            raise ValueError(
+                f"y must have shape (N,), (L,N) or (N,L). Got {y_arr.shape} for X {X.shape}."
+            )
+
+        if y2d.shape[1] != N:
+            raise ValueError(f"y must have N={N} samples (second axis). Got y {y2d.shape}.")
+
+        L = int(y2d.shape[0])
+        self.n_outputs_ = L
 
         # quantum featurization (single expensive call)
         Phi = self.featurizer.transform(X)  # (N,D)
 
         # split train_val vs test
-        tr_idx, te_idx = _train_test_split_indices(X.shape[0], self.test_ratio, self.split_seed)
-        Phi_tr, y_tr = Phi[tr_idx], y[tr_idx]
-        Phi_te, y_te = Phi[te_idx], y[te_idx]
+        tr_idx, te_idx = _train_test_split_indices(N, self.test_ratio, self.split_seed)
+        Phi_tr = Phi[tr_idx]
+        Phi_te = Phi[te_idx]
+
+        # (L, n_train) / (L, n_test)
+        y_tr = y2d[:, tr_idx]
+        y_te = y2d[:, te_idx]
 
         # optional standardization (recommended for kernel lengthscale stability)
         if self.standardize:
@@ -209,67 +439,141 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
         else:
             self.scaler_ = None
 
-        # tune Matérn hyperparameters on train_val
-        strategy = self.tuning.get("strategy", "grid")
-        val_ratio = float(self.tuning.get("val_ratio", 0.2))
-        tune_seed = int(self.tuning.get("seed", 0))
-        reg = float(self.tuning.get("reg", 1e-6))
-        xi_bounds = tuple(self.tuning.get("xi_bounds", (1e-3, 1e3)))
+        # -----------------------------------------------------------------------
+        # Tune + fit KRR per output label, reusing the *same* Phi_tr.
+        # This avoids re-running circuits when the same X is used for many tasks.
+        # -----------------------------------------------------------------------
 
-        if strategy == "grid":
-            nu_grid = self.tuning.get("nu_grid", (0.5, 1.5, 2.5, 5.0))
-            xi_maxiter = int(self.tuning.get("xi_maxiter", 80))
-            best_params, _ = tune_matern_grid_train_val(
-                Phi_tr, y_tr,
-                val_ratio=val_ratio,
-                seed=tune_seed,
-                reg=reg,
-                xi_bounds=xi_bounds,
-                nu_grid=nu_grid,
-                xi_maxiter=xi_maxiter,
-            )
-        elif strategy == "powell":
-            nu_bounds = tuple(self.tuning.get("nu_bounds", (0.2, 5.0)))
-            n_restarts = int(self.tuning.get("n_restarts", 8))
-            best_params, _ = tune_matern_continuous_train_val(
-                Phi_tr, y_tr,
-                val_ratio=val_ratio,
-                seed=tune_seed,
-                reg=reg,
-                xi_bounds=xi_bounds,
-                nu_bounds=nu_bounds,
-                n_restarts=n_restarts,
-            )
+        # Normalize num_workers
+        if num_workers is None:
+            num_workers = 1
+        num_workers = int(num_workers)
+        if num_workers <= 0:
+            num_workers = max(1, mp.cpu_count())
+
+        tasks: List[Tuple[int, np.ndarray]] = [(l, y_tr[l].reshape(-1)) for l in range(L)]
+
+        # Cap workers to number of outputs
+        requested = int(num_workers) if num_workers is not None else 1
+        effective_workers = max(1, min(requested, L))
+
+        if effective_workers == 1:
+            _mp_init(Phi_tr, dict(self.tuning))
+            tuned = [_tune_and_fit_one_output(task) for task in tasks]
         else:
-            raise ValueError(f"Unknown tuning.strategy={strategy!r}")
+            try:
+                ctx = mp.get_context("fork")
+            except ValueError:
+                ctx = mp.get_context()
 
-        self.best_params_ = dict(best_params)
-        xi = float(best_params["xi"])
-        nu = float(best_params["nu"])
-        reg = float(best_params["reg"])
+            with ctx.Pool(
+                    processes=effective_workers,
+                    initializer=_mp_init,
+                    initargs=(Phi_tr, dict(self.tuning)),
+            ) as pool:
+                tuned = pool.map(_tune_and_fit_one_output, tasks)
 
-        # fit final KRR on all train_val
-        self.kernel_ = _build_kernel(xi=xi, nu=nu)
-        Ktt = self.kernel_(Phi_tr, Phi_tr)
-        A = Ktt + reg * np.eye(Ktt.shape[0])
-        self.alpha_ = np.linalg.solve(A, y_tr)
+        # Reorder by output index
+        tuned = sorted(tuned, key=lambda t: t[0])
+
+        best_params_list: List[Dict[str, float]] = []
+        alpha_list: List[np.ndarray] = []
+        kernel_list: List[Any] = []
+
+        for _, bp, alpha in tuned:
+            best_params_list.append(dict(bp))
+            alpha = np.asarray(alpha, dtype=float).reshape(-1)
+            alpha_list.append(alpha)
+            kernel_list.append(_build_kernel(xi=float(bp["xi"]), nu=float(bp["nu"])))
+
         self.X_train_features_ = Phi_tr
+
+        if L == 1:
+            self.best_params_ = best_params_list[0]
+            self.alpha_ = alpha_list[0]
+            self.kernel_ = kernel_list[0]
+        else:
+            self.best_params_ = best_params_list
+            self.alpha_ = np.stack(alpha_list, axis=0)  # (L, n_train)
+            self.kernel_ = kernel_list
 
         # store test set to allow predict() with X=None
         self.X_test_ = X[te_idx]
-        self.y_test_ = y_te
+        # keep y_test_ as 1D for single-output (backward compat), else (L,n_test)
+        self.y_test_ = y_te[0] if L == 1 else y_te
 
         # optional: compute & store test predictions immediately
-        self.y_pred_test_ = self._predict_from_features(Phi_te)
+        y_pred_te = self._predict_from_features(Phi_te)
+        self.y_pred_test_ = y_pred_te
         return self
 
     def _predict_from_features(self, Phi: np.ndarray) -> np.ndarray:
+        """
+        Predict from (already standardized) feature matrix.
+
+        Parameters
+        ----------
+        Phi : numpy.ndarray
+            Feature matrix of shape ``(N, D)``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Predictions with shape ``(N,)`` for single output or ``(L, N)`` for multi-output.
+        """
         if self.alpha_ is None or self.kernel_ is None or self.X_train_features_ is None:
             raise RuntimeError("Model is not fitted yet.")
-        Kxt = self.kernel_(Phi, self.X_train_features_)
-        return Kxt @ self.alpha_
+
+        # single-output
+        if not isinstance(self.kernel_, list):
+            Kxt = self.kernel_(Phi, self.X_train_features_)
+            return Kxt @ self.alpha_
+
+        # multi-output
+        kernels: List[Any] = self.kernel_
+        alphas = np.asarray(self.alpha_)
+        if alphas.ndim != 2:
+            raise RuntimeError(f"Expected alpha_ to be 2D for multi-output, got {alphas.shape}.")
+
+        L = alphas.shape[0]
+        yhat = np.empty((L, Phi.shape[0]), dtype=float)
+        for l in range(L):
+            Kxt = kernels[l](Phi, self.X_train_features_)
+            yhat[l] = Kxt @ alphas[l]
+        return yhat
+
+    def predict_from_features(self, Phi: np.ndarray, *, apply_scaler: bool = True) -> np.ndarray:
+        """Predict from precomputed feature matrix.
+
+        Parameters
+        ----------
+        Phi:
+            Feature matrix of shape (N, D).
+        apply_scaler:
+            If True and the model was trained with standardization, apply the
+            stored ``StandardScaler`` to ``Phi`` before prediction.
+        """
+        Phi = np.asarray(Phi)
+        if Phi.ndim != 2:
+            raise ValueError(f"Phi must be 2D (N,D). Got {Phi.shape}.")
+        if apply_scaler and self.scaler_ is not None:
+            Phi = self.scaler_.transform(Phi)
+        return self._predict_from_features(Phi)
 
     def predict(self, X: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        Predict labels for new inputs or for the stored test set.
+
+        Parameters
+        ----------
+        X : numpy.ndarray, optional
+            If provided, windows with shape ``(N, w, d)``. If None, predicts on the test set stored during ``fit``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Predictions with shape ``(N_test,)`` for single output or ``(L, N_test)`` for multi-output.
+        """
         # sklearn-like: predict(X). Convenience: predict() predicts on stored test set.
         if X is None:
             if self.X_test_ is None:
@@ -283,6 +587,4 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
             raise ValueError(f"X must be (N,w,d). Got {X.shape}.")
 
         Phi = self.featurizer.transform(X)
-        if self.scaler_ is not None:
-            Phi = self.scaler_.transform(Phi)
-        return self._predict_from_features(Phi)
+        return self.predict_from_features(Phi, apply_scaler=True)

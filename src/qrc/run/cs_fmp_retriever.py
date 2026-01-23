@@ -1,3 +1,22 @@
+"""src.qrc.run.cs_fmp_retriever
+
+Noisy (classical-shadow-like) feature maps from exact density matrices.
+
+This module provides :class:`CSFeatureMapsRetriever`, which wraps an exact expectation
+retriever and adds a simple **shot noise + median-of-means** (MoM) aggregation model.
+
+It is intended for *simulation-based* experiments where you want to mimic shot noise
+without implementing full classical-shadow tomography.
+
+Model:
+- For each observable expectation μ = Tr(ρ O) with μ ∈ [-1, 1], simulate ±1 outcomes:
+  P(X=+1) = (1+μ)/2.
+- Aggregate ``shots`` samples using median-of-means by splitting into ``n_groups`` blocks.
+
+The returned feature matrix has the same shape and ordering as
+:class:`~src.qrc.run.fmp_retriever.ExactFeatureMapsRetriever`.
+"""
+
 import numpy as np
 from typing import Optional, Sequence
 
@@ -8,19 +27,34 @@ from .circuit_run import ExactResults
 
 
 class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
-    """
-    Noisy (classical-shadow-like) feature maps from ExactResults density matrices.
+    """Classical-shadow-like (shot-noisy) feature maps from exact density matrices.
 
-    Input:
-      - results.states: (N, R, 2**n, 2**n)
+    Parameters
+    ----------
+    cfg : BaseQRConfig
+        Circuit configuration; used to validate state dimension.
+    observables : Sequence[Operator | SparsePauliOp]
+        Observables defining features.
+    default_shots : int, optional
+        Default number of shots if not provided to :meth:`get_feature_maps`.
+    default_n_groups : int, optional
+        Default number of MoM groups. If not provided, a heuristic based on ``shots`` is used.
 
-    Output:
-      - fmps: (N, R*K) where K=len(observables), same ordering as ExactFeatureMapsRetriever.
+    Notes
+    -----
+    Input results must be :class:`~src.qrc.run.circuit_run.ExactResults` with
+    ``results.states`` of shape ``(N, R, 2**n, 2**n)``.
+
+    Output feature matrix has shape ``(N, R*K)`` where ``K=len(observables)``.
 
     Noise model:
-      - Assumes observables are Pauli strings (eigenvalues ±1) or otherwise bounded in [-1,1].
-      - For each (i,r,k), we simulate 'shots' ±1 measurements with mean mu = Tr(rho O).
-      - Median-of-Means (MoM): split shots into K groups, take median of group means.
+    - Assumes each observable is bounded in [-1, 1] (Pauli strings satisfy this).
+    - Simulates independent ±1 measurements using a binomial model.
+    - Applies median-of-means to improve robustness.
+
+    The exact expectation values are computed using an internal
+    :class:`~src.qrc.run.fmp_retriever.ExactFeatureMapsRetriever` to ensure identical
+    ordering and Pauli caching behavior.
     """
 
     def __init__(
@@ -44,7 +78,18 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
 
     @staticmethod
     def _pick_n_groups(shots: int) -> int:
-        # heuristic: ~sqrt(shots) groups, cap at 16
+        """Heuristic choice for the number of MoM groups.
+
+        Parameters
+        ----------
+        shots : int
+            Total number of shots.
+
+        Returns
+        -------
+        int
+            Number of groups (capped to keep compute manageable).
+        """
         return max(1, min(16, int(np.sqrt(shots))))
 
     def get_feature_maps(
@@ -55,6 +100,29 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         seed: Optional[int] = None,
         n_groups: Optional[int] = None,
     ) -> np.ndarray:
+        """Compute shot-noisy feature maps using median-of-means.
+
+        Parameters
+        ----------
+        results : ExactResults
+            Exact density-matrix results.
+        shots : int, optional
+            Number of simulated shots per observable. If omitted, ``default_shots`` is used.
+        seed : int, optional
+            RNG seed for reproducible noise.
+        n_groups : int, optional
+            Number of MoM groups. If omitted, uses ``default_n_groups`` or a heuristic.
+
+        Returns
+        -------
+        np.ndarray
+            Feature matrix of shape ``(N, R*K)``.
+
+        Raises
+        ------
+        ValueError
+            If ``shots`` is missing/non-positive, or if ``results.states`` has incompatible shape.
+        """
         # ------------------------
         # validate / defaults
         # ------------------------
@@ -66,7 +134,7 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         if shots <= 0:
             raise ValueError(f"shots must be positive, got {shots}.")
 
-        # Basic cfg compatibility check (avoid relying on object equality)
+        # Basic cfg compatibility check
         n = int(self.cfg.num_qubits)
         dim = 1 << n
         states = np.asarray(results.states)
@@ -84,7 +152,7 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         mu_flat = self._exact.get_feature_maps(results)   # (N, R*K)
         mu = mu_flat.reshape(N, R, K)
 
-        # For Pauli observables, μ ∈ [-1,1]. Clip for numerical drift / bounded assumptions.
+        # For Pauli observables, μ ∈ [-1,1]. Clip for numerical drift.
         mu = np.clip(mu, -1.0, 1.0)
 
         # ------------------------
@@ -103,8 +171,8 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         # simulate group means using Binomial model (exact for ±1 outcomes)
         #
         # If X ∈ {±1} with E[X]=μ, then P(X=+1) = (1+μ)/2.
-        # For a batch of size b, sum of +1 outcomes ~ Binomial(b, p),
-        # and batch mean = ( (#(+1) - #(−1)) / b ) = (2*count - b)/b.
+        # For a batch of size b, count(+1) ~ Binomial(b, p),
+        # and batch mean = (2*count - b) / b.
         # ------------------------
         rng = np.random.default_rng(seed)
         p = (1.0 + mu) / 2.0

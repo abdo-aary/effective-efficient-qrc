@@ -1,3 +1,16 @@
+"""Quantum reservoir featurization.
+
+This module defines :class:`src.models.qrc_featurizer.QRCFeaturizer`, a lightweight transformer that turns
+a window dataset ``X`` of shape ``(N, w, d)`` into a feature matrix ``Phi`` of shape ``(N, D)`` by:
+
+1. Building a pubs dataset (circuits + parameter binds) using :class:`src.qrc.circuits.circuit_factory.CircuitFactory`.
+2. Executing pubs with a :class:`src.qrc.run.circuit_run.BaseCircuitsRunner`.
+3. Converting runner outputs (:class:`src.qrc.run.circuit_run.Results`) into real-valued features using a
+   :class:`src.qrc.run.fmp_retriever.BaseFeatureMapsRetriever`.
+
+The featurizer is intentionally *stateless*, so the same ``Phi`` can be reused for many downstream supervised
+tasks (including multi-output labels) without rerunning circuits.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,22 +20,42 @@ import numpy as np
 
 from src.qrc.circuits.configs import BaseQRConfig
 from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.utils import angle_positioning_linear
+from src.qrc.circuits.utils import angle_positioning_linear, angle_positioning_tanh
 from src.qrc.run.circuit_run import BaseCircuitsRunner
 from src.qrc.run.fmp_retriever import BaseFeatureMapsRetriever
 
 _ANGLE_POS_REGISTRY = {
     "linear": angle_positioning_linear,
+    "tanh": angle_positioning_tanh,
 }
 
 
 @dataclass
 class QRCFeaturizer:
     """
-    Stateless featurizer: X(N,w,d) -> Phi(N,D)
+    Stateless quantum featurizer for window datasets.
 
-    Can later be made sklearn-compatible by inheriting TransformerMixin,
-    but keeping it simple is fine.
+    Parameters
+    ----------
+    cfg : src.qrc.circuits.configs.BaseQRConfig
+        Quantum reservoir configuration (number of qubits, input dimension, seed, ...).
+    runner : src.qrc.run.circuit_run.BaseCircuitsRunner
+        Runner used to execute pubs and return :class:`src.qrc.run.circuit_run.Results`.
+    fmp_retriever : src.qrc.run.fmp_retriever.BaseFeatureMapsRetriever
+        Retriever that converts runner results into a feature matrix ``Phi``.
+    pubs_family : str
+        Name of the pubs family used to build circuits (e.g. ``"ising_ring_swap"``).
+    angle_positioning_name : str
+        Name of the angle positioning map to be applied to window values before they are used as circuit angles.
+        Small numerical constant forwarded to the pubs builder (used for stability in some encodings).
+    runner_kwargs : dict
+        Keyword arguments forwarded to ``runner.run_pubs(...)`` (e.g. ``device="GPU"``).
+    fmp_kwargs : dict
+        Keyword arguments forwarded to ``fmp_retriever.get_feature_maps(...)`` (e.g. ``shots`` for CS retriever).
+
+    Notes
+    -----
+    This class is conceptually similar to an ``sklearn`` transformer, but kept minimal on purpose.
     """
     cfg: BaseQRConfig
     runner: BaseCircuitsRunner
@@ -34,6 +67,24 @@ class QRCFeaturizer:
     fmp_kwargs: Dict[str, Any]
 
     def transform(self, X: np.ndarray) -> np.ndarray:
+        """
+        Compute a feature matrix for a batch of windows.
+
+        Parameters
+        ----------
+        X : numpy.ndarray
+            Window dataset with shape ``(N, w, d)``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Feature matrix ``Phi`` with shape ``(N, D)``.
+
+        Raises
+        ------
+        ValueError
+            If the input shape is not ``(N, w, d)``.
+        """
         if X.ndim != 3:
             raise ValueError(f"X must be (N,w,d). Got {X.shape}.")
 

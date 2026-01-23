@@ -1,3 +1,11 @@
+"""Kernel utilities for QRC models.
+
+This module provides helper routines used by :class:`src.models.qrc_matern_krr.QRCMaternKRRRegressor`
+to tune Matérn kernel hyperparameters and evaluate kernel ridge regression (KRR) validation error.
+
+The tuners are intentionally lightweight: a single train/validation split and simple optimizers.
+"""
+
 import numpy as np
 from typing import Tuple, Dict, Sequence
 from scipy.optimize import minimize, minimize_scalar
@@ -15,6 +23,27 @@ def krr_val_mse_for_params(
         nu: float,
         reg: float,
 ) -> float:
+    """
+    Compute the validation MSE for kernel ridge regression with a fixed Matérn kernel.
+
+    Parameters
+    ----------
+    Xtr, ytr : numpy.ndarray
+        Training features and targets. ``Xtr`` has shape ``(N_tr, D)`` and ``ytr`` has shape ``(N_tr,)``.
+    Xva, yva : numpy.ndarray
+        Validation features and targets. ``Xva`` has shape ``(N_va, D)`` and ``yva`` has shape ``(N_va,)``.
+    log_xi : float
+        Log length-scale, i.e. ``log_xi = log(xi)``.
+    nu : float
+        Matérn smoothness parameter.
+    reg : float
+        Ridge regularization parameter added to the Gram matrix diagonal.
+
+    Returns
+    -------
+    float
+        Mean squared error on the validation set.
+    """
     xi = float(np.exp(log_xi))
     # Build kernel with fixed params
     ker = ConstantKernel(1.0, constant_value_bounds="fixed") * SkMatern(
@@ -43,8 +72,34 @@ def tune_matern_continuous_train_val(
         n_restarts: int = 8,
 ) -> Tuple[Dict, float]:
     """
-    Continuous search over (xi, nu) to minimize validation MSE (single split).
-    Returns: (best_params_dict, best_mse).
+    Tune Matérn hyperparameters with a continuous 2D search over ``(xi, nu)``.
+
+    This routine performs a single train/validation split and then runs multiple random restarts
+    of a bounded Powell optimization over ``(log(xi), nu)``.
+
+    Parameters
+    ----------
+    X, y : numpy.ndarray
+        Features and targets. ``X`` has shape ``(N, D)`` and ``y`` has shape ``(N,)``.
+    val_ratio : float, default=0.2
+        Fraction of samples used for validation.
+    seed : int, default=0
+        Seed controlling the split and random restarts.
+    reg : float, default=1e-6
+        Ridge regularization parameter.
+    xi_bounds : tuple[float, float], default=(1e-3, 1e3)
+        Bounds for the Matérn length-scale ``xi``.
+    nu_bounds : tuple[float, float], default=(0.2, 5.0)
+        Bounds for the Matérn smoothness ``nu``.
+    n_restarts : int, default=8
+        Number of random restarts.
+
+    Returns
+    -------
+    best_params : dict
+        Best parameters with keys ``{"xi", "nu", "reg"}``.
+    best_mse : float
+        Best validation MSE achieved.
     """
     rng = np.random.default_rng(seed)
     N = X.shape[0]
@@ -99,10 +154,35 @@ def tune_matern_grid_train_val(
         xi_maxiter: int = 80,
 ) -> Tuple[Dict, float]:
     """
-    Grid search over nu, and 1D bounded optimization over log(xi), to minimize
-    validation MSE (single split). Returns: (best_params_dict, best_mse).
+    Tune Matérn hyperparameters with a grid over ``nu`` and a 1D bounded search over ``xi``.
 
-    This is typically faster + more stable than 2D Powell in (xi, nu).
+    For each ``nu`` in ``nu_grid``, this routine minimizes the validation MSE over
+    ``xi in [xi_bounds[0], xi_bounds[1]]`` using bounded optimization on ``log(xi)``.
+    The best pair is returned.
+
+    Parameters
+    ----------
+    X, y : numpy.ndarray
+        Features and targets. ``X`` has shape ``(N, D)`` and ``y`` has shape ``(N,)``.
+    val_ratio : float, default=0.2
+        Fraction of samples used for validation.
+    seed : int, default=0
+        Seed controlling the split.
+    reg : float, default=1e-6
+        Ridge regularization parameter.
+    xi_bounds : tuple[float, float], default=(1e-3, 1e3)
+        Bounds for the Matérn length-scale ``xi``.
+    nu_grid : Sequence[float], default=(0.5, 1.5, 2.5, 5.0)
+        Candidate values for Matérn smoothness ``nu``.
+    xi_maxiter : int, default=80
+        Maximum iterations for the 1D optimizer.
+
+    Returns
+    -------
+    best_params : dict
+        Best parameters with keys ``{"xi", "nu", "reg"}``.
+    best_mse : float
+        Best validation MSE achieved.
     """
     if X.ndim != 2:
         raise ValueError(f"X must be 2D (N,d). Got shape {X.shape}.")

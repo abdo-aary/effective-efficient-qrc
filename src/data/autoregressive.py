@@ -1,1 +1,0 @@
-"""TODO: ensure that each data entry is in (-1, 1)!"""

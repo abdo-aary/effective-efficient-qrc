@@ -67,7 +67,7 @@ qrc:
 
   pubs:
     family: ising_ring_swap
-    angle_positioning: linear
+    angle_positioning: tanh
     num_reservoirs: 2
     lam_0: 0.1
     seed: 0
@@ -75,7 +75,7 @@ qrc:
 
   runner:
     kind: exact_aer
-    kwargs: {}
+    kwargs: {device: "GPU"}
 
   features:
     kind: exact

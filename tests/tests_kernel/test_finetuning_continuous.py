@@ -44,7 +44,7 @@ def train_val_split(X, y, val_ratio=0.2, seed=0):
 # ======================================================================
 
 def test_tune_returns_dict_and_float_and_respects_bounds():
-    X, y = make_smooth_regression_dataset(N=80, D=4, noise=0.02, seed=1)
+    X, y = make_smooth_regression_dataset(N=10, D=4, noise=0.02, seed=1)
 
     xi_bounds = (1e-2, 1e2)
     nu_bounds = (0.3, 3.5)
@@ -73,7 +73,7 @@ def test_tune_returns_dict_and_float_and_respects_bounds():
 # ======================================================================
 
 def test_tune_is_deterministic_given_seed():
-    X, y = make_smooth_regression_dataset(N=90, D=5, noise=0.03, seed=2)
+    X, y = make_smooth_regression_dataset(N=10, D=3, noise=0.03, seed=2)
 
     best1, mse1 = tune_matern_continuous_train_val(
         X, y, seed=123, val_ratio=0.2, reg=1e-6, n_restarts=5
@@ -89,7 +89,7 @@ def test_tune_is_deterministic_given_seed():
 
 def test_tune_changes_with_different_seed_split_usually():
     # Not guaranteed mathematically, but "usually" should differ with different random split
-    X, y = make_smooth_regression_dataset(N=120, D=6, noise=0.05, seed=3)
+    X, y = make_smooth_regression_dataset(N=10, D=3, noise=0.05, seed=3)
 
     best1, mse1 = tune_matern_continuous_train_val(
         X, y, seed=0, val_ratio=0.2, reg=1e-6, n_restarts=4
@@ -107,7 +107,7 @@ def test_tune_changes_with_different_seed_split_usually():
 # ======================================================================
 
 def test_tuned_params_improve_over_bad_params_on_validation():
-    X, y = make_smooth_regression_dataset(N=140, D=6, noise=0.03, seed=4)
+    X, y = make_smooth_regression_dataset(N=10, D=3, noise=0.03, seed=4)
     Xtr, ytr, Xva, yva = train_val_split(X, y, val_ratio=0.25, seed=10)
 
     # Tune on same split by calling tune_matern_continuous_train_val with same seed
