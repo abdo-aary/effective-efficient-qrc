@@ -9,7 +9,9 @@
 venv/
 
 # Draft
-#draft/
+*draft*
+
+*dep*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

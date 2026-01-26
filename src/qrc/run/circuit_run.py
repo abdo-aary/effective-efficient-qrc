@@ -1,4 +1,5 @@
-"""src.qrc.run.circuit_run
+"""
+src.qrc.run.circuit_run
 
 Runners and result containers for executing QRC circuits.
 
@@ -15,8 +16,7 @@ This module defines:
 A **PUB** is represented as a ``(qc, param_values)`` tuple where:
 
 - ``qc`` is a Qiskit :class:`~qiskit.QuantumCircuit` that is parameterized by the
-  reservoir parameters (and typically also injection parameters already bound by
-  the circuit factory).
+  reservoir parameters (and may already include input injection angles as numeric values).
 - ``param_values`` is a NumPy array of shape ``(R, P)`` that provides *R* distinct
   reservoir parameterizations for the same circuit (spatial multiplexing). The
   column order is **not** ``qc.parameters`` order: it is rebuilt from circuit
@@ -30,25 +30,32 @@ The runner expects the circuit metadata keys:
 - ``qc.metadata["lam"]``: contraction parameter
 
 These keys are produced by the circuit factory in :mod:`src.qrc.circuits`.
-"""
 
+Performance note (Patch B)
+--------------------------
+Transpiling inside a Python loop can dominate runtime long before GPU work starts.
+To reduce overhead while preserving correctness for circuits that differ by *numeric*
+injection angles, :meth:`ExactAerCircuitsRunner.run_pubs` uses **batched transpilation**
+(`transpile(list_of_circuits, ...)`) rather than caching/reusing a transpiled circuit.
+"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import Any, List, Optional, Tuple, Dict
 
 import numpy as np
+import pickle
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
-
+from qiskit.circuit import Parameter
 from src.qrc.circuits.configs import BaseQRConfig
 
-import pickle
 
+PUB = Tuple[QuantumCircuit, np.ndarray]
 
-def _to_array(dm_obj) -> np.ndarray:
+def _to_array(dm_obj: Any) -> np.ndarray:
     """Convert a Qiskit density-matrix-like object to a complex NumPy array.
 
     Parameters
@@ -74,7 +81,7 @@ class Results(ABC):
     Attributes
     ----------
     cfg : BaseQRConfig
-        Configuration used to build/run the circuits (topology, projection, qubits, etc.).
+        Configuration used to build/run the circuits (topology, number of qubits, etc.).
     states : np.ndarray
         Array storing simulator outputs. The exact meaning/shape depends on the subclass.
     """
@@ -151,8 +158,8 @@ class ExactResults(Results):
 
         Notes
         -----
-        The serialization uses a small dict payload (class name, states, cfg)
-        to remain future-proof if the dataclass layout changes.
+        The serialization uses a dict payload (class name, states, cfg)
+        to remain more forward-compatible if the dataclass layout changes.
         """
         path = Path(file)
         with path.open("wb") as f:
@@ -185,7 +192,6 @@ class ExactResults(Results):
         with path.open("rb") as f:
             obj = pickle.load(f)
 
-        # Support both: whole-object pickle and dict-based payload
         if isinstance(obj, ExactResults):
             return obj
 
@@ -220,10 +226,11 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
     The runner:
 
     1. Configures an :class:`~qiskit_aer.AerSimulator` backend with ``method="density_matrix"``.
-    2. For each PUB, transpiles the circuit, ensures a density-matrix save instruction exists,
+    2. For each PUB, copies the circuit, ensures a density-matrix save instruction exists,
        and prepares a parameter-binds mapping.
-    3. Executes all circuits in a single Aer job using ``parameter_binds``.
-    4. Extracts reduced density matrices (reservoir qubits only) into an array
+    3. Transpiles all circuits in a single batched call to reduce Python overhead.
+    4. Executes all circuits in a single Aer job using ``parameter_binds``.
+    5. Extracts reduced density matrices (reservoir qubits only) into an array
        of shape ``(N, R, 2**n, 2**n)``.
 
     Notes
@@ -241,7 +248,6 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
 
     If Aer is built with GPU support and exposes ``available_devices()``,
     passing ``device="GPU"`` to :meth:`run_pubs` will request GPU execution.
-    The test suite should skip gracefully if GPU is unavailable.
     """
 
     def __init__(self, cfg: BaseQRConfig):
@@ -256,26 +262,31 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
         self.backend = AerSimulator(method="density_matrix")
 
     def run_pubs(
-        self,
-        pubs: List[Tuple[QuantumCircuit, np.ndarray]],
-        max_threads: Optional[int] = None,
-        seed_simulator: int = 0,
-        optimization_level: int = 1,
-        device: str = "CPU",
-        max_parallel_threads: Optional[int] = None,
-        max_parallel_experiments: Optional[int] = None,
-        max_parallel_shots: Optional[int] = None,
+            self,
+            pubs: List[PUB],
+            max_threads: Optional[int] = None,
+            seed_simulator: int = 0,
+            optimization_level: int = 1,
+            device: str = "CPU",
+            max_parallel_threads: Optional[int] = None,
+            max_parallel_experiments: Optional[int] = None,
+            max_parallel_shots: Optional[int] = None,
+            chunk_size: Optional[int] = None,
     ) -> ExactResults:
-        """Run a PUBS dataset and return exact reduced density matrices.
+        """Run a list of PUBs using Aer (density-matrix) and return reduced DMs.
 
         Parameters
         ----------
-        pubs : list[tuple[QuantumCircuit, np.ndarray]]
-            List of PUBs. Each element is ``(qc, vals)`` where:
+        pubs : list[tuple[qiskit.QuantumCircuit, numpy.ndarray]]
+            PUBs collection.
 
-            - ``qc`` is a parameterized circuit with required metadata keys
-              ``J``, ``h_x``, ``h_z``, ``lam``.
-            - ``vals`` is a float array of shape ``(R, P)`` containing *R* parameterizations.
+            **Legacy mode**:
+                ``pubs`` has length ``N`` and each ``vals`` is shape ``(R, P)``.
+
+            **Batched-template mode** (the “big fix”):
+                ``pubs`` has length ``1`` and the single ``vals`` is shape ``(N, R, P)``.
+                The same parameterized circuit template is transpiled once and executed with
+                vectorized parameter binds.
 
         max_threads : int, optional
             Requested maximum threads for Aer. If ``None`` or < 1, uses Aer convention
@@ -292,6 +303,10 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
             Aer parallelism option.
         max_parallel_shots : int, optional
             Aer parallelism option.
+        chunk_size : int, optional
+            Only used in **batched-template mode**. If provided, splits the total
+            number of experiments ``N*R`` into chunks of at most ``chunk_size`` to
+            reduce peak memory and job sizes.
 
         Returns
         -------
@@ -304,21 +319,11 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
             If PUB formatting is inconsistent, metadata is missing, or dimensions mismatch.
         KeyError
             If Aer result objects do not contain a density matrix payload.
-
-        Notes
-        -----
-        This runner always requests ``shots=1`` because it uses deterministic density-matrix
-        simulation; repeated shots do not change the returned state.
         """
-        N = len(pubs)
-        if N == 0:
+        if not pubs:
             raise ValueError("pubs must be non-empty")
 
-        # All pubs share same R
-        R = int(pubs[0][1].shape[0])
-
-        # We save ONLY the reservoir qubits 0..n-1
-        n_res = int(self.cfg.num_qubits)
+        n_res = int(getattr(self.cfg, "num_qubits"))
         dim_res = 1 << n_res
 
         # Aer parallelism options
@@ -338,53 +343,168 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
             max_parallel_shots=max_parallel_shots,
         )
 
-        circuits = []
-        binds_list = []
+        def _param_order_from_metadata(qc: QuantumCircuit) -> List[Parameter]:
+            """Resolve the expected parameter ordering from qc.metadata."""
+            if qc.metadata is None:
+                raise ValueError("Circuit has no metadata; cannot align parameter columns.")
+            md = qc.metadata
+
+            # Recommended new way
+            if "param_order" in md:
+                order = list(md["param_order"])
+                if not order:
+                    raise ValueError("metadata['param_order'] is empty.")
+                return order
+
+            # Legacy fallback: J, h_x, h_z, lam
+            try:
+                J = list(md["J"])
+                hx = list(md["h_x"])
+                hz = list(md["h_z"])
+                lam = md["lam"]
+            except KeyError as e:
+                raise ValueError(
+                    f"Missing metadata key {e}. Need 'param_order' or (J,h_x,h_z,lam)."
+                ) from e
+            return J + hx + hz + [lam]
+
+        def _ensure_save_density_matrix(qc: QuantumCircuit) -> QuantumCircuit:
+            """Copy qc and add save_density_matrix(qubits=reservoir) if missing."""
+            qc_work = qc.copy()
+            has_save_dm = any(
+                getattr(inst.operation, "name", "") == "save_density_matrix"
+                for inst in qc_work.data
+            )
+            if not has_save_dm:
+                qc_work.save_density_matrix(qubits=list(range(n_res)))
+            return qc_work
+
+        # ------------------------------------------------------------------
+        # Mode detection
+        # ------------------------------------------------------------------
+        qc0, vals0 = pubs[0]
+        vals0 = np.asarray(vals0)
+
+        batched_template_mode = (len(pubs) == 1) and (vals0.ndim == 3)
+
+        if batched_template_mode:
+            # ==============================================================
+            # Batched-template mode: one circuit, vals shape (N, R, P)
+            # ==============================================================
+            N, R, P = map(int, vals0.shape)
+
+            param_order = _param_order_from_metadata(qc0)
+            if len(param_order) != P:
+                raise ValueError(
+                    f"Template vals has P={P} cols but metadata param_order has {len(param_order)} params."
+                )
+
+            qc_work = _ensure_save_density_matrix(qc0)
+            tqc = transpile(qc_work, backend=self.backend, optimization_level=optimization_level)
+
+            # Map parameters by NAME (robust if Parameter objects differ post-transpile)
+            tparam_by_name: Dict[str, Parameter] = {p.name: p for p in list(tqc.parameters)}
+            order_names = [p.name for p in param_order]
+            missing = [nm for nm in order_names if nm not in tparam_by_name]
+            if missing:
+                raise ValueError(f"Transpiled circuit missing parameters {missing}")
+
+            states = np.empty((N, R, dim_res, dim_res), dtype=complex)
+
+            B = N * R  # total number of experiments for the single template circuit
+            if chunk_size is None or chunk_size < 1:
+                chunk_size = B
+
+            # Pre-flatten each parameter column once; slice per chunk.
+            flat_cols: List[np.ndarray] = [vals0[:, :, j].reshape(B) for j in range(P)]
+
+            offset = 0
+            while offset < B:
+                end = min(B, offset + chunk_size)
+                chunk_len = end - offset
+
+                bind = {
+                    tparam_by_name[nm]: flat_cols[j][offset:end].tolist()
+                    for j, nm in enumerate(order_names)
+                }
+                job = self.backend.run(
+                    [tqc],
+                    parameter_binds=[bind],
+                    shots=1,
+                    seed_simulator=seed_simulator,
+                )
+                result = job.result()
+
+                for kk in range(chunk_len):
+                    data_k = result.data(kk)
+
+                    dm = data_k.get("density_matrix", None)
+                    if dm is None:
+                        # older Aer sometimes stores the key with a prefix
+                        for key, val in data_k.items():
+                            if "density_matrix" in key:
+                                dm = val
+                                break
+                    if dm is None:
+                        raise KeyError(
+                            f"No density_matrix found in result.data({kk}). Keys={list(data_k.keys())}"
+                        )
+
+                    dm_arr = _to_array(dm)
+                    if dm_arr.shape != (dim_res, dim_res):
+                        raise ValueError(
+                            f"Got DM shape {dm_arr.shape}, expected {(dim_res, dim_res)} at global_k={offset + kk}"
+                        )
+
+                    global_k = offset + kk
+                    i = global_k // R
+                    r = global_k % R
+                    states[i, r] = dm_arr
+
+                offset = end
+
+            return ExactResults(states=states, cfg=self.cfg)
+
+        # ------------------------------------------------------------------
+        # Legacy mode: pubs length N, each vals shape (R, P)
+        # ------------------------------------------------------------------
+        N = len(pubs)
+        if vals0.ndim != 2:
+            raise ValueError(
+                f"Legacy PUB mode expects vals.ndim==2 for each pub, got pubs[0] shape {vals0.shape}. "
+                f"To use batched-template mode pass a single pub with vals shape (N,R,P)."
+            )
+
+        R = int(vals0.shape[0])
+
+        circuits: List[QuantumCircuit] = []
+        binds_list: List[Dict[Parameter, List[float]]] = []
 
         for i, (qc, vals) in enumerate(pubs):
+            vals = np.asarray(vals)
             if vals.ndim != 2:
                 raise ValueError(f"pub[{i}] params must be 2D (R,P). Got {vals.shape}")
             if vals.shape[0] != R:
                 raise ValueError(f"pub[{i}] has R={vals.shape[0]} but expected R={R}")
 
-            # Column order is reconstructed from metadata, not qc.parameters.
-            if qc.metadata is None:
-                raise ValueError(f"pub[{i}] circuit has no metadata; cannot align columns.")
-            try:
-                J = list(qc.metadata["J"])
-                hx = list(qc.metadata["h_x"])
-                hz = list(qc.metadata["h_z"])
-                lam = qc.metadata["lam"]
-            except KeyError as e:
-                raise ValueError(f"pub[{i}] missing metadata key {e}. Need J, h_x, h_z, lam.") from e
-
-            param_order = J + hx + hz + [lam]
+            param_order = _param_order_from_metadata(qc)
             P = len(param_order)
             if vals.shape[1] != P:
                 raise ValueError(
                     f"pub[{i}] param cols mismatch: vals has {vals.shape[1]} cols but expected {P} "
-                    f"(J,h_x,h_z,lam from qc.metadata)."
+                    f"(from circuit metadata)."
                 )
 
-            qc_work = qc.copy()
-
-            # Ensure a save_density_matrix instruction exists.
-            has_save_dm = any(getattr(inst.operation, "name", "") == "save_density_matrix" for inst in qc_work.data)
-            if not has_save_dm:
-                qc_work.save_density_matrix(qubits=list(range(n_res)))
-
+            qc_work = _ensure_save_density_matrix(qc)
             tqc = transpile(qc_work, backend=self.backend, optimization_level=optimization_level)
             circuits.append(tqc)
 
-            # Map parameters by NAME (robust if Parameter objects differ post-transpile)
-            tparam_by_name = {p.name: p for p in list(tqc.parameters)}
+            tparam_by_name: Dict[str, Parameter] = {p.name: p for p in list(tqc.parameters)}
             order_names = [p.name for p in param_order]
-
             missing = [nm for nm in order_names if nm not in tparam_by_name]
             if missing:
                 raise ValueError(f"pub[{i}] transpiled circuit missing parameters {missing}")
 
-            # Vectorized binds: each param -> list length R
             bind = {tparam_by_name[nm]: vals[:, j].tolist() for j, nm in enumerate(order_names)}
             binds_list.append(bind)
 
@@ -406,17 +526,20 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
 
                 dm = data_k.get("density_matrix", None)
                 if dm is None:
-                    # fallback: find any dm key
-                    for kk, vv in data_k.items():
-                        if "density_matrix" in kk:
-                            dm = vv
+                    for key, val in data_k.items():
+                        if "density_matrix" in key:
+                            dm = val
                             break
                 if dm is None:
-                    raise KeyError(f"No density_matrix found in result.data({k}). Keys={list(data_k.keys())}")
+                    raise KeyError(
+                        f"No density_matrix found in result.data({k}). Keys={list(data_k.keys())}"
+                    )
 
                 dm_arr = _to_array(dm)
                 if dm_arr.shape != (dim_res, dim_res):
-                    raise ValueError(f"Got DM shape {dm_arr.shape}, expected {(dim_res, dim_res)} at (i={i}, r={r})")
+                    raise ValueError(
+                        f"Got DM shape {dm_arr.shape}, expected {(dim_res, dim_res)} at (i={i}, r={r})"
+                    )
 
                 states[i, r] = dm_arr
 
