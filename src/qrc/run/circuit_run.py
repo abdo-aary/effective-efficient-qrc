@@ -80,13 +80,13 @@ class Results(ABC):
 
     Attributes
     ----------
-    cfg : BaseQRConfig
+    qrc_cfg : BaseQRConfig
         Configuration used to build/run the circuits (topology, number of qubits, etc.).
     states : np.ndarray
         Array storing simulator outputs. The exact meaning/shape depends on the subclass.
     """
 
-    cfg: BaseQRConfig
+    qrc_cfg: BaseQRConfig
     states: np.ndarray
 
     @abstractmethod
@@ -135,18 +135,18 @@ class ExactResults(Results):
 
     Then this class stores:
 
-    - ``states`` of shape ``(N, R, 2**n, 2**n)``, where ``n = cfg.num_qubits``.
+    - ``states`` of shape ``(N, R, 2**n, 2**n)``, where ``n = qrc_cfg.num_qubits``.
 
     Parameters
     ----------
     states : np.ndarray
         Complex array of reduced density matrices, shape ``(N, R, 2**n, 2**n)``.
-    cfg : BaseQRConfig
+    qrc_cfg : BaseQRConfig
         Configuration associated with these results.
     """
 
     states: np.ndarray
-    cfg: BaseQRConfig
+    qrc_cfg: BaseQRConfig
 
     def save(self, file: str | Path) -> None:
         """Serialize :class:`ExactResults` to disk.
@@ -158,13 +158,13 @@ class ExactResults(Results):
 
         Notes
         -----
-        The serialization uses a dict payload (class name, states, cfg)
+        The serialization uses a dict payload (class name, states, qrc_cfg)
         to remain more forward-compatible if the dataclass layout changes.
         """
         path = Path(file)
         with path.open("wb") as f:
             pickle.dump(
-                {"cls": "ExactResults", "states": self.states, "cfg": self.cfg},
+                {"cls": "ExactResults", "states": self.states, "qrc_cfg": self.qrc_cfg},
                 f,
                 protocol=pickle.HIGHEST_PROTOCOL,
             )
@@ -196,7 +196,7 @@ class ExactResults(Results):
             return obj
 
         if isinstance(obj, dict) and obj.get("cls") == "ExactResults":
-            return ExactResults(states=obj["states"], cfg=obj["cfg"])
+            return ExactResults(states=obj["states"], qrc_cfg=obj["qrc_cfg"])
 
         raise TypeError(f"File {file} does not contain a valid ExactResults object.")
 
@@ -250,15 +250,15 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
     passing ``device="GPU"`` to :meth:`run_pubs` will request GPU execution.
     """
 
-    def __init__(self, cfg: BaseQRConfig):
+    def __init__(self, qrc_cfg: BaseQRConfig):
         """Construct the runner.
 
         Parameters
         ----------
-        cfg : BaseQRConfig
+        qrc_cfg : BaseQRConfig
             Circuit configuration (number of reservoir qubits, etc.).
         """
-        self.cfg = cfg
+        self.qrc_cfg = qrc_cfg
         self.backend = AerSimulator(method="density_matrix")
 
     def run_pubs(
@@ -323,7 +323,7 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
         if not pubs:
             raise ValueError("pubs must be non-empty")
 
-        n_res = int(getattr(self.cfg, "num_qubits"))
+        n_res = int(getattr(self.qrc_cfg, "num_qubits"))
         dim_res = 1 << n_res
 
         # Aer parallelism options
@@ -464,7 +464,7 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
 
                 offset = end
 
-            return ExactResults(states=states, cfg=self.cfg)
+            return ExactResults(states=states, qrc_cfg=self.qrc_cfg)
 
         # ------------------------------------------------------------------
         # Legacy mode: pubs length N, each vals shape (R, P)
@@ -544,4 +544,4 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
 
                 states[i, r] = dm_arr
 
-        return ExactResults(states=states, cfg=self.cfg)
+        return ExactResults(states=states, qrc_cfg=self.qrc_cfg)
