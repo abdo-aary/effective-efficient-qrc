@@ -1,5 +1,5 @@
 root_dir: ${oc.env:PROJECT_ROOT}
-save_dir: ${.root_dir}/storage/data/synthetic/${process.kind}
+save_dir: ${.root_dir}/storage/data/synthetic/${process.kind}/N=${sampling.N}__w=${sampling.w}__d=${sampling.d}__s=${sampling.s}
 
 name: auto
 format: npz

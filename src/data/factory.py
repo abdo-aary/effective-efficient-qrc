@@ -212,12 +212,7 @@ def _auto_name(cfg: DictConfig) -> str:
     str
         A filesystem-friendly name encoding process/functional and main hyperparams.
     """
-    N, w, d = int(cfg.sampling.N), int(cfg.sampling.w), int(cfg.sampling.d)
-    s = int(cfg.sampling.s)
-    proc = str(cfg.process.kind)
-    fun = str(cfg.functionals.kind)
-    seed = int(cfg.seed)
-    return f"{proc}__{fun}__N={N}__w={w}__d={d}__s={s}__seed={seed}"
+    return "data"
 
 
 def save_dataset(ds: WindowsDataset, cfg: DictConfig) -> DatasetArtifact:
