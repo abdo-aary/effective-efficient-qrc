@@ -50,10 +50,10 @@ import pickle
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from qiskit.circuit import Parameter
-from src.qrc.circuits.configs import BaseQRConfig
-
+from src.qrc.circuits.qrc_configs import BaseQRConfig
 
 PUB = Tuple[QuantumCircuit, np.ndarray]
+
 
 def _to_array(dm_obj: Any) -> np.ndarray:
     """Convert a Qiskit density-matrix-like object to a complex NumPy array.
@@ -396,7 +396,8 @@ class ExactAerCircuitsRunner(BaseCircuitsRunner):
             param_order = _param_order_from_metadata(qc0)
             if len(param_order) != P:
                 raise ValueError(
-                    f"Template vals has P={P} cols but metadata param_order has {len(param_order)} params."
+                    f"param cols mismatch: template vals has {P} cols but expected {len(param_order)} "
+                    f"(from circuit metadata)."
                 )
 
             qc_work = _ensure_save_density_matrix(qc0)

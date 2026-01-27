@@ -3,14 +3,10 @@ import pytest
 
 from qiskit import QuantumCircuit, transpile
 from qiskit.quantum_info import DensityMatrix, partial_trace
-
-try:
-    from src.qrc.circuits.configs import RingQRConfig as Config
-except Exception:
-    from src.qrc.circuits.configs import RingQRCConfig as Config
+from src.qrc.circuits.qrc_configs import RingQRConfig as Config
 
 from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.utils import angle_positioning_tanh
+from src.qrc.circuits.utils import angle_positioning_tanh, angle_positioning_linear
 
 qiskit_aer = pytest.importorskip("qiskit_aer")
 from qiskit_aer import AerSimulator
@@ -35,6 +31,18 @@ def reduce_reservoir(dm_full: DensityMatrix, n: int) -> DensityMatrix:
     return DensityMatrix(partial_trace(dm_full, env))
 
 
+def bind_from_pub_row(qc: QuantumCircuit, row: np.ndarray) -> dict:
+    """
+    Optimized/template PUBs define an explicit parameter column order
+    (qc.metadata['param_order']). Fall back to qc.parameters if absent.
+    """
+    order = qc.metadata.get("param_order", None)
+    if order is None:
+        order = list(qc.parameters)
+    assert len(order) == len(row), f"Param order length {len(order)} != row length {len(row)}"
+    return dict(zip(order, row))
+
+
 # -------------------------
 # Closed-form expected state for n=1, z=0, hz=pi, hx=0
 # -------------------------
@@ -49,12 +57,12 @@ def expected_rho_after_w_steps(lam: float, w: int) -> np.ndarray:
     assert 0.0 <= lam <= 1.0
     x_star = (1.0 - lam) / (1.0 + lam) if lam != 1.0 else 0.0
     x_w = x_star + (1.0 - x_star) * ((-lam) ** w)
-
-    # rho = 1/2 [[1, x], [x, 1]]
     return np.array([[0.5, 0.5 * x_w], [0.5 * x_w, 0.5]], dtype=complex)
 
 
-def make_param_values_for_step_order(qc_step: QuantumCircuit, *, hx: float, hz: float, lam: float, R: int) -> np.ndarray:
+def make_param_values_for_step_order(
+    qc_step: QuantumCircuit, *, hx: float, hz: float, lam: float, R: int
+) -> np.ndarray:
     """
     Build param_values in the SAME column order as CircuitFactory.set_reservoirs_parameterizationSWAP:
       [J..., h_x..., h_z..., lam]
@@ -69,8 +77,6 @@ def make_param_values_for_step_order(qc_step: QuantumCircuit, *, hx: float, hz: 
     P = len(order)
 
     vals = np.zeros((R, P), dtype=float)
-    # fill: J=0, hx,hz constant, lam varies per row (caller can overwrite)
-    # here we just set constant lam for all rows; test can modify
     for r in range(R):
         for j, p in enumerate(order):
             if p.name.startswith("h_x"):
@@ -102,15 +108,49 @@ def X_zero(cfg1):
 
 
 # -------------------------
-# Runtime tests for create_pubs_dataset_reservoirs_IsingRingSWAP
+# Tests: create_pubs_dataset_reservoirs_IsingRingSWAP (template entrypoint)
 # -------------------------
 
-def test_dataset_pubs_runtime_expected_state_single_reservoir(cfg1, X_zero, monkeypatch):
+def test_create_pubs_dataset_returns_template_pub(cfg1, X_zero):
     """
-    Strong runtime check:
-    Patch parameterization to force hz=pi, hx=0, lambda=lam0 for all reservoirs (R=1),
-    then every pub circuit output (reduced to reservoir) must match the closed-form rho_w.
-    This ALSO catches any param_values <-> qc.parameters column-order mismatch.
+    The updated implementation should ALWAYS return template mode:
+      pubs = [(qc_template, vals)] with vals shape (N, R, P_total).
+    """
+    lam_0 = 0.05
+    R = 4
+
+    pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
+        qrc_cfg=cfg1,
+        angle_positioning=angle_positioning_linear,
+        X=X_zero,
+        lam_0=lam_0,
+        num_reservoirs=R,
+        seed=123,
+        eps=1e-8,
+    )
+
+    assert isinstance(pubs, list)
+    assert len(pubs) == 1
+
+    qc0, vals0 = pubs[0]
+    assert isinstance(qc0, QuantumCircuit)
+    assert isinstance(vals0, np.ndarray)
+    assert vals0.ndim == 3
+
+    assert vals0.shape[0] == X_zero.shape[0]  # N
+    assert vals0.shape[1] == R                 # R
+    assert "param_order" in qc0.metadata
+    assert vals0.shape[2] == len(qc0.metadata["param_order"])
+
+
+# -------------------------
+# Runtime tests (adapted to internal reservoir sampling)
+# -------------------------
+
+def test_dataset_runtime_expected_state_single_reservoir(cfg1, X_zero, monkeypatch):
+    """
+    Patch sampling to force hz=pi, hx=0, lambda=lam0 for all reservoirs (R=1),
+    then the window circuit output reduced to reservoir must match closed-form rho_w.
     """
     lam0 = 0.37
     R = 1
@@ -129,7 +169,7 @@ def test_dataset_pubs_runtime_expected_state_single_reservoir(cfg1, X_zero, monk
     )
 
     pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
-        cfg=cfg1,
+        qrc_cfg=cfg1,
         angle_positioning=angle_positioning_tanh,
         X=X_zero,
         lam_0=lam0,
@@ -138,20 +178,22 @@ def test_dataset_pubs_runtime_expected_state_single_reservoir(cfg1, X_zero, monk
         eps=1e-8,
     )
 
+    qc, vals = pubs[0]
+    assert vals.ndim == 3
+
     expected = expected_rho_after_w_steps(lam=lam0, w=w)
 
-    for qc, vals in pubs:
-        # bind using pub convention: vals row aligns with qc.parameters
-        bind = dict(zip(list(qc.parameters), vals[0]))
+    for i in range(X_zero.shape[0]):  # over windows
+        bind = bind_from_pub_row(qc, vals[i, 0])
         dm_full = run_dm(qc.assign_parameters(bind, inplace=False), seed=0)
         dm_res = reduce_reservoir(dm_full, n=cfg1.num_qubits)
         assert np.allclose(dm_res.data, expected, atol=1e-10, rtol=0.0)
 
 
-def test_dataset_pubs_runtime_expected_state_multiple_reservoirs(cfg1, X_zero, monkeypatch):
+def test_dataset_runtime_expected_state_multiple_reservoirs(cfg1, X_zero, monkeypatch):
     """
-    Same as above but with multiple reservoirs (R>1) and different lambdas per reservoir row.
-    Verifies each row produces the correct analytic rho_w(lam_r).
+    Multiple reservoirs (R>1), each with its own lambda row.
+    Verifies each reservoir row produces correct analytic rho_w(lam_r).
     """
     R = 3
     w = X_zero.shape[1]
@@ -159,10 +201,7 @@ def test_dataset_pubs_runtime_expected_state_multiple_reservoirs(cfg1, X_zero, m
 
     qc_step = CircuitFactory.createIsingRingCircuitSWAP(cfg1, angle_positioning_tanh)
     forced_param_values = make_param_values_for_step_order(qc_step, hx=0.0, hz=np.pi, lam=lams[0], R=R)
-    # overwrite lam column per row
-    lam_col = forced_param_values.shape[1] - 1
-    for r in range(R):
-        forced_param_values[r, lam_col] = lams[r]
+    forced_param_values[:, -1] = np.asarray(lams, dtype=float)  # last col = lam
 
     def patched_set_reservoirs_parameterizationSWAP(*args, **kwargs):
         return forced_param_values
@@ -174,7 +213,7 @@ def test_dataset_pubs_runtime_expected_state_multiple_reservoirs(cfg1, X_zero, m
     )
 
     pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
-        cfg=cfg1,
+        qrc_cfg=cfg1,
         angle_positioning=angle_positioning_tanh,
         X=X_zero,
         lam_0=lams[0],
@@ -183,9 +222,12 @@ def test_dataset_pubs_runtime_expected_state_multiple_reservoirs(cfg1, X_zero, m
         eps=1e-8,
     )
 
-    for qc, vals in pubs:
+    qc, vals = pubs[0]
+    assert vals.ndim == 3
+
+    for i in range(X_zero.shape[0]):
         for r in range(R):
-            bind = dict(zip(list(qc.parameters), vals[r]))
+            bind = bind_from_pub_row(qc, vals[i, r])
             dm_full = run_dm(qc.assign_parameters(bind, inplace=False), seed=0)
             dm_res = reduce_reservoir(dm_full, n=cfg1.num_qubits)
 
@@ -193,12 +235,11 @@ def test_dataset_pubs_runtime_expected_state_multiple_reservoirs(cfg1, X_zero, m
             assert np.allclose(dm_res.data, expected, atol=1e-10, rtol=0.0)
 
 
-def test_dataset_pubs_runtime_consistency_row_vs_name_binding(cfg1, X_zero, monkeypatch):
+def test_dataset_runtime_consistency_row_vs_name_binding(cfg1, X_zero, monkeypatch):
     """
-    Detect subtle parameter-order mismatches:
-    Compare output when binding via pub row vector (zip(qc.parameters, row))
-    versus binding by parameter NAMES (independent of column order).
-    If these differ, your pub column order does not match qc.parameters.
+    Detect parameter-order mismatches:
+    Compare binding via pub row vector in qc.metadata['param_order']
+    vs binding by parameter NAMES (immune to column order).
     """
     lam0 = 0.41
     R = 1
@@ -216,9 +257,9 @@ def test_dataset_pubs_runtime_consistency_row_vs_name_binding(cfg1, X_zero, monk
     )
 
     pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
-        cfg=cfg1,
+        qrc_cfg=cfg1,
         angle_positioning=angle_positioning_tanh,
-        X=X_zero[:1],  # one window is enough
+        X=X_zero[:1],
         lam_0=lam0,
         num_reservoirs=R,
         seed=0,
@@ -226,17 +267,21 @@ def test_dataset_pubs_runtime_consistency_row_vs_name_binding(cfg1, X_zero, monk
     )
 
     qc, vals = pubs[0]
-    row = vals[0]
+    assert vals.ndim == 3
 
-    # (A) pub binding: assumes correct column order
-    bind_row = dict(zip(list(qc.parameters), row))
+    row = vals[0, 0]
+
+    # (A) pub row binding via param_order
+    bind_row = bind_from_pub_row(qc, row)
     dmA = run_dm(qc.assign_parameters(bind_row, inplace=False), seed=0)
     dmA_res = reduce_reservoir(dmA, n=cfg1.num_qubits)
 
-    # (B) name-based binding: immune to column ordering
+    # (B) name-based binding
     bind_name = {}
     for p in list(qc.parameters):
-        if p.name.startswith("h_x"):
+        if p.name.startswith("z_") or p.name.startswith("z"):
+            bind_name[p] = 0.0
+        elif p.name.startswith("h_x"):
             bind_name[p] = 0.0
         elif p.name.startswith("h_z"):
             bind_name[p] = float(np.pi)

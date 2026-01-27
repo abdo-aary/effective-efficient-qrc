@@ -1,12 +1,106 @@
 import numpy as np
 import pytest
 
+import inspect
+
+
+def _get_pub_dataset_fn():
+    fn = getattr(CircuitFactory, "create_pubs_dataset_reservoirs_IsingRingSWAP", None)
+    if fn is None:
+        fn = getattr(CircuitFactory, "create_pubs_dataset_reservoir_IsingRingSWAP", None)
+    if fn is None:
+        raise AttributeError(
+            "Could not find create_pubs_dataset_reservoirs_IsingRingSWAP or create_pubs_dataset_reservoir_IsingRingSWAP"
+        )
+    return fn
+
+
+def _pub_qc_vals(pub):
+    if isinstance(pub, (tuple, list)) and len(pub) >= 2:
+        return pub[0], pub[1]
+    raise TypeError(f"Unsupported PUB container type: {type(pub)}")
+
+
+def pubs_is_template(pubs) -> bool:
+    if not isinstance(pubs, list) or len(pubs) == 0:
+        return False
+    _, vals0 = _pub_qc_vals(pubs[0])
+    return (len(pubs) == 1) and isinstance(vals0, np.ndarray) and (vals0.ndim == 3)
+
+
+def pubs_N_R(pubs):
+    if pubs_is_template(pubs):
+        _, vals = _pub_qc_vals(pubs[0])
+        return int(vals.shape[0]), int(vals.shape[1])
+    else:
+        N = len(pubs)
+        _, vals0 = _pub_qc_vals(pubs[0])
+        return int(N), int(vals0.shape[0])
+
+
+def pubs_get_qc_vals_for_window(pubs, i: int):
+    if pubs_is_template(pubs):
+        qc, vals = _pub_qc_vals(pubs[0])
+        # Help runner / reference binding
+        qc.metadata = qc.metadata or {}
+        qc.metadata["param_order"] = param_order_from_metadata(qc)
+        return qc, vals[i]
+    else:
+        return _pub_qc_vals(pubs[i])
+
+
+def pubs_get_qc_row(pubs, i: int, r: int):
+    qc, vals = pubs_get_qc_vals_for_window(pubs, i)
+    if vals.ndim == 2:
+        return qc, vals[r]
+    raise ValueError(f"Unexpected vals.ndim={vals.ndim} for pubs_get_qc_row")
+
+
+def call_create_pubs_dataset(*, cfg, angle_positioning, X, lam_0, num_reservoirs, seed=0, eps=1e-8, template_pub=True):
+    """Dispatcher across legacy vs optimized CircuitFactory signatures."""
+    fn = _get_pub_dataset_fn()
+    sig = inspect.signature(fn)
+    params = sig.parameters
+
+    kwargs = dict(cfg=cfg, angle_positioning=angle_positioning, X=X)
+
+    if "parameters_reservoirs" in params:
+        parameters_reservoirs = CircuitFactory.set_reservoirs_parameterizationSWAP(
+            cfg=cfg,
+            angle_positioning=angle_positioning,
+            num_reservoirs=num_reservoirs,
+            lam_0=lam_0,
+            seed=seed,
+            eps=eps,
+        )
+        kwargs["parameters_reservoirs"] = parameters_reservoirs
+        if "template_pub" in params:
+            kwargs["template_pub"] = template_pub
+    else:
+        kwargs.update(lam_0=lam_0, num_reservoirs=num_reservoirs, seed=seed, eps=eps)
+        if "template_pub" in params:
+            kwargs["template_pub"] = template_pub
+
+    return fn(**kwargs)
+
+
+def param_order_from_metadata(qc):
+    md = getattr(qc, "metadata", None) or {}
+    if "param_order" in md:
+        return list(md["param_order"])
+    J = list(md["J"])
+    hx = list(md["h_x"])
+    hz = list(md["h_z"])
+    lam = md["lam"]
+    return J + hx + hz + [lam]
+
+
 from qiskit.quantum_info import SparsePauliOp, Operator
 
 from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactResults
 from src.qrc.run.fmp_retriever import ExactFeatureMapsRetriever
 from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.configs import RingQRConfig
+from src.qrc.circuits.qrc_configs import RingQRConfig
 from src.qrc.circuits.utils import angle_positioning_linear
 
 
@@ -112,45 +206,21 @@ def X_small(cfg_small):
 
 @pytest.fixture(scope="module")
 def pubs_small(cfg_small, X_small):
-    """
-    Try to use your dataset pub builder if present.
-    Otherwise, fall back to building per-window pubs if you exposed that API.
-    """
     lam_0 = 0.05
     R = 3
 
-    # preferred: the function you described
-    for name in [
-        "create_pubs_dataset_reservoirs_IsingRingSWAP",
-        "create_pubs_dataset_reservoir_IsingRingSWAP",
-        "create_pubs_dataset_reservoir_IsingRingRingSWAP",
-    ]:
-        fn = getattr(CircuitFactory, name, None)
-        if fn is not None:
-            return fn(
-                cfg=cfg_small,
-                angle_positioning=angle_positioning_linear,
-                X=X_small,
-                lam_0=lam_0,
-                num_reservoirs=R,
-            )
-
-    # fallback: if you have a per-window pub builder
-    fn2 = getattr(CircuitFactory, "create_pub_reservoir_IsingRingSWAP", None)
-    if fn2 is None:
-        pytest.skip("No dataset pub builder found on CircuitFactory.")
-    pubs = []
-    for i in range(X_small.shape[0]):
-        pubs.append(
-            fn2(
-                cfg=cfg_small,
-                angle_positioning=angle_positioning_linear,
-                x_window=X_small[i],
-                lam_0=lam_0,
-                num_reservoirs=R,
-                seed=100 + i,
-            )
-        )
+    pubs = call_create_pubs_dataset(
+        cfg=cfg_small,
+        angle_positioning=angle_positioning_linear,
+        X=X_small,
+        lam_0=lam_0,
+        num_reservoirs=R,
+        seed=999,
+        eps=1e-8,
+        template_pub=True,
+    )
+    N, _ = pubs_N_R(pubs)
+    assert N == X_small.shape[0]
     return pubs
 
 
@@ -216,8 +286,7 @@ def test_fmps_from_run_pubs_shapes_and_determinism(cfg_small, pubs_small):
     fm1 = ExactFeatureMapsRetriever(cfg_small, obs).get_feature_maps(res1)
     fm2 = ExactFeatureMapsRetriever(cfg_small, obs).get_feature_maps(res2)
 
-    N = len(pubs_small)
-    R = pubs_small[0][1].shape[0]
+    N, R = pubs_N_R(pubs_small)
     assert fm1.shape == (N, R * K)
     assert np.allclose(fm1, fm2, atol=0.0, rtol=0.0)  # exact determinism expected
 

@@ -39,11 +39,13 @@ for the PUBS arrays, which is *not* necessarily the same as ``qc.parameters``.
 
 from __future__ import annotations
 
+from typing import List, Tuple
+
 import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector, Parameter
 
-from src.qrc.circuits.configs import RingQRConfig
+from src.qrc.circuits.qrc_configs import RingQRConfig
 
 
 class CircuitFactory:
@@ -60,117 +62,8 @@ class CircuitFactory:
     """
 
     @staticmethod
-    def createIsingRingCircuitDynamic(
-        cfg: RingQRConfig,
-        angle_positioning: callable,
-        method: str = "density_matrix",
-    ) -> QuantumCircuit:
-        """Create the *stochastic* (dynamic) per-step Ising ring reservoir circuit.
-
-        The circuit implements, on the reservoir register:
-
-        1) **Data injection**: apply ``Ry(theta(z_j))`` on each reservoir qubit.
-        2) **Ising unitary** ``W``: a layer of ``RZZ`` gates on ring edges followed
-           by local ``Rz`` and ``Rx`` fields.
-        3) **Contraction** ``E_λ`` via a *coin qubit* and **mid-circuit measurement**
-           with conditional reset:
-
-           - With probability ``λ``: do nothing (keep the post-``W`` state).
-           - With probability ``1-λ``: reset the reservoir to ``|+>^{⊗n}``.
-
-        Parameters
-        ----------
-        cfg : RingQRConfig
-            Reservoir configuration, including the number of qubits and topology.
-        angle_positioning : callable
-            Function mapping a :class:`qiskit.circuit.ParameterVector` ``z`` to a
-            list of angle expressions of length ``cfg.num_qubits``.
-            Typical choices are :func:`src.qrc.circuits.utils.angle_positioning_linear`
-            or :func:`src.qrc.circuits.utils.angle_positioning_tanh`.
-        method : str, default="density_matrix"
-            Implementation backend assumption. Only ``"density_matrix"`` is supported
-            for this dynamic/conditional circuit variant.
-
-        Returns
-        -------
-        QuantumCircuit
-            A parameterized circuit with ``cfg.num_qubits + 1`` qubits (reservoir
-            + coin) and 1 classical bit. The circuit carries metadata keys
-            ``"z"``, ``"J"``, ``"h_x"``, ``"h_z"``, ``"lam"``.
-
-        Raises
-        ------
-        NotImplementedError
-            If `method` is not ``"density_matrix"``.
-
-        Notes
-        -----
-        This construction uses classical control (``if_test``) and mid-circuit
-        measurement, which may not be supported on all simulators/hardware.
-        For a fully unitary and deterministic contraction, use
-        :meth:`createIsingRingCircuitSWAP`.
-        """
-        if method != "density_matrix":
-            raise NotImplementedError(
-                f"Only method='density_matrix' is supported here; got {method}."
-            )
-
-        n = cfg.num_qubits
-        topology = cfg.topology
-
-        # Input (projected) parameters z in R^n (n = cfg.num_qubits)
-        z = ParameterVector("z", cfg.num_qubits)
-
-        # Shared injection angles (length should be n)
-        angles = angle_positioning(z)
-
-        zz_params = ParameterVector("J", len(topology.edges))
-        rx_params = ParameterVector("h_x", n)
-        rz_params = ParameterVector("h_z", n)
-        lam_param = Parameter("lam")
-
-        # +1 coin qubit (constant overhead), +1 classical bit for conditional reset
-        qc = QuantumCircuit(n + 1, 1, name="SMC")
-        qubits = list(range(n))
-        coin = n  # last qubit
-        cbit = qc.clbits[0]
-
-        # 1) Data injection
-        for i in range(n):
-            qc.ry(angles[i], qubits[i])
-
-        # 2) Ising unitary W
-        for e, (q1, q2) in enumerate(topology.edges):
-            qc.rzz(zz_params[e], q1, q2)
-
-        for i in range(n):
-            qc.rz(rz_params[i], qubits[i])
-        for i in range(n):
-            qc.rx(rx_params[i], qubits[i])
-
-        # 3) Stochastic contraction via coin + conditional reset-to-|+>^{⊗n}
-        qc.reset(coin)
-        theta = 2 * (lam_param ** 0.5).arcsin()  # Ry(theta)|0> => P(|1>) = lam
-        qc.ry(theta, coin)
-        qc.measure(coin, cbit)
-
-        # If coin == 0: reset each reservoir qubit to |0>, then H -> |+>
-        with qc.if_test((cbit, 0)):
-            qc.reset(qubits)
-            qc.h(qubits)
-
-        # Store parameter handles as metadata (used by runners)
-        qc.metadata["z"] = z
-        qc.metadata["J"] = zz_params
-        qc.metadata["h_x"] = rx_params
-        qc.metadata["h_z"] = rz_params
-        qc.metadata["lam"] = lam_param
-
-        return qc
-
-    @staticmethod
     def createIsingRingCircuitSWAP(
-        cfg: RingQRConfig,
+        qrc_cfg: RingQRConfig,
         angle_positioning: callable,
     ) -> QuantumCircuit:
         r"""Create the *deterministic* per-step Ising ring reservoir circuit (SWAP dilation).
@@ -193,7 +86,7 @@ class CircuitFactory:
 
         Parameters
         ----------
-        cfg : RingQRConfig
+        qrc_cfg : RingQRConfig
             Reservoir configuration, including topology.
         angle_positioning : callable
             Map from injected coordinate vector ``z`` to per-qubit ``Ry`` angles.
@@ -201,7 +94,7 @@ class CircuitFactory:
         Returns
         -------
         QuantumCircuit
-            Parameterized circuit with ``2*cfg.num_qubits + 1`` qubits. Metadata keys
+            Parameterized circuit with ``2*qrc_cfg.num_qubits + 1`` qubits. Metadata keys
             ``"z"``, ``"J"``, ``"h_x"``, ``"h_z"``, ``"lam"`` are set.
 
         Notes
@@ -210,8 +103,8 @@ class CircuitFactory:
         mid-circuit measurement/conditional control.
         """
 
-        n = cfg.num_qubits
-        topology = cfg.topology
+        n = qrc_cfg.num_qubits
+        topology = qrc_cfg.topology
 
         z = ParameterVector("z", n)
         angles = angle_positioning(z)
@@ -267,18 +160,18 @@ class CircuitFactory:
 
     @staticmethod
     def instantiateFullIsingRingEvolution(
-        cfg: RingQRConfig,
+        qrc_cfg: RingQRConfig,
         angle_positioning: callable,
         x_window: np.ndarray,
     ) -> QuantumCircuit:
         """Instantiate (bind) the input window and return a circuit free in reservoir parameters.
 
-        Given a time window ``x_window`` of shape ``(w, d)`` (with ``d=cfg.input_dim``),
+        Given a time window ``x_window`` of shape ``(w, d)`` (with ``d=qrc_cfg.input_dim``),
         this routine:
 
         1) Builds the per-step circuit (SWAP contraction version).
         2) Initializes the reservoir to ``|+>^{⊗n}``.
-        3) For each time step ``t``, projects ``x_t`` to ``z_t = x_t @ cfg.projection`` and
+        3) For each time step ``t``, projects ``x_t`` to ``z_t = x_t @ qrc_cfg.projection`` and
            binds the circuit's input parameters ``z`` to ``z_t``.
         4) Composes the bound step circuit into a single window circuit.
 
@@ -287,8 +180,8 @@ class CircuitFactory:
 
         Parameters
         ----------
-        cfg : RingQRConfig
-            Reservoir configuration. Must satisfy ``cfg.input_dim == x_window.shape[-1]``.
+        qrc_cfg : RingQRConfig
+            Reservoir configuration. Must satisfy ``qrc_cfg.input_dim == x_window.shape[-1]``.
         angle_positioning : callable
             Injection angle map used by the per-step circuit.
         x_window : numpy.ndarray
@@ -305,21 +198,21 @@ class CircuitFactory:
         Raises
         ------
         AssertionError
-            If `x_window` does not have shape ``(w, cfg.input_dim)``.
+            If `x_window` does not have shape ``(w, qrc_cfg.input_dim)``.
         """
-        assert x_window.shape[-1] == cfg.input_dim, (
+        assert x_window.shape[-1] == qrc_cfg.input_dim, (
             "Mismatch between the window dimension and input_dim in the provided config. "
-            f"Got x_window.shape[-1]={x_window.shape[-1]} and cfg.input_dim={cfg.input_dim}."
+            f"Got x_window.shape[-1]={x_window.shape[-1]} and qrc_cfg.input_dim={qrc_cfg.input_dim}."
         )
         assert x_window.ndim == 2, (
             f"x_window should be a 2D array of shape (w, d), got x_window.ndim={x_window.ndim}."
         )
 
         qc_reservoir = CircuitFactory.createIsingRingCircuitSWAP(
-            cfg=cfg, angle_positioning=angle_positioning
+            qrc_cfg=qrc_cfg, angle_positioning=angle_positioning
         )
 
-        n = cfg.num_qubits
+        n = qrc_cfg.num_qubits
         qubits = list(range(n))
         z_params = qc_reservoir.metadata["z"]
 
@@ -327,7 +220,7 @@ class CircuitFactory:
         qc.h(qubits[:n])
 
         for x_t in x_window:
-            z_t = x_t @ cfg.projection
+            z_t = x_t @ qrc_cfg.projection
             bind_map_input = dict(zip(z_params, z_t))
             qc_step_bound = qc_reservoir.assign_parameters(bind_map_input)
             qc.compose(qc_step_bound, inplace=True)
@@ -340,7 +233,7 @@ class CircuitFactory:
 
     @staticmethod
     def set_reservoirs_parameterizationSWAP(
-        cfg: RingQRConfig,
+        qrc_cfg: RingQRConfig,
         angle_positioning: callable,
         num_reservoirs: int,
         lam_0: float,
@@ -359,7 +252,7 @@ class CircuitFactory:
 
         Parameters
         ----------
-        cfg : RingQRConfig
+        qrc_cfg : RingQRConfig
             Reservoir configuration.
         angle_positioning : callable
             Injection angle map (only used to build the parameter vectors; it does
@@ -392,7 +285,7 @@ class CircuitFactory:
         assert R >= 1, f"num_reservoirs must be >= 1, got {num_reservoirs}"
         assert eps < lam_0 < 1 - eps, f"lam_0 must be in (eps, 1-eps); got lam_0={lam_0}, eps={eps}"
 
-        qc = CircuitFactory.createIsingRingCircuitSWAP(cfg=cfg, angle_positioning=angle_positioning)
+        qc = CircuitFactory.createIsingRingCircuitSWAP(qrc_cfg=qrc_cfg, angle_positioning=angle_positioning)
         rng = np.random.default_rng(seed)
 
         rzz_params = qc.metadata["J"]
@@ -424,115 +317,170 @@ class CircuitFactory:
         return param_values
 
     @staticmethod
-    def create_pub_reservoirs_IsingRingSWAP(
-        cfg: RingQRConfig,
-        angle_positioning: callable,
-        x_window: np.ndarray,
-        num_reservoirs: int,
-        param_values: np.ndarray,
-    ):
-        """Create a single PUB for a given window using shared reservoir parameters.
+    def instantiateFullIsingRingEvolutionTemplate(
+            qrc_cfg: RingQRConfig,
+            angle_positioning: callable,
+            w: int,
+    ) -> Tuple[QuantumCircuit, List[ParameterVector]]:
+        """
+        Build a *single* parameterized window circuit (template) with *unbound* input injections.
 
-        A "PUB" is a tuple ``(qc, param_values)`` where:
+        This differs from `instantiateFullIsingRingEvolution(...)`:
 
-        - ``qc`` is the *window circuit* with input parameters already bound.
-        - ``param_values`` is a 2D array of shape ``(R, P)`` with ``R=num_reservoirs``
-          different reservoir parameterizations to be evaluated on the **same** circuit.
+        - Here we do NOT bind the injected inputs.
+        - Instead, each time step t uses its own ParameterVector z_t, so the full
+          window circuit remains parameterized by all injected inputs.
+        - Reservoir parameters (J, h_x, h_z, lam) are shared across all steps.
+
+        The goal is to allow downstream runners (Aer) to transpile ONCE and run
+        many shots/experiments via batched parameter binding.
 
         Parameters
         ----------
-        cfg : RingQRConfig
+        qrc_cfg : RingQRConfig
             Reservoir configuration.
         angle_positioning : callable
-            Injection angle map.
-        x_window : numpy.ndarray
-            Window of shape ``(w, d)``.
-        num_reservoirs : int
-            Number of reservoir parameterizations ``R``. Used for basic sanity checks.
-        param_values : numpy.ndarray
-            Array of shape ``(R, P)`` produced by :meth:`set_reservoirs_parameterizationSWAP`.
+            Function mapping a length-n ParameterVector z_t to per-qubit angles.
+        w : int
+            Window length (number of time steps in the composed circuit).
 
         Returns
         -------
-        tuple
-            ``(qc, param_values)`` ready for runners such as
-            :class:`src.qrc.run.circuit_run.ExactAerCircuitsRunner`.
+        qc_window : QuantumCircuit
+            Parameterized circuit representing the full w-step evolution.
+            Metadata contains shared reservoir params ("J", "h_x", "h_z", "lam")
+            and also "z_steps" with the per-step ParameterVectors.
+        z_steps : list[ParameterVector]
+            The list [z_0, ..., z_{w-1}] used in the template circuit.
         """
-        R = num_reservoirs
-        assert R >= 1, f"num_reservoirs must be >= 1, got {num_reservoirs}"
+        n = qrc_cfg.num_qubits
 
-        qc = CircuitFactory.instantiateFullIsingRingEvolution(
-            cfg=cfg,
-            angle_positioning=angle_positioning,
-            x_window=x_window,
-        )
+        # Step template with shared reservoir params + a generic z vector.
+        qc_step = CircuitFactory.createIsingRingCircuitSWAP(qrc_cfg=qrc_cfg, angle_positioning=angle_positioning)
+        z_base = qc_step.metadata["z"]  # ParameterVector("z", n)
 
-        return (qc, param_values)
+        # Start full window circuit with the same width as step circuit.
+        qc_window = QuantumCircuit(qc_step.num_qubits, name="QRC_template")
+        qc_window.h(list(range(n)))  # initial reservoir |+>^n
+
+        z_steps: List[ParameterVector] = []
+
+        for t in range(w):
+            z_t = ParameterVector(f"z_{t}", n)
+            z_steps.append(z_t)
+
+            # Rename step's base z -> time-specific z_t (Parameter -> Parameter mapping).
+            rename_map = dict(zip(z_base, z_t))
+            qc_step_t = qc_step.assign_parameters(rename_map, inplace=False)
+
+            qc_window.compose(qc_step_t, inplace=True)
+
+        # Keep shared reservoir params in metadata for downstream ordering/binding.
+        qc_window.metadata["z_steps"] = z_steps
+        qc_window.metadata["J"] = qc_step.metadata["J"]
+        qc_window.metadata["h_x"] = qc_step.metadata["h_x"]
+        qc_window.metadata["h_z"] = qc_step.metadata["h_z"]
+        qc_window.metadata["lam"] = qc_step.metadata["lam"]
+
+        return qc_window, z_steps
 
     @staticmethod
     def create_pubs_dataset_reservoirs_IsingRingSWAP(
-        cfg: RingQRConfig,
-        angle_positioning: callable,
-        X: np.ndarray,
-        lam_0: float,
-        num_reservoirs: int,
-        seed: int = 12354,
-        eps: float = 1e-8,
+            qrc_cfg: RingQRConfig,
+            angle_positioning: callable,
+            X: np.ndarray,
+            num_reservoirs: int,
+            lam_0: float,
+            seed: float = 12345,
+            eps: float = 1e-8,
     ):
-        """Build a PUBS dataset for a window dataset ``X``.
+        """
+        Create PUBs for a dataset X across multiple reservoirs (SWAP dilation variant).
 
-        This function samples a *single shared* set of reservoir parameters
-        (``param_values``) and reuses it for each input window in ``X``. This is
-        often desirable when benchmarking different readouts on the same reservoir
-        ensemble.
+        Returns a *single* template PUB:
+            pubs = [(qc_template, vals)]
+        where:
+            - qc_template is one parameterized circuit for the whole window (w steps)
+            - vals has shape (N, R, P_total), with columns matching qc_template.metadata["param_order"]
 
         Parameters
         ----------
-        cfg : RingQRConfig
-            Reservoir configuration.
+        qrc_cfg : RingQRConfig
+            Reservoir config.
         angle_positioning : callable
-            Injection angle map.
+            Injection mapping used inside the circuit.
         X : numpy.ndarray
-            Input windows of shape ``(N, w, d)``.
-        lam_0 : float
-            Fixed contraction strength for the first reservoir.
+            Input windows of shape (N, w, d).
         num_reservoirs : int
-            Number of reservoir parameterizations ``R``.
-        seed : int, default=12354
-            Seed used to sample reservoir parameters (shared across all windows).
-        eps : float, default=1e-8
-            Margin to avoid sampling λ extremely close to 0 or 1.
+            Number of reservoirs R.
+        lam_0 : float
+            Contraction λ for reservoir 0.
+        seed : float
+            RNG seed for reservoir parameter sampling (J, h_x, h_z, λ for r>=1).
+        eps : float
+            Margin to avoid sampling exactly 0 or 1 for λ.
 
         Returns
         -------
-        list
-            List of length ``N`` where each element is a PUB ``(qc, param_values)``.
-
-        Raises
-        ------
-        AssertionError
-            If `X` does not have shape ``(N, w, d)``.
+        pubs : list
+            Always: length-1 list [(qc_template, vals_3d)]
         """
-        assert X.ndim == 3, f"X should be an array of shape (N, w, d), got X.shape={X.shape}"
+        # ---- Backward-compat shim (optional, but saves you from positional-call breakage) ----
+        if isinstance(num_reservoirs, (float, np.floating)) and isinstance(lam_0, (int, np.integer)):
+            num_reservoirs, lam_0 = int(lam_0), float(num_reservoirs)
 
-        param_values = CircuitFactory.set_reservoirs_parameterizationSWAP(
-            cfg=cfg,
+        X = np.asarray(X, dtype=float)
+        assert X.ndim == 3, f"Expected X shape (N,w,d), got {X.shape}"
+        N, w, d = X.shape
+        assert d == qrc_cfg.input_dim, f"X last dim {d} != qrc_cfg.input_dim {qrc_cfg.input_dim}"
+
+        # ---- Template mode: one window circuit, all inputs unbound ----
+        qc_template, z_steps = CircuitFactory.instantiateFullIsingRingEvolutionTemplate(
+            qrc_cfg=qrc_cfg, angle_positioning=angle_positioning, w=w
+        )
+
+        # ---- Generate reservoir parameter table internally ----
+        R = int(num_reservoirs)
+        parameters_reservoirs = CircuitFactory.set_reservoirs_parameterizationSWAP(
+            qrc_cfg=qrc_cfg,
             angle_positioning=angle_positioning,
-            num_reservoirs=num_reservoirs,
+            num_reservoirs=R,
             lam_0=lam_0,
             seed=seed,
             eps=eps,
         )
+        parameters_reservoirs = np.asarray(parameters_reservoirs, dtype=float)
+        assert parameters_reservoirs.shape[0] == R, (
+            f"Expected parameters_reservoirs shape (R,P), got {parameters_reservoirs.shape} with R={R}"
+        )
 
-        pubs = []
-        for x_window in X:
-            pub = CircuitFactory.create_pub_reservoirs_IsingRingSWAP(
-                cfg=cfg,
-                angle_positioning=angle_positioning,
-                x_window=x_window,
-                param_values=param_values,
-                num_reservoirs=num_reservoirs,
-            )
-            pubs.append(pub)
+        # ---- Compute injected z-values for every (N,w,n) ----
+        Z = X @ qrc_cfg.projection  # (N,w,d) @ (d,n) -> (N,w,n)
+        Z = np.asarray(Z, dtype=float)
 
-        return pubs
+        # Flatten injected params in the same order as we created z_steps:
+        # [z_0[0..n-1], z_1[0..n-1], ..., z_{w-1}[0..n-1]]
+        inj = Z.reshape(N, -1)  # (N, w*n)
+        P_inj = inj.shape[1]
+
+        # Reservoir params are (R, P_res)
+        P_res = parameters_reservoirs.shape[1]
+
+        # Broadcast and concatenate -> (N, R, P_total)
+        inj_b = np.broadcast_to(inj[:, None, :], (N, R, P_inj))
+        res_b = np.broadcast_to(parameters_reservoirs[None, :, :], (N, R, P_res))
+        vals = np.concatenate([inj_b, res_b], axis=2)
+
+        # ---- Deterministic parameter column order for downstream binding ----
+        inj_params = [p for z_t in z_steps for p in z_t]
+        param_order = (
+                inj_params
+                + list(qc_template.metadata["J"])
+                + list(qc_template.metadata["h_x"])
+                + list(qc_template.metadata["h_z"])
+                + [qc_template.metadata["lam"]]
+        )
+        qc_template.metadata["param_order"] = param_order
+
+        return [(qc_template, vals)]
+

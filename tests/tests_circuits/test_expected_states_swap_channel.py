@@ -4,7 +4,7 @@ import pytest
 from qiskit import QuantumCircuit, transpile
 from qiskit.quantum_info import DensityMatrix, partial_trace
 
-from src.qrc.circuits.configs import RingQRConfig as Config
+from src.qrc.circuits.qrc_configs import RingQRConfig as Config
 
 from src.qrc.circuits.circuit_factory import CircuitFactory
 from src.qrc.circuits.utils import angle_positioning_linear
@@ -87,7 +87,7 @@ def test_swap_channel_lambda0_outputs_plus(cfg1, x_window_zero):
     For any unitary part, E_{lam=0}(rho) = |+><+| exactly.
     """
     qc = CircuitFactory.instantiateFullIsingRingEvolution(
-        cfg=cfg1, angle_positioning=angle_positioning_linear, x_window=x_window_zero
+        qrc_cfg=cfg1, angle_positioning=angle_positioning_linear, x_window=x_window_zero
     )
 
     # Make unitary nontrivial (hz=pi makes |+> -> |->), but lambda=0 should override to |+>
@@ -106,7 +106,7 @@ def test_swap_channel_lambda1_matches_unitary_output(cfg1, x_window_zero):
     For lambda=1, contraction does nothing => output should be |->.
     """
     qc = CircuitFactory.instantiateFullIsingRingEvolution(
-        cfg=cfg1, angle_positioning=angle_positioning_linear, x_window=x_window_zero
+        qrc_cfg=cfg1, angle_positioning=angle_positioning_linear, x_window=x_window_zero
     )
 
     row = make_param_row_by_name(qc, hz0=np.pi, hx0=0.0, lam=1.0)
@@ -126,7 +126,7 @@ def test_swap_channel_intermediate_lambda_gives_exact_mixture(cfg1, x_window_zer
     Deterministic with shots=1 under density_matrix because SWAP+reset is CPTP (no measurement).
     """
     qc = CircuitFactory.instantiateFullIsingRingEvolution(
-        cfg=cfg1, angle_positioning=angle_positioning_linear, x_window=x_window_zero
+        qrc_cfg=cfg1, angle_positioning=angle_positioning_linear, x_window=x_window_zero
     )
 
     lam = 0.23
@@ -150,7 +150,7 @@ def test_env_is_reset_and_factorizes_for_n1(cfg1, x_window_zero):
     This is a great runtime check that reset really “traces out” and reinitializes the env.
     """
     qc = CircuitFactory.instantiateFullIsingRingEvolution(
-        cfg=cfg1, angle_positioning=angle_positioning_linear, x_window=x_window_zero
+        qrc_cfg=cfg1, angle_positioning=angle_positioning_linear, x_window=x_window_zero
     )
 
     lam = 0.37

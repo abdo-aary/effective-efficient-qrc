@@ -25,7 +25,7 @@ from typing import Sequence
 import numpy as np
 from qiskit.quantum_info import Operator, SparsePauliOp
 
-from src.qrc.circuits.configs import BaseQRConfig
+from src.qrc.circuits.qrc_configs import BaseQRConfig
 from .circuit_run import Results
 
 

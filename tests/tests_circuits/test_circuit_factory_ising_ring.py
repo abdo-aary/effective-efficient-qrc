@@ -4,7 +4,7 @@ from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from qiskit.quantum_info import DensityMatrix, partial_trace
 
-from src.qrc.circuits.configs import RingQRConfig
+from src.qrc.circuits.qrc_configs import RingQRConfig
 from src.qrc.circuits.circuit_factory import CircuitFactory
 from src.qrc.circuits.utils import angle_positioning_tanh
 
@@ -69,14 +69,14 @@ def random_bind_map(qc: QuantumCircuit, rng: np.random.Generator, lam_value=None
     return bind
 
 
-def build_unitary_reference_circuit(cfg: RingQRConfig, qc_template: QuantumCircuit) -> QuantumCircuit:
+def build_unitary_reference_circuit(qrc_cfg: RingQRConfig, qc_template: QuantumCircuit) -> QuantumCircuit:
     """
     Reference circuit implementing ONLY:
         data injection -> Ising unitary
     using the *same* Parameter objects from qc_template.metadata.
     """
-    n = cfg.num_qubits
-    topology = cfg.topology
+    n = qrc_cfg.num_qubits
+    topology = qrc_cfg.topology
 
     z  = qc_template.metadata["z"]
     J  = qc_template.metadata["J"]
@@ -116,27 +116,27 @@ def reduced_reservoir(dm_full: DensityMatrix, n: int) -> DensityMatrix:
 # -------------------------
 
 def test_create_ising_ring_circuit_structure_and_metadata():
-    cfg = RingQRConfig(input_dim=10, num_qubits=3, seed=12345)
+    qrc_cfg = RingQRConfig(input_dim=10, num_qubits=3, seed=12345)
     qc = CircuitFactory.createIsingRingCircuitSWAP(
-        cfg=cfg, angle_positioning=angle_positioning_tanh
+        qrc_cfg=qrc_cfg, angle_positioning=angle_positioning_tanh
     )
 
-    assert qc.num_qubits == 2 * cfg.num_qubits + 1  # reservoir + coin
+    assert qc.num_qubits == 2 * qrc_cfg.num_qubits + 1  # reservoir + coin
 
     # Metadata present
     for k in ["z", "J", "h_x", "h_z", "lam"]:
         assert k in qc.metadata
 
     # Parameter vector lengths
-    assert len(qc.metadata["z"]) == cfg.num_qubits
-    assert len(qc.metadata["J"]) == len(cfg.topology.edges)
-    assert len(qc.metadata["h_x"]) == cfg.num_qubits
-    assert len(qc.metadata["h_z"]) == cfg.num_qubits
+    assert len(qc.metadata["z"]) == qrc_cfg.num_qubits
+    assert len(qc.metadata["J"]) == len(qrc_cfg.topology.edges)
+    assert len(qc.metadata["h_x"]) == qrc_cfg.num_qubits
+    assert len(qc.metadata["h_z"]) == qrc_cfg.num_qubits
 
 
 def test_parameter_binding_leaves_no_unbound_params():
-    cfg = RingQRConfig(input_dim=7, num_qubits=3, seed=1)
-    qc = CircuitFactory.createIsingRingCircuitSWAP(cfg, angle_positioning_tanh)
+    qrc_cfg = RingQRConfig(input_dim=7, num_qubits=3, seed=1)
+    qc = CircuitFactory.createIsingRingCircuitSWAP(qrc_cfg, angle_positioning_tanh)
 
     rng = np.random.default_rng(0)
     bind = random_bind_map(qc, rng, lam_value=0.37)
@@ -147,8 +147,8 @@ def test_parameter_binding_leaves_no_unbound_params():
 
 
 def test_contraction_lambda_zero_outputs_plus_state():
-    cfg = RingQRConfig(input_dim=9, num_qubits=3, seed=2)
-    qc = CircuitFactory.createIsingRingCircuitSWAP(cfg, angle_positioning_tanh)
+    qrc_cfg = RingQRConfig(input_dim=9, num_qubits=3, seed=2)
+    qc = CircuitFactory.createIsingRingCircuitSWAP(qrc_cfg, angle_positioning_tanh)
 
     rng = np.random.default_rng(123)
     bind = random_bind_map(qc, rng, lam_value=0.0)
@@ -156,24 +156,24 @@ def test_contraction_lambda_zero_outputs_plus_state():
 
     dm_full = run_density_matrix(qc_bound, seed=0)
 
-    dm_res = reduced_reservoir(dm_full, cfg.num_qubits)
+    dm_res = reduced_reservoir(dm_full, qrc_cfg.num_qubits)
 
-    dm_plus = plus_state_density(cfg.num_qubits)
+    dm_plus = plus_state_density(qrc_cfg.num_qubits)
 
     assert np.allclose(dm_res.data, dm_plus.data, atol=1e-10, rtol=0.0)
 
 
 def test_contraction_lambda_one_matches_unitary_reference():
-    cfg = RingQRConfig(input_dim=9, num_qubits=3, seed=3)
-    qc = CircuitFactory.createIsingRingCircuitSWAP(cfg, angle_positioning_tanh)
-    qc_ref = build_unitary_reference_circuit(cfg, qc)
+    qrc_cfg = RingQRConfig(input_dim=9, num_qubits=3, seed=3)
+    qc = CircuitFactory.createIsingRingCircuitSWAP(qrc_cfg, angle_positioning_tanh)
+    qc_ref = build_unitary_reference_circuit(qrc_cfg, qc)
 
     rng = np.random.default_rng(456)
     bind = random_bind_map(qc, rng, lam_value=1.0)
 
     # Full circuit
     dm_full = run_density_matrix(qc.assign_parameters(bind, inplace=False), seed=0)
-    dm_res = reduced_reservoir(dm_full, cfg.num_qubits)
+    dm_res = reduced_reservoir(dm_full, qrc_cfg.num_qubits)
 
     # Reference unitary-only circuit (bind same params, but ignore 'lam')
     bind_ref = {p: v for p, v in bind.items() if p != qc.metadata["lam"]}
@@ -183,21 +183,21 @@ def test_contraction_lambda_one_matches_unitary_reference():
 
 
 def test_contraction_mixture_for_intermediate_lambda():
-    cfg = RingQRConfig(input_dim=10, num_qubits=3, seed=4)
-    qc = CircuitFactory.createIsingRingCircuitSWAP(cfg, angle_positioning_tanh)
-    qc_ref = build_unitary_reference_circuit(cfg, qc)
+    qrc_cfg = RingQRConfig(input_dim=10, num_qubits=3, seed=4)
+    qc = CircuitFactory.createIsingRingCircuitSWAP(qrc_cfg, angle_positioning_tanh)
+    qc_ref = build_unitary_reference_circuit(qrc_cfg, qc)
 
     rng = np.random.default_rng(789)
     lam = 0.23
     bind = random_bind_map(qc, rng, lam_value=lam)
 
     dm_full = run_density_matrix(qc.assign_parameters(bind, inplace=False), seed=0)
-    dm_res = reduced_reservoir(dm_full, cfg.num_qubits)
+    dm_res = reduced_reservoir(dm_full, qrc_cfg.num_qubits)
 
     bind_ref = {p: v for p, v in bind.items() if p != qc.metadata["lam"]}
     dm_unitary = run_density_matrix(qc_ref.assign_parameters(bind_ref, inplace=False), seed=0)
 
-    dm_plus = plus_state_density(cfg.num_qubits)
+    dm_plus = plus_state_density(qrc_cfg.num_qubits)
     expected = lam * dm_unitary.data + (1.0 - lam) * dm_plus.data
 
     assert np.allclose(dm_res.data, expected, atol=1e-10, rtol=0.0)
@@ -208,8 +208,8 @@ def test_density_matrix_output_is_deterministic_across_seeds():
     Strong determinism check: run with different Aer seeds.
     If measurement were being sampled per-shot in the saved density matrix, this would differ.
     """
-    cfg = RingQRConfig(input_dim=8, num_qubits=3, seed=5)
-    qc = CircuitFactory.createIsingRingCircuitSWAP(cfg, angle_positioning_tanh)
+    qrc_cfg = RingQRConfig(input_dim=8, num_qubits=3, seed=5)
+    qc = CircuitFactory.createIsingRingCircuitSWAP(qrc_cfg, angle_positioning_tanh)
 
     rng = np.random.default_rng(999)
     bind = random_bind_map(qc, rng, lam_value=0.61)

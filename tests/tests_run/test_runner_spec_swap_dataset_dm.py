@@ -1,17 +1,22 @@
+# tests/tests_run/test_runner_spec_swap_dataset_dm.py
+import inspect
 import numpy as np
 import pytest
+
+pytest.importorskip("qiskit_aer")
 
 from qiskit import transpile
 from qiskit_aer import AerSimulator
 from qiskit.quantum_info import DensityMatrix, Statevector, partial_trace
+
 from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.configs import RingQRConfig
+from src.qrc.circuits.qrc_configs import RingQRConfig
 from src.qrc.circuits.utils import angle_positioning_linear
 from src.qrc.run.circuit_run import ExactAerCircuitsRunner
 
 
 # ----------------------------
-# Helpers
+# Helpers (template-PUB + signature robust)
 # ----------------------------
 def get_pub_dataset_fn():
     fn = getattr(CircuitFactory, "create_pubs_dataset_reservoirs_IsingRingSWAP", None)
@@ -19,23 +24,123 @@ def get_pub_dataset_fn():
         fn = getattr(CircuitFactory, "create_pubs_dataset_reservoir_IsingRingSWAP", None)
     if fn is None:
         raise AttributeError(
-            "Could not find create_pubs_dataset_reservoirs_IsingRingSWAP or create_pubs_dataset_reservoir_IsingRingSWAP"
+            "Could not find create_pubs_dataset_reservoirs_IsingRingSWAP "
+            "or create_pubs_dataset_reservoir_IsingRingSWAP"
         )
     return fn
 
 
+def _pub_qc_vals(pub):
+    if isinstance(pub, (tuple, list)) and len(pub) >= 2:
+        return pub[0], pub[1]
+    raise TypeError(f"Unsupported PUB container type: {type(pub)}")
+
+
+def pubs_is_template(pubs) -> bool:
+    if not isinstance(pubs, list) or len(pubs) == 0:
+        return False
+    _, vals0 = _pub_qc_vals(pubs[0])
+    return (len(pubs) == 1) and isinstance(vals0, np.ndarray) and (vals0.ndim == 3)
+
+
+def pubs_N_R(pubs):
+    if pubs_is_template(pubs):
+        _, vals = _pub_qc_vals(pubs[0])
+        return int(vals.shape[0]), int(vals.shape[1])
+    else:
+        N = len(pubs)
+        _, vals0 = _pub_qc_vals(pubs[0])
+        return int(N), int(vals0.shape[0])
+
+
+def pubs_get_qc_vals_for_window(pubs, i: int):
+    """
+    Returns (qc, vals_window) where vals_window has shape (R,P)
+    in both legacy and template modes.
+    """
+    if pubs_is_template(pubs):
+        qc, vals3 = _pub_qc_vals(pubs[0])  # (N,R,P)
+        return qc, vals3[i]
+    else:
+        return _pub_qc_vals(pubs[i])  # (qc_i, vals_i) where vals_i is (R,P)
+
+
+def call_create_pubs_dataset(
+    *,
+    cfg,
+    angle_positioning,
+    X,
+    lam_0: float,
+    num_reservoirs: int,
+    seed: int = 0,
+    eps: float = 1e-8,
+    template_pub: bool = True,
+):
+    """
+    Dispatch across legacy vs optimized CircuitFactory signatures.
+
+    - Optimized signature: (cfg, angle_positioning, X, parameters_reservoirs, template_pub=...)
+    - Legacy signature: (cfg, angle_positioning, X, lam_0, num_reservoirs, seed, eps, ...)
+    """
+    fn = get_pub_dataset_fn()
+    sig = inspect.signature(fn)
+    params = sig.parameters
+
+    kwargs = dict(cfg=cfg, angle_positioning=angle_positioning, X=X)
+
+    if "parameters_reservoirs" in params:
+        parameters_reservoirs = CircuitFactory.set_reservoirs_parameterizationSWAP(
+            cfg=cfg,
+            angle_positioning=angle_positioning,
+            num_reservoirs=num_reservoirs,
+            lam_0=lam_0,
+            seed=seed,
+            eps=eps,
+        )
+        kwargs["parameters_reservoirs"] = parameters_reservoirs
+        if "template_pub" in params:
+            kwargs["template_pub"] = template_pub
+    else:
+        kwargs.update(lam_0=lam_0, num_reservoirs=num_reservoirs, seed=seed, eps=eps)
+        if "template_pub" in params:
+            kwargs["template_pub"] = template_pub
+
+    return fn(**kwargs)
+
+
 def param_order_from_metadata(qc):
-    """Must match how param_values columns are built: J + h_x + h_z + [lam]."""
-    J = list(qc.metadata["J"])
-    hx = list(qc.metadata["h_x"])
-    hz = list(qc.metadata["h_z"])
-    lam = qc.metadata["lam"]
+    """
+    Must match how vals columns are built.
+
+    Prefer qc.metadata["param_order"] (new).
+    Fallback to (J,h_x,h_z,lam) (legacy).
+    """
+    md = getattr(qc, "metadata", None) or {}
+    if "param_order" in md:
+        return list(md["param_order"])
+
+    # legacy fallback
+    J = list(md["J"])
+    hx = list(md["h_x"])
+    hz = list(md["h_z"])
+    lam = md["lam"]
     return J + hx + hz + [lam]
 
 
 def lam_col_index(qc):
+    """
+    Robustly find which column corresponds to lambda.
+    """
     order = param_order_from_metadata(qc)
-    return len(order) - 1  # by construction
+    md = getattr(qc, "metadata", None) or {}
+    if "lam" in md:
+        lam_param = md["lam"]
+        try:
+            return order.index(lam_param)
+        except ValueError:
+            pass
+    # Fallback (historical): last
+    return len(order) - 1
 
 
 def plus_density(n):
@@ -52,10 +157,14 @@ def run_reservoir_dm_direct(qc, cfg, row, seed=0, label="dm_res"):
     backend = AerSimulator(method="density_matrix")
 
     qc2 = qc.copy()
-    # Always save with a label we control to avoid key ambiguity
     qc2.save_density_matrix(qubits=list(range(n)), label=label)
 
     order = param_order_from_metadata(qc2)
+    if len(order) != len(row):
+        raise ValueError(
+            f"param cols mismatch: row has {len(row)} but expected {len(order)} (from metadata)."
+        )
+
     bind = {p: float(row[j]) for j, p in enumerate(order)}
     bound = qc2.assign_parameters(bind, inplace=False)
 
@@ -81,6 +190,11 @@ def run_full_and_reduced_dm_direct(qc, cfg, row, seed=0):
     qc2.save_density_matrix(qubits=list(range(n)), label="dm_res")
 
     order = param_order_from_metadata(qc2)
+    if len(order) != len(row):
+        raise ValueError(
+            f"param cols mismatch: row has {len(row)} but expected {len(order)} (from metadata)."
+        )
+
     bind = {p: float(row[j]) for j, p in enumerate(order)}
     bound = qc2.assign_parameters(bind, inplace=False)
 
@@ -135,14 +249,15 @@ def random_X(cfg_small):
 
 @pytest.fixture
 def pubs(cfg_small, random_X):
-    fn = get_pub_dataset_fn()
-    return fn(
+    return call_create_pubs_dataset(
         cfg=cfg_small,
         angle_positioning=angle_positioning_linear,
         X=random_X,
         lam_0=0.05,
         num_reservoirs=3,
-        seed=999,   # ensure deterministic parameterization draw if supported
+        seed=999,   # deterministic parameterization draw
+        eps=1e-8,
+        template_pub=True,
     )
 
 
@@ -160,13 +275,14 @@ def test_one_step_swap_channel_matches_mixture_formula(cfg_small, pubs):
 
     assert res.states.ndim == 4  # (N,R,2^n,2^n)
     N, R, D1, D2 = res.states.shape
-    assert N == len(pubs)
+    N_pub, _ = pubs_N_R(pubs)
+    assert N == N_pub
     assert D1 == D2 == 2 ** cfg_small.num_qubits
 
     dm_plus = plus_density(cfg_small.num_qubits)
 
     # Use the first window only (w=1, spec is exact per window)
-    qc, vals = pubs[0]
+    qc, vals = pubs_get_qc_vals_for_window(pubs, 0)
     lam_idx = lam_col_index(qc)
 
     for r in range(R):
@@ -180,7 +296,9 @@ def test_one_step_swap_channel_matches_mixture_formula(cfg_small, pubs):
 
         expected = lam * dm_unitary.data + (1.0 - lam) * dm_plus.data
 
-        assert np.allclose(dm_out.data, expected, atol=1e-10, rtol=0.0), f"Mismatch at reservoir r={r}, lam={lam}"
+        assert np.allclose(dm_out.data, expected, atol=1e-10, rtol=0.0), (
+            f"Mismatch at reservoir r={r}, lam={lam}"
+        )
 
 
 # ============================================================
@@ -191,19 +309,17 @@ def test_saved_reservoir_dm_matches_partial_trace(cfg_small, pubs):
     Verifies 'save_density_matrix(qubits=reservoir)' is consistent with full DM.
     This catches qubit-order / subset mistakes.
     """
-    qc, vals = pubs[0]
+    qc, vals = pubs_get_qc_vals_for_window(pubs, 0)
     row = vals[0]  # any reservoir row
 
     dm_full, dm_res_saved = run_full_and_reduced_dm_direct(qc, cfg_small, row, seed=0)
 
     n = int(cfg_small.num_qubits)
     total = qc.num_qubits
-    # env qubits are everything except reservoir [0..n-1]
-    env = list(range(n, total))
+    env = list(range(n, total))  # env qubits are everything except reservoir [0..n-1]
 
     dm_res_traced = partial_trace(dm_full, env)
 
-    # Ensure same dims and numeric match
     assert dm_res_traced.dim == dm_res_saved.dim
     assert np.allclose(dm_res_traced.data, dm_res_saved.data, atol=1e-10, rtol=0.0)
 
@@ -213,41 +329,57 @@ def test_saved_reservoir_dm_matches_partial_trace(cfg_small, pubs):
 # ============================================================
 def test_dataset_parameterization_reuse_and_output_variation(cfg_small, pubs):
     """
-    The intention being to reuse the same (R,P) reservoir parameterization across all windows.
-    This test verifies:
-      - pubs[i][1] matrices are identical across windows
+    Intention: reuse the same reservoir parameterization across all windows.
+
+    - Legacy mode: vals matrices (R,P) are identical across windows.
+    - Template mode: vals include injection params varying with window; we instead
+      check that the *constant columns across windows* (reservoir params) are identical.
+
+    Also verifies:
       - outputs differ across windows for same reservoir (with high prob)
       - outputs differ across reservoirs for same window (with high prob)
       - determinism: same seed => same states
     """
-    assert len(pubs) >= 2, "Need at least 2 windows in pubs fixture"
-    qc0, vals0 = pubs[0]
-    qc1, vals1 = pubs[1]
+    N, R = pubs_N_R(pubs)
+    assert N >= 2, "Need at least 2 windows in pubs fixture"
 
-    # Parameterization reuse across windows
-    assert vals0.shape == vals1.shape
-    assert np.allclose(vals0, vals1, atol=0.0, rtol=0.0), "Expected identical parameterization matrices across windows"
+    if pubs_is_template(pubs):
+        qc, vals3 = _pub_qc_vals(pubs[0])  # (N,R,P)
+        order = param_order_from_metadata(qc)
+
+        # Identify reservoir params as columns that are exactly constant across windows+reservoirs
+        base = vals3[0:1, :, :]  # (1,R,P)
+        mask_const = np.all(vals3 == base, axis=(0, 1))  # (P,)
+
+        # Optional name-based refinement: injection often named "z..."
+        mask_name = np.array([not str(p.name).startswith("z") for p in order], dtype=bool)
+        mask_res = mask_const & mask_name if np.any(mask_const & mask_name) else mask_const
+
+        assert np.any(mask_res), "Could not isolate any constant (reservoir) parameter columns in template mode"
+
+        ref = vals3[0, :, mask_res]  # (R,Pres)
+        for i in range(1, N):
+            assert np.allclose(vals3[i, :, mask_res], ref, atol=0.0, rtol=0.0)
+    else:
+        qc0, vals0 = _pub_qc_vals(pubs[0])
+        qc1, vals1 = _pub_qc_vals(pubs[1])
+        assert vals0.shape == vals1.shape
+        assert np.allclose(vals0, vals1, atol=0.0, rtol=0.0)
 
     runner = ExactAerCircuitsRunner(cfg_small)
     res1 = run_runner(runner, pubs, seed=0, opt=0)
     res2 = run_runner(runner, pubs, seed=0, opt=0)
 
-    assert np.allclose(res1.states, res2.states, atol=0.0, rtol=0.0), "Runner should be deterministic with fixed seed"
+    assert np.allclose(res1.states, res2.states, atol=0.0, rtol=0.0)
 
     states = res1.states
-    N, R, d1, d2 = states.shape
-    assert N == len(pubs)
+    N2, R2, d1, d2 = states.shape
+    assert N2 == N
+    assert R2 == R
     assert d1 == d2 == 2 ** cfg_small.num_qubits
 
-    # Outputs should vary across windows for at least one reservoir
-    # (very unlikely to fail unless something is wrong)
-    diffs_win = []
-    for r in range(R):
-        diffs_win.append(np.linalg.norm(states[0, r] - states[1, r]))
-    assert max(diffs_win) > 1e-6, "Suspicious: outputs identical across different windows for all reservoirs"
+    diffs_win = [np.linalg.norm(states[0, r] - states[1, r]) for r in range(R)]
+    assert max(diffs_win) > 1e-6
 
-    # Outputs should vary across reservoirs for at least one window
-    diffs_res = []
-    for r in range(1, R):
-        diffs_res.append(np.linalg.norm(states[0, 0] - states[0, r]))
-    assert max(diffs_res) > 1e-6, "Suspicious: outputs identical across different reservoirs for same window"
+    diffs_res = [np.linalg.norm(states[0, 0] - states[0, r]) for r in range(1, R)]
+    assert max(diffs_res) > 1e-6

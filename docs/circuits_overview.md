@@ -23,7 +23,7 @@ It is intentionally lightweight and focused on:
    - build a *single-step* SMC circuit (data injection → Ising unitary → contraction),
    - “unroll” it over a window `x_window ∈ R^{w×d}` by repeatedly binding `z_t = x_t @ Π`,
    - sample **R** reservoir parameterizations `(J, h_x, h_z, λ)` shared across all windows,
-   - return a list of **PUBs**: one pub per input window.
+   - return a single **template PUB**: ``[(qc_template, vals)]`` where ``vals`` has shape ``(N, R, P_total)``.
 4. Downstream (outside this package):
    - a **runner** executes PUBs and returns `Results`,
    - a **feature map retriever** produces features `Φ ∈ R^{N×D}` using chosen observables.
@@ -55,18 +55,16 @@ class QRTopologyConfig {
 
 class CircuitFactory {
   <<static>>
-  +createIsingRingCircuitDynamic(cfg, angle_positioning, method) QuantumCircuit
   +createIsingRingCircuitSWAP(cfg, angle_positioning) QuantumCircuit
-  +instantiateFullIsingRingEvolution(cfg, angle_positioning, x_window) QuantumCircuit
+  +instantiateFullIsingRingEvolutionTemplate(cfg, angle_positioning, w) (QuantumCircuit, List~ParameterVector~)
   +set_reservoirs_parameterizationSWAP(cfg, angle_positioning, num_reservoirs, lam_0, seed, eps) ndarray
-  +create_pub_reservoirs_IsingRingSWAP(cfg, angle_positioning, x_window, num_reservoirs, param_values) Pub
-  +create_pubs_dataset_reservoirs_IsingRingSWAP(cfg, angle_positioning, X, lam_0, num_reservoirs, seed, eps) List~Pub~
+  +create_pubs_dataset_reservoirs_IsingRingSWAP(cfg, angle_positioning, X, num_reservoirs, lam_0, seed, eps) List~Pub~
 }
 
 class Pub {
   <<tuple>>
   +QuantumCircuit qc
-  +ndarray param_values  # shape (R,P)
+  +ndarray param_values  # shape (N,R,P_total)
 }
 
 class QuantumCircuit {
@@ -79,6 +77,8 @@ class QcMetadataContract {
   +h_z : ParameterVector
   +lam : Parameter
   +z : ParameterVector
+  +z_steps : List~ParameterVector~
+  +param_order : List~Parameter~
 }
 
 
@@ -170,29 +170,24 @@ We use by default the following angle positionning utiliy.
 
 ### Core idea: PUBs
 
-A **PUB** is a tuple `(qc, param_values)` where:
+A **PUB** is a tuple ``(qc, param_values)`` where:
 
-- `qc` is a `QuantumCircuit` produced by the factory,
-- `param_values` has shape `(R, P)` and contains `R` different reservoir parameterizations.
+- ``qc`` is a `QuantumCircuit` produced by the factory,
+- ``param_values`` is an array of numeric parameter values aligned with a deterministic
+  parameter order stored in ``qc.metadata["param_order"]``.
 
-The runner expects a **specific parameter column order**, and the circuit stores the
-corresponding parameter objects in `qc.metadata`:
+In the **dataset** entry point (`create_pubs_dataset_reservoirs_IsingRingSWAP`), we return a
+*single* **template PUB**:
 
-- `qc.metadata["J"]` : `ParameterVector` for two-qubit ZZ couplings,
-- `qc.metadata["h_x"]` : `ParameterVector` for local X fields,
-- `qc.metadata["h_z"]` : `ParameterVector` for local Z fields,
-- `qc.metadata["lam"]` : `Parameter` for contraction strength,
-- `qc.metadata["z"]` : `ParameterVector` for input injection parameters.
+- ``qc`` is a **window template circuit** (w steps, unbound inputs),
+- ``param_values`` has shape ``(N, R, P_total)``:
+  - ``N``: number of windows,
+  - ``R``: number of reservoirs,
+  - ``P_total = (w·n) + (|J| + |h_x| + |h_z| + 1)``.
 
-> **Important**: Downstream runners typically reconstruct the binding order from these metadata keys.
+The runner should bind parameters for a given (window i, reservoir r) using:
 
-### `CircuitFactory.createIsingRingCircuitDynamic(cfg, angle_positioning, method="density_matrix")`
-Builds a **single-step** circuit:
-1) Inject data via `Ry(θ(z))` on each reservoir qubit,  
-2) Apply an Ising unitary `W` (ZZ on edges + local Rz/Rx),  
-3) Apply a **stochastic contraction** using a coin qubit + conditional reset of the reservoir.
-
-This variant uses measurement + conditional logic (classical bit).
+``dict(zip(qc.metadata["param_order"], param_values[i, r]))``.
 
 ### `CircuitFactory.createIsingRingCircuitSWAP(cfg, angle_positioning)`
 Builds a **deterministic** single-step contraction implementing
@@ -203,14 +198,14 @@ via a Stinespring-like dilation:
 - reservoir qubits + `n` aux qubits initialized to `|+⟩^{⊗n}` + a coin qubit controlling swaps,
 - reset of environment qubits to trace them out.
 
-### `CircuitFactory.instantiateFullIsingRingEvolution(cfg, angle_positioning, x_window)`
-Turns a window `x_window ∈ R^{w×d}` into a circuit representing `w` consecutive SMC steps:
+### `CircuitFactory.instantiateFullIsingRingEvolutionTemplate(cfg, angle_positioning, w)`
+Builds a *single* **parameterized window circuit** of length `w` where:
+- each step `t` uses its own injected input vector `z_t` (unbound parameters),
+- reservoir parameters `(J, h_x, h_z, λ)` are shared across steps.
 
-- For each timestep `t`, project `x_t` into `z_t = x_t @ Π` (with `Π = cfg.projection`),
-- Bind the step circuit’s `z` parameters to `z_t`,
-- Compose the bound step circuit into an accumulating circuit initialized at `|+⟩^{⊗n}`.
+Returns `(qc_template, z_steps)` and stores shared parameters in `qc_template.metadata`
+as well as `qc_template.metadata["z_steps"]`.
 
-The resulting circuit remains parameterized by `(J, h_x, h_z, λ)`.
 
 ### `CircuitFactory.set_reservoirs_parameterizationSWAP(cfg, angle_positioning, num_reservoirs, lam_0, seed, eps)`
 Samples **R** reservoir parameterizations (shared across all windows):
@@ -221,15 +216,20 @@ Samples **R** reservoir parameterizations (shared across all windows):
 Returns `param_values ∈ R^{R×P}` in the expected metadata-driven order:
 `[J..., h_x..., h_z..., lam]`.
 
-### `CircuitFactory.create_pub_reservoirs_IsingRingSWAP(...)`
-Creates a single PUB for one window:
-- Builds the full unrolled circuit for that window,
-- Pairs it with the shared `param_values`.
-
 ### `CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(...)`
-Creates the full PUBS dataset:
-- Input: `X ∈ R^{N×w×d}`,
-- Output: `pubs: List[Pub]` of length `N`.
+Dataset entry point.
+
+- Input: `X ∈ R^{N×w×d}`
+- Output: `pubs = [(qc_template, vals)]` (length **1** list)
+
+where:
+- `qc_template` is a window template circuit (w steps, unbound injected inputs),
+- `vals` has shape `(N, R, P_total)` and follows the column order in
+  `qc_template.metadata["param_order"]`.
+
+Internally, this function samples the reservoir parameter table by calling
+`set_reservoirs_parameterizationSWAP(...)` (so you no longer pass a
+`parameters_reservoirs` argument).
 
 ---
 
@@ -237,22 +237,30 @@ Creates the full PUBS dataset:
 
 ```python
 import numpy as np
-from src.qrc.circuits.configs import RingQRConfig
+from src.qrc.circuits.qrc_configs import RingQRConfig
 from src.qrc.circuits.utils import angle_positioning_tanh
 from src.qrc.circuits.circuit_factory import CircuitFactory
 
 cfg = RingQRConfig(input_dim=3, num_qubits=3, seed=0)
 
-X = np.random.default_rng(0).normal(size=(10, 20, 3))  # (N,w,d)
+# X has shape (N, w, d)
+X = np.random.default_rng(0).normal(size=(10, 20, 3))
+
 pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
-    cfg=cfg,
+    qrc_cfg=cfg,
     angle_positioning=angle_positioning_tanh,
     X=X,
+    num_reservoirs=8,
     lam_0=0.2,
-    num_reservoirs=4,
     seed=0,
 )
-# pubs is ready to be executed by a runner (outside this package)
+
+qc_template, vals = pubs[0]  # vals.shape == (N, R, P_total)
+
+# Example: bind parameters for window i and reservoir r
+i, r = 0, 0
+bind = dict(zip(qc_template.metadata["param_order"], vals[i, r]))
+qc_bound = qc_template.assign_parameters(bind, inplace=False)
 ```
 
 ---
@@ -263,8 +271,8 @@ pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
 - `x_window`: a single window, shape `(w, d)`.
 - `Π = cfg.projection`: JL projection, shape `(d, n)` where `n = cfg.num_qubits`.
 - `z_t = x_t @ Π`: injected vector, shape `(n,)`.
-- `param_values`: reservoir parameter matrix, shape `(R, P)` with:
-  - `P = |J| + |h_x| + |h_z| + 1`.
+- `vals`: PUB parameter tensor, shape `(N, R, P_total)` with:
+  - `P_total = (w·n) + (|J| + |h_x| + |h_z| + 1)`.
 
 ---
 
