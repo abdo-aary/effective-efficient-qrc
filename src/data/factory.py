@@ -1,5 +1,5 @@
 """
-Data factory utilities for generating and saving synthetic windowed datasets.
+Data factory utilities for generating, saving, and loading synthetic windowed datasets.
 
 This module provides a thin orchestration layer around:
 - Hydra/OmegaConf configuration objects (`omegaconf.DictConfig`)
@@ -60,6 +60,146 @@ class DatasetArtifact:
     data_path: Path
     meta_path: Path | None
     config_path: Path | None
+
+
+def load_dataset_artifact(path: str | Path) -> DatasetArtifact:
+    """Infer a :class:`DatasetArtifact` from a user-provided path.
+
+    This is the inverse of :func:`save_dataset`.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        One of:
+
+        - a path to a saved dataset file (``.npz`` or ``*.X.npy``), or
+        - a directory containing exactly one dataset file.
+
+        For ``.npy`` datasets, the *primary* data path is the ``*.X.npy`` file.
+
+    Returns
+    -------
+    DatasetArtifact
+        Descriptor pointing to the inferred data/meta/config files.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no dataset file can be found.
+    ValueError
+        If the directory contains multiple candidate dataset files.
+    """
+    p = _as_project_path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Dataset path does not exist: {p}")
+
+    # --- resolve the main data file
+    if p.is_dir():
+        npz = sorted(p.glob("*.npz"))
+        x_npy = sorted(p.glob("*.X.npy"))
+        candidates = npz + x_npy
+        if len(candidates) == 0:
+            raise FileNotFoundError(f"No dataset file found under directory: {p}")
+        if len(candidates) > 1:
+            raise ValueError(
+                f"Multiple dataset files found under {p}. "
+                f"Please pass an explicit file path. Candidates: {candidates}"
+            )
+        data_path = candidates[0]
+        root = p
+    else:
+        data_path = p
+        root = p.parent
+
+    # Determine base name and sidecar files
+    if data_path.suffix == ".npz":
+        base = data_path.stem
+    elif data_path.name.endswith(".X.npy"):
+        base = data_path.name[: -len(".X.npy")]
+    elif data_path.name.endswith(".y.npy"):
+        # allow pointing directly to y.npy
+        base = data_path.name[: -len(".y.npy")]
+        data_path = root / f"{base}.X.npy"
+    else:
+        raise ValueError(f"Unsupported dataset file: {data_path}")
+
+    meta_path = root / f"{base}.meta.json"
+    if not meta_path.exists():
+        meta_path = None
+
+    config_path = root / f"{base}.config.yaml"
+    if not config_path.exists():
+        config_path = None
+
+    return DatasetArtifact(root=root, data_path=data_path, meta_path=meta_path, config_path=config_path)
+
+
+def load_windows_dataset(
+    path: str | Path,
+    *,
+    instantiate_functionals: bool = True,
+) -> tuple[WindowsDataset, DatasetArtifact]:
+    """Load a :class:`~src.data.generate.base.WindowsDataset` from disk.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        See :func:`load_dataset_artifact`.
+    instantiate_functionals : bool, default=True
+        If a sidecar ``*.config.yaml`` exists, attempt to instantiate
+        ``cfg.functionals['items']`` and return them in ``ds.label_functionals``.
+        If instantiation fails (or no config exists), returns an empty list.
+
+    Returns
+    -------
+    (WindowsDataset, DatasetArtifact)
+        The loaded dataset and the inferred artifact descriptor.
+
+    Raises
+    ------
+    FileNotFoundError
+        If required array files are missing.
+    ValueError
+        If the artifact format is unsupported.
+    """
+    art = load_dataset_artifact(path)
+
+    data_path = art.data_path
+    if not data_path.exists():
+        raise FileNotFoundError(f"Dataset file missing: {data_path}")
+
+    # --- load arrays
+    if data_path.suffix == ".npz":
+        with np.load(data_path) as z:
+            X = np.asarray(z["X"])
+            y = np.asarray(z["y"])
+    elif data_path.name.endswith(".X.npy"):
+        X = np.load(data_path)
+        y_path = art.root / f"{data_path.name[: -len('.X.npy')]}.y.npy"
+        if not y_path.exists():
+            raise FileNotFoundError(f"Missing y array for npy dataset: {y_path}")
+        y = np.load(y_path)
+    else:
+        raise ValueError(f"Unsupported dataset file: {data_path}")
+
+    # --- load meta
+    meta: dict[str, object] = {}
+    if art.meta_path is not None and art.meta_path.exists():
+        meta = json.loads(art.meta_path.read_text(encoding="utf-8"))
+
+    # --- optionally instantiate functionals
+    label_functionals = []
+    if instantiate_functionals and art.config_path is not None and art.config_path.exists():
+        try:
+            cfg = OmegaConf.load(art.config_path)
+            label_functionals = build_label_functionals(cfg)
+        except Exception:
+            # Loading datasets should never hard-fail because a functional _target_
+            # cannot be imported in a particular environment.
+            label_functionals = []
+
+    ds = WindowsDataset(X=X, y=y, label_functionals=label_functionals, meta=meta)
+    return ds, art
 
 
 def _as_project_path(p: str | Path) -> Path:
@@ -212,7 +352,12 @@ def _auto_name(cfg: DictConfig) -> str:
     str
         A filesystem-friendly name encoding process/functional and main hyperparams.
     """
-    return "data"
+    N, w, d = int(cfg.sampling.N), int(cfg.sampling.w), int(cfg.sampling.d)
+    s = int(cfg.sampling.s)
+    proc = str(cfg.process.kind)
+    fun = str(cfg.functionals.kind)
+    seed = int(cfg.seed)
+    return f"{proc}__{fun}__N={N}__w={w}__d={d}__s={s}__seed={seed}"
 
 
 def save_dataset(ds: WindowsDataset, cfg: DictConfig) -> DatasetArtifact:
