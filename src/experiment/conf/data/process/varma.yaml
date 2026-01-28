@@ -1,8 +1,8 @@
 kind: varma
 generator:
   _target_: src.data.generate.varma.VARMAGenerator
-  p: 2
-  q: 1
+  p: 3
+  q: 3
   gamma: 0.7
   eta: 0.5
   rho: 0.5
