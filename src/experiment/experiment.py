@@ -175,3 +175,163 @@ class Experiment:
             raise ValueError("cfg.reg_sweep.reg_grid is required when reg_sweep.enabled=true")
 
         return self.run_reg_sweep(reg_grid)
+
+    def build_reg_sweep_metrics_table(self) -> list[dict[str, Any]]:
+        """Build a long-form metrics table from the latest regularization sweep.
+
+        The returned structure is intentionally simple (a list of row dicts) so it can be
+        serialized to CSV/JSON and re-plotted without re-running the sweep.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Rows with keys: ``functional``, ``split``, ``lambda_reg``, ``mse``.
+        """
+        if self.reg_sweep_ is None:
+            raise RuntimeError("No sweep results found. Run `run_reg_sweep(...)` first.")
+
+        import numpy as np
+
+        reg = np.asarray(self.reg_sweep_.get("reg_grid"), dtype=float).reshape(-1)
+        if reg.size == 0:
+            raise RuntimeError("reg_sweep_ contains an empty reg_grid.")
+
+        names = _default_functional_names(self.dataset)
+        L = len(names)
+        R = int(reg.size)
+
+        def _as_LR(arr, *, arr_name: str) -> np.ndarray:
+            a = np.asarray(arr, dtype=float)
+            if a.ndim == 1:
+                if L != 1:
+                    raise ValueError(f"{arr_name} is 1D but dataset has L={L} functionals.")
+                if a.shape != (R,):
+                    raise ValueError(f"{arr_name} expected shape (R,) with R={R}, got {a.shape}.")
+                return a.reshape(1, R)
+            if a.ndim == 2:
+                if a.shape == (L, R):
+                    return a
+                if a.shape == (R, L):
+                    return a.T
+                raise ValueError(
+                    f"{arr_name} expected shape (L,R)=({L},{R}) or (R,L)=({R},{L}), got {a.shape}."
+                )
+            raise ValueError(f"{arr_name} expected 1D or 2D array, got ndim={a.ndim} with shape {a.shape}.")
+
+        mse_train = _as_LR(self.reg_sweep_.get("mse_train"), arr_name="mse_train")
+        mse_test = _as_LR(self.reg_sweep_.get("mse_test"), arr_name="mse_test")
+
+        rows: list[dict[str, Any]] = []
+        for li, fname in enumerate(names):
+            for ri, lam in enumerate(reg.tolist()):
+                rows.append(
+                    {"functional": fname, "split": "train", "lambda_reg": float(lam), "mse": float(mse_train[li, ri])}
+                )
+                rows.append(
+                    {"functional": fname, "split": "test", "lambda_reg": float(lam), "mse": float(mse_test[li, ri])}
+                )
+        return rows
+
+    def save_reg_sweep_artifacts(
+        self,
+        out_dir: str | Path,
+        *,
+        formats: tuple[str, ...] = ("pdf", "png"),
+        csv_name: str = "reg_sweep_metrics.csv",
+        train_plot_name: str = "reg_sweep_train",
+        test_plot_name: str = "reg_sweep_test",
+    ) -> Dict[str, Path]:
+        """Save CSV + train/test plots for the latest regularization sweep.
+
+        Parameters
+        ----------
+        out_dir:
+            Output directory (created if missing).
+        formats:
+            Image formats to save for plots, e.g. ("pdf", "png").
+        csv_name:
+            File name for the CSV metrics table.
+        train_plot_name:
+            Base name (without extension) for the train plot.
+        test_plot_name:
+            Base name (without extension) for the test plot.
+
+        Returns
+        -------
+        Dict[str, Path]
+            Paths to written artifacts. Keys: ``csv``, ``train_plot_<fmt>``, ``test_plot_<fmt>``.
+        """
+        if self.reg_sweep_ is None:
+            raise RuntimeError("No sweep results found. Run `run_reg_sweep(...)` first.")
+
+        import csv
+        import numpy as np
+
+        # Ensure headless plotting in CI.
+        import matplotlib
+        matplotlib.use("Agg", force=True)
+        import matplotlib.pyplot as plt
+
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        reg = np.asarray(self.reg_sweep_.get("reg_grid"), dtype=float).reshape(-1)
+        if reg.size == 0:
+            raise RuntimeError("reg_sweep_ contains an empty reg_grid.")
+
+        names = _default_functional_names(self.dataset)
+        L = len(names)
+        R = int(reg.size)
+
+        def _as_LR(arr, *, arr_name: str) -> np.ndarray:
+            a = np.asarray(arr, dtype=float)
+            if a.ndim == 1:
+                if L != 1:
+                    raise ValueError(f"{arr_name} is 1D but dataset has L={L} functionals.")
+                if a.shape != (R,):
+                    raise ValueError(f"{arr_name} expected shape (R,) with R={R}, got {a.shape}.")
+                return a.reshape(1, R)
+            if a.ndim == 2:
+                if a.shape == (L, R):
+                    return a
+                if a.shape == (R, L):
+                    return a.T
+                raise ValueError(
+                    f"{arr_name} expected shape (L,R)=({L},{R}) or (R,L)=({R},{L}), got {a.shape}."
+                )
+            raise ValueError(f"{arr_name} expected 1D or 2D array, got ndim={a.ndim} with shape {a.shape}.")
+
+        mse_train = _as_LR(self.reg_sweep_.get("mse_train"), arr_name="mse_train")
+        mse_test = _as_LR(self.reg_sweep_.get("mse_test"), arr_name="mse_test")
+
+        # 1) CSV
+        rows = self.build_reg_sweep_metrics_table()
+        csv_path = out_dir / csv_name
+        with csv_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["functional", "split", "lambda_reg", "mse"])
+            writer.writeheader()
+            writer.writerows(rows)
+
+        artifacts: Dict[str, Path] = {"csv": csv_path}
+
+        def _plot(split: str, y: np.ndarray, base_name: str) -> None:
+            fig, ax = plt.subplots()
+            for li, fname in enumerate(names):
+                ax.plot(reg, y[li], label=fname)
+            ax.set_xscale("log")
+            ax.set_xlabel(r"$\lambda_{\mathrm{reg}}$")
+            ax.set_ylabel("MSE")
+            ax.set_title(f"Regularization sweep ({split})")
+            ax.legend()
+            fig.tight_layout()
+            for fmt in formats:
+                fmt = fmt.lower().lstrip(".")
+                p = out_dir / f"{base_name}.{fmt}"
+                fig.savefig(p)
+                artifacts[f"{split}_plot_{fmt}"] = p
+            plt.close(fig)
+
+        _plot("train", mse_train, train_plot_name)
+        _plot("test", mse_test, test_plot_name)
+
+        return artifacts

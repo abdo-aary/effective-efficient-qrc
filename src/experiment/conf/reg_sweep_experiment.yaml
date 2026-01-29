@@ -45,6 +45,10 @@ reg_sweep:
     - 1e-1
     - 5e-1
     - 1.0
+  artifacts:
+    enabled: true
+    out_dir: ${hydra:run.dir}/artifacts
+    formats: [ "pdf" ]
 
 output:
   # Suggested paths for an external runner script/notebook.
