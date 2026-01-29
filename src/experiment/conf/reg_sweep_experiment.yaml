@@ -52,5 +52,16 @@ reg_sweep:
 
 output:
   # Suggested paths for an external runner script/notebook.
+  save_dir: ${oc.env:PROJECT_ROOT}/${output.root_dir}/storage/results/
+
   model_dir: ${hydra:run.dir}/model
   sweep_path: ${hydra:run.dir}/reg_sweep.npz
+
+hydra:
+  run:
+    dir: ${output.save_dir}/reg_sweep/${now:%Y-%m-%d_%H-%M-%S}
+
+  job_logging:
+    handlers:
+      file:
+        filename: ${hydra.run.dir}/reg_sweep.log
