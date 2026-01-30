@@ -21,30 +21,28 @@ reg_sweep:
   # Regularization grid for lambda_reg (ridge). Spans 1e-12..1e0 in half-decades.
   reg_grid:
     - 1e-12
-    - 5e-12
     - 1e-11
-    - 5e-11
     - 1e-10
-    - 5e-10
     - 1e-9
-    - 5e-9
     - 1e-8
-    - 5e-8
     - 1e-7
-    - 5e-7
     - 1e-6
-    - 5e-6
     - 1e-5
-    - 5e-5
     - 1e-4
-    - 5e-4
     - 1e-3
     - 5e-3
     - 1e-2
     - 5e-2
     - 1e-1
     - 5e-1
-    - 1.0
+    - 1e0
+    - 5e0
+    - 1e1
+    - 5e1
+    - 1e2
+    - 5e2
+    - 1e3
+    - 5e3
 
 output:
   # Base directory for experiment runs

@@ -41,6 +41,7 @@ _FRIENDLY_FUNCTIONAL_NAMES_BY_KIND = {
     "e2_three": ["Single step forecasting", "Exponential fading", "Voltera"],
 }
 
+
 def _default_functional_names(ds: WindowsDataset) -> list[str]:
     """Best-effort functional names for reporting.
 
