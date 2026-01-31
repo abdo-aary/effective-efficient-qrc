@@ -11,7 +11,7 @@ This module defines:
 - utilities to generate Johnson–Lindenstrauss (JL) random projections
 
 The JL projection is used to map an input vector ``x in R^d`` to an injected
-coordinate vector ``z = x @ Pi`` of dimension ``zeta`` (typically ``zeta = n``,
+coordinate vector ``z = x @ Pi`` of dimension ``n`` (typically ``n = n``,
 the number of reservoir qubits).
 
 All returned configurations are *pure NumPy* objects and are therefore easy to
@@ -26,22 +26,22 @@ from typing import Sequence, Tuple
 import numpy as np
 
 
-def sample_jl_projections_gaussian(input_dim: int, zeta: int, seed: int) -> np.ndarray:
+def sample_jl_projections_gaussian(input_dim: int, n: int, seed: int) -> np.ndarray:
     """Sample a Gaussian Johnson–Lindenstrauss projection matrix.
 
-    The returned matrix :math:`\Pi \in \mathbb{R}^{d \times \zeta}` has entries
-    distributed as :math:`\mathcal{N}(0, 1/\zeta)`. Applying
+    The returned matrix :math:`\Pi \in \mathbb{R}^{d \times \n}` has entries
+    distributed as :math:`\mathcal{N}(0, 1/\n)`. Applying
 
     ``z = x @ Pi``
 
-    maps a vector ``x in R^d`` to ``z in R^zeta`` while approximately preserving
-    pairwise distances for suitably large ``zeta``.
+    maps a vector ``x in R^d`` to ``z in R^n`` while approximately preserving
+    pairwise distances for suitably large ``n``.
 
     Parameters
     ----------
     input_dim : int
         Original dimension ``d``.
-    zeta : int
+    n : int
         Projected dimension ``ζ`` (often chosen equal to the number of qubits).
     seed : int
         RNG seed for reproducibility.
@@ -49,19 +49,19 @@ def sample_jl_projections_gaussian(input_dim: int, zeta: int, seed: int) -> np.n
     Returns
     -------
     numpy.ndarray
-        Projection matrix of shape ``(input_dim, zeta)``.
+        Projection matrix of shape ``(input_dim, n)``.
 
     Examples
     --------
     >>> import numpy as np
-    >>> Pi = sample_jl_projections_gaussian(input_dim=100, zeta=20, seed=123)
+    >>> Pi = sample_jl_projections_gaussian(input_dim=100, n=20, seed=123)
     >>> x = np.random.default_rng(0).normal(size=(100,))
     >>> z = x @ Pi
     >>> z.shape
     (20,)
     """
     rng = np.random.default_rng(seed)
-    projection = rng.normal(loc=0.0, scale=1.0 / np.sqrt(zeta), size=(input_dim, zeta))
+    projection = rng.normal(loc=0.0, scale=1.0 / np.sqrt(n), size=(input_dim, n))
     return projection
 
 
@@ -139,7 +139,7 @@ class RingQRConfig(BaseQRConfig):
         self.seed = int(seed)
         self.projection = sample_jl_projections_gaussian(
             input_dim=self.input_dim,
-            zeta=self.num_qubits,
+            n=self.num_qubits,
             seed=self.seed,
         )
 
