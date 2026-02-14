@@ -199,7 +199,7 @@ pytest -q
 If you use this codebase in academic work, please cite the QuaRK paper.
 
 ```bibtex
-@misc{quark,
+@misc{quark_qrk,
   title        = {QuaRK: A Quantum Reservoir Kernel for Time Series Learning},
   author       = {Aaraba, Abdallah and Cherkaoui, Soumaya and Ahmad, Ola and Wang, Shengrui},
   note         = {Preprint},
