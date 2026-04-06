@@ -87,6 +87,39 @@ def test_featurizer_transform_happy_path(monkeypatch):
     assert retriever.last_kwargs == {"_N": N, "fk": 3}
 
 
+def test_featurizer_passes_angle_positioning_to_runner_that_requires_it(monkeypatch):
+    N, w, d = 3, 2, 2
+    X = np.random.default_rng(1).normal(size=(N, w, d))
+
+    class AngleRunner(DummyRunner):
+        requires_angle_positioning_name = True
+
+    runner = AngleRunner()
+    retriever = DummyRetriever(D=5)
+
+    monkeypatch.setattr(
+        qf.CircuitFactory,
+        "create_pubs_dataset_reservoirs_IsingRingSWAP",
+        staticmethod(lambda **kwargs: {"pubs": "SWAP"}),
+    )
+
+    featurizer = qf.QRCFeaturizer(
+        qrc_cfg=DummyCfg(),
+        runner=runner,
+        fmp_retriever=retriever,
+        pubs_family="ising_ring_swap",
+        angle_positioning_name="tanh",
+        pubs_kwargs={},
+        runner_kwargs={"rk": 2},
+        fmp_kwargs={"_N": N},
+    )
+
+    Phi = featurizer.transform(X)
+
+    assert Phi.shape == (N, 5)
+    assert runner.last_kwargs == {"rk": 2, "angle_positioning_name": "tanh"}
+
+
 def test_featurizer_rejects_bad_X_shape():
     runner = DummyRunner()
     retriever = DummyRetriever()

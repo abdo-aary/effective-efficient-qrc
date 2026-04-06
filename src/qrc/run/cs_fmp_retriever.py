@@ -22,6 +22,7 @@ from typing import Optional, Sequence
 
 from qiskit.quantum_info import Operator, SparsePauliOp
 
+from src.compute.backend import import_cupy, is_cupy_array
 from .fmp_retriever import BaseFeatureMapsRetriever, ExactFeatureMapsRetriever
 from .circuit_run import ExactResults
 
@@ -64,6 +65,7 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         *,
         default_shots: Optional[int] = None,
         default_n_groups: Optional[int] = None,
+        backend: str = "auto",
     ):
         self.qrc_cfg = qrc_cfg
         self.observables = list(observables)
@@ -72,9 +74,10 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
 
         self.default_shots = default_shots
         self.default_n_groups = default_n_groups
+        self.backend = str(backend)
 
         # Reuse the exact retriever to compute μ = Tr(ρ O) with the same ordering/cache.
-        self._exact = ExactFeatureMapsRetriever(qrc_cfg, self.observables)
+        self._exact = ExactFeatureMapsRetriever(qrc_cfg, self.observables, backend=backend)
 
     @staticmethod
     def _pick_n_groups(shots: int) -> int:
@@ -137,7 +140,10 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         # Basic qrc_cfg compatibility check
         n = int(self.qrc_cfg.num_qubits)
         dim = 1 << n
-        states = np.asarray(results.states)
+        raw_states = results.states
+        use_cupy = self.backend == "cupy" or (self.backend == "auto" and is_cupy_array(raw_states))
+        xp = import_cupy() if use_cupy else np
+        states = xp.asarray(raw_states)
         if states.ndim != 4:
             raise ValueError(f"Expected results.states shape (N,R,dim,dim), got {states.shape}")
         if states.shape[2:] != (dim, dim):
@@ -153,7 +159,7 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         mu = mu_flat.reshape(N, R, K)
 
         # For Pauli observables, μ ∈ [-1,1]. Clip for numerical drift.
-        mu = np.clip(mu, -1.0, 1.0)
+        mu = xp.clip(mu, -1.0, 1.0)
 
         # ------------------------
         # MoM setup
@@ -174,9 +180,9 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         # For a batch of size b, count(+1) ~ Binomial(b, p),
         # and batch mean = (2*count - b) / b.
         # ------------------------
-        rng = np.random.default_rng(seed)
+        rng = xp.random.default_rng(seed) if use_cupy else np.random.default_rng(seed)
         p = (1.0 + mu) / 2.0
-        p = np.clip(p, 0.0, 1.0)
+        p = xp.clip(p, 0.0, 1.0)
 
         counts = rng.binomial(
             n=batch_size,
@@ -186,7 +192,7 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         group_means = (2.0 * counts - batch_size) / float(batch_size)  # (N,R,K,G)
 
         # Median-of-Means aggregation
-        cs_est = np.median(group_means, axis=-1)  # (N,R,K)
+        cs_est = xp.median(group_means, axis=-1)  # (N,R,K)
 
         fmps = cs_est.reshape(N, R * K).astype(float)
         self.fmps = fmps

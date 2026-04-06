@@ -25,6 +25,7 @@ from typing import Sequence
 import numpy as np
 from qiskit.quantum_info import Operator, SparsePauliOp
 
+from src.compute.backend import asnumpy, get_array_module, import_cupy, is_cupy_array
 from src.qrc.circuits.qrc_configs import BaseQRConfig
 from .circuit_run import Results
 
@@ -140,9 +141,16 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
         If the observable labels do not match ``num_qubits`` (Pauli fast path).
     """
 
-    def __init__(self, qrc_cfg: BaseQRConfig, observables: Sequence[Operator | SparsePauliOp]):
+    def __init__(
+        self,
+        qrc_cfg: BaseQRConfig,
+        observables: Sequence[Operator | SparsePauliOp],
+        *,
+        backend: str = "auto",
+    ):
         self.qrc_cfg = qrc_cfg
         self.observables = observables
+        self.backend = str(backend)
         self._pauli_cache = None  # list[(xmask:int, zmask:int, ny:int)] or None
         self._dense_cache = None  # obs_mat (K,dim,dim) if needed
 
@@ -273,7 +281,10 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
         ValueError
             If ``results.states`` has an unexpected shape or does not match ``qrc_cfg.num_qubits``.
         """
-        states = np.asarray(results.states)
+        raw_states = results.states
+        use_cupy = self.backend == "cupy" or (self.backend == "auto" and is_cupy_array(raw_states))
+        xp = import_cupy() if use_cupy else np
+        states = xp.asarray(raw_states)
         if states.ndim != 4:
             raise ValueError(f"Expected states shape (N,R,dim,dim), got {states.shape}")
 
@@ -287,7 +298,7 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
 
         K = len(self.observables)
         if K == 0:
-            out = np.zeros((N, 0), dtype=np.float64)
+            out = xp.zeros((N, 0), dtype=xp.float64)
             self.fmps = out
             return out
 
@@ -298,18 +309,25 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
             self._ensure_pauli_cache(n)
 
         if self._pauli_cache is not None:
-            rows = np.arange(dim, dtype=np.uint32)
-            feats = np.empty((N * R, K), dtype=np.float64)
+            rows = xp.arange(dim, dtype=xp.uint32)
+            feats = xp.empty((N * R, K), dtype=xp.float64)
 
             for k, (xmask, zmask, ny) in enumerate(self._pauli_cache):
-                cols = rows ^ np.uint32(xmask)
+                cols = rows ^ xp.uint32(xmask)
                 vals = rho[:, rows, cols]  # (B,dim)
 
-                parity = self._bitcount_parity(np.bitwise_and(rows, np.uint32(zmask)))
-                sign = 1.0 - 2.0 * parity.astype(np.float64)
+                if use_cupy:
+                    cpu_rows = np.arange(dim, dtype=np.uint32)
+                    parity = xp.asarray(
+                        self._bitcount_parity(np.bitwise_and(cpu_rows, np.uint32(zmask))),
+                        dtype=xp.int8,
+                    )
+                else:
+                    parity = self._bitcount_parity(np.bitwise_and(rows, np.uint32(zmask)))
+                sign = 1.0 - 2.0 * parity.astype(xp.float64)
                 phase = (1j ** ny) * sign  # (dim,)
 
-                exp = np.sum(vals * phase[None, :], axis=1)  # (B,)
+                exp = xp.sum(vals * phase[None, :], axis=1)  # (B,)
                 feats[:, k] = exp.real
 
             fmps = feats.reshape(N, R, K).reshape(N, R * K)
@@ -318,8 +336,8 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
 
         # --- Generic fallback ---
         self._ensure_dense_cache()
-        obs_mat = self._dense_cache  # (K,dim,dim)
-        exp = np.einsum("bij,kji->bk", rho, obs_mat).real  # (B,K)
+        obs_mat = xp.asarray(self._dense_cache)  # (K,dim,dim)
+        exp = xp.einsum("bij,kji->bk", rho, obs_mat).real  # (B,K)
         fmps = exp.reshape(N, R, K).reshape(N, R * K)
 
         self.fmps = fmps

@@ -9,3 +9,6 @@ defaults:
   - _self_
 
 kind: qrc_matern_krr
+readout_backend: auto
+readout_dtype: float64
+readout_device: 0

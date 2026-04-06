@@ -1,4 +1,5 @@
 _target_: src.qrc.run.cs_fmp_retriever.CSFeatureMapsRetriever
+backend: auto
 kwargs:
   shots: 1000
   seed: 12345

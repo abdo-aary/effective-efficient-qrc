@@ -393,6 +393,8 @@ class CircuitFactory:
             lam_0: float,
             seed: float = 12345,
             eps: float = 1e-8,
+            projection_backend: str = "numpy",
+            projection_device: int | None = 0,
     ):
         """
         Create PUBs for a dataset X across multiple reservoirs (SWAP dilation variant).
@@ -455,7 +457,19 @@ class CircuitFactory:
         )
 
         # ---- Compute injected z-values for every (N,w,n) ----
-        Z = X @ qrc_cfg.projection  # (N,w,d) @ (d,n) -> (N,w,n)
+        if str(projection_backend) == "cupy":
+            try:
+                import cupy as cp  # type: ignore[import-not-found]
+                device = cp.cuda.Device(int(projection_device)) if projection_device is not None else None
+                if device is None:
+                    Z = cp.asnumpy(cp.asarray(X) @ cp.asarray(qrc_cfg.projection))
+                else:
+                    with device:
+                        Z = cp.asnumpy(cp.asarray(X) @ cp.asarray(qrc_cfg.projection))
+            except ImportError as exc:
+                raise ImportError("projection_backend='cupy' requires CuPy.") from exc
+        else:
+            Z = X @ qrc_cfg.projection  # (N,w,d) @ (d,n) -> (N,w,n)
         Z = np.asarray(Z, dtype=float)
 
         # Flatten injected params in the same order as we created z_steps:
@@ -483,4 +497,3 @@ class CircuitFactory:
         qc_template.metadata["param_order"] = param_order
 
         return [(qc_template, vals)]
-

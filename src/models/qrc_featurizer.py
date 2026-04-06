@@ -88,22 +88,26 @@ class QRCFeaturizer:
         if X.ndim != 3:
             raise ValueError(f"X must be (N,w,d). Got {X.shape}.")
 
-        # Right now we have one concrete family in CircuitFactory
-        if self.pubs_family != "ising_ring_swap":
-            raise ValueError(f"Unknown pubs_family={self.pubs_family!r}. Add it to the featurizer.")
-
         angle_positioning = _ANGLE_POS_REGISTRY.get(self.angle_positioning_name)
         if angle_positioning is None:
             raise ValueError(f"Unknown angle_positioning={self.angle_positioning_name!r}")
 
-        pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
-            qrc_cfg=self.qrc_cfg,
-            angle_positioning=angle_positioning,
-            X=X,
-            **self.pubs_kwargs,
-        )
+        if self.pubs_family == "ising_ring_swap":
+            pubs = CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP(
+                qrc_cfg=self.qrc_cfg,
+                angle_positioning=angle_positioning,
+                X=X,
+                **self.pubs_kwargs,
+            )
+        else:
+            raise ValueError(f"Unknown pubs_family={self.pubs_family!r}. Add it to the featurizer.")
 
-        results = self.runner.run_pubs(pubs=pubs, **self.runner_kwargs)
+        runner_kwargs = dict(self.runner_kwargs)
+        if getattr(self.runner, "requires_observables", False):
+            runner_kwargs.setdefault("observables", getattr(self.fmp_retriever, "observables", None))
+        if getattr(self.runner, "requires_angle_positioning_name", False):
+            runner_kwargs.setdefault("angle_positioning_name", self.angle_positioning_name)
+        results = self.runner.run_pubs(pubs=pubs, **runner_kwargs)
 
         # CSFeatureMapsRetriever expects shots/seed/n_groups in get_feature_maps
         Phi = self.fmp_retriever.get_feature_maps(results, **self.fmp_kwargs)

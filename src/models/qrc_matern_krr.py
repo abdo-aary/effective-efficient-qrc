@@ -19,6 +19,7 @@ import multiprocessing as mp
 from pathlib import Path
 import json
 import numpy as np
+from scipy.optimize import minimize_scalar
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 
@@ -28,6 +29,10 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.preprocessing import StandardScaler
 from sklearn.gaussian_process.kernels import Matern as SkMatern, ConstantKernel
 
+from src.compute.backend import asnumpy, resolve_backend
+from src.models.gpu_krr import GPU_MATERN_NU_GRID
+from src.models.gpu_krr import krr_validation_mse as gpu_krr_validation_mse
+from src.models.gpu_krr import matern_kernel_matrix, solve_krr as gpu_solve_krr
 from src.models.kernel import tune_matern_grid_train_val, tune_matern_continuous_train_val
 from src.models.qrc_featurizer import QRCFeaturizer
 
@@ -83,6 +88,20 @@ def build_sparse_pauli_ops(labels: List[str]) -> List[SparsePauliOp]:
         Qiskit Pauli operators.
     """
     return [SparsePauliOp(lab) for lab in labels]
+
+
+class _ArrayStandardizer:
+    """Minimal scaler object compatible with the saved artifact format."""
+
+    def __init__(self, mean: np.ndarray, scale: np.ndarray):
+        self.mean_ = np.asarray(mean, dtype=float)
+        self.scale_ = np.asarray(scale, dtype=float)
+        self.var_ = self.scale_ ** 2
+        self.n_features_in_ = int(self.mean_.shape[0])
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        scale = np.where(self.scale_ == 0.0, 1.0, self.scale_)
+        return (np.asarray(X, dtype=float) - self.mean_.reshape(1, -1)) / scale.reshape(1, -1)
 
 
 def _train_test_split_indices(N: int, test_ratio: float, seed: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -141,6 +160,98 @@ def _build_kernel(xi: float, nu: float) -> Any:
     )
 
 
+def _resolve_readout_backend(backend: str, *, nu: float | None = None) -> str:
+    resolved = resolve_backend(str(backend))
+    if resolved == "cupy" and nu is not None and not any(np.isclose(float(nu), allowed) for allowed in GPU_MATERN_NU_GRID):
+        if str(backend) == "auto":
+            return "numpy"
+        raise ValueError(f"GPU Matérn readout supports nu in {GPU_MATERN_NU_GRID}, got {nu}.")
+    return resolved
+
+
+def _can_use_gpu_for_nu_grid(backend: str, nu_grid: Any) -> bool:
+    if resolve_backend(str(backend)) != "cupy":
+        return False
+    unsupported = [
+        float(nu)
+        for nu in list(nu_grid)
+        if not any(np.isclose(float(nu), allowed) for allowed in GPU_MATERN_NU_GRID)
+    ]
+    if not unsupported:
+        return True
+    if str(backend) == "auto":
+        return False
+    raise ValueError(f"GPU Matérn readout supports nu in {GPU_MATERN_NU_GRID}; unsupported values: {unsupported}.")
+
+
+def _tune_matern_grid_train_val_gpu(
+    X: np.ndarray,
+    y: np.ndarray,
+    *,
+    val_ratio: float = 0.2,
+    seed: int = 0,
+    reg: float = 1e-6,
+    xi_bounds: Tuple[float, float] = (1e-3, 1e3),
+    nu_grid: Tuple[float, ...] | List[float] = GPU_MATERN_NU_GRID,
+    xi_maxiter: int = 80,
+    backend: str = "cupy",
+    dtype: str = "float64",
+    device: int | None = None,
+) -> Tuple[Dict, float]:
+    """CuPy-backed variant of the existing grid tuner."""
+
+    if X.ndim != 2:
+        raise ValueError(f"X must be 2D (N,d). Got shape {X.shape}.")
+    N = X.shape[0]
+    if N < 2:
+        raise ValueError("Need at least 2 samples to do a train/val split.")
+    for nu in nu_grid:
+        _resolve_readout_backend(backend, nu=float(nu))
+
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(N)
+    n_val = max(1, int(val_ratio * N))
+    if n_val >= N:
+        n_val = N - 1
+    val_idx = idx[:n_val]
+    tr_idx = idx[n_val:]
+    Xtr, ytr = X[tr_idx], y[tr_idx]
+    Xva, yva = X[val_idx], y[val_idx]
+
+    if xi_bounds[0] <= 0 or xi_bounds[1] <= 0 or xi_bounds[0] >= xi_bounds[1]:
+        raise ValueError(f"xi_bounds must be positive and increasing. Got {xi_bounds}.")
+    log_xi_lo, log_xi_hi = float(np.log(xi_bounds[0])), float(np.log(xi_bounds[1]))
+
+    best_mse = float("inf")
+    best_log_xi = None
+    best_nu = None
+    for nu in nu_grid:
+        nu = float(nu)
+        res = minimize_scalar(
+            lambda log_xi: gpu_krr_validation_mse(
+                Xtr,
+                ytr,
+                Xva,
+                yva,
+                xi=float(np.exp(log_xi)),
+                nu=nu,
+                reg=reg,
+                backend=backend,
+                dtype=dtype,
+                device=device,
+            ),
+            bounds=(log_xi_lo, log_xi_hi),
+            method="bounded",
+            options={"maxiter": int(xi_maxiter)},
+        )
+        if float(res.fun) < best_mse:
+            best_mse = float(res.fun)
+            best_log_xi = float(res.x)
+            best_nu = nu
+
+    return {"xi": float(np.exp(best_log_xi)), "nu": float(best_nu), "reg": float(reg)}, best_mse
+
+
 # -----------------------------------------------------------------------------
 # Multiprocessing helpers (module-level for pickling)
 # -----------------------------------------------------------------------------
@@ -177,8 +288,34 @@ def _tune_and_fit_one_output(args: Tuple[int, np.ndarray]) -> Tuple[int, Dict[st
     tune_seed = int(tuning.get("seed", 0))
     reg = float(tuning.get("reg", 1e-6))
     xi_bounds = tuple(tuning.get("xi_bounds", (1e-3, 1e3)))
+    readout_backend = str(tuning.get("readout_backend", "numpy"))
+    readout_dtype = str(tuning.get("readout_dtype", "float64"))
+    readout_device = tuning.get("readout_device", None)
+    readout_device = None if readout_device is None else int(readout_device)
+    resolved_readout_backend = resolve_backend(readout_backend)
 
-    if strategy == "grid":
+    if strategy == "grid" and resolved_readout_backend == "cupy":
+        nu_grid = tuning.get("nu_grid", GPU_MATERN_NU_GRID)
+        use_gpu_grid = _can_use_gpu_for_nu_grid(readout_backend, nu_grid)
+    else:
+        use_gpu_grid = False
+
+    if strategy == "grid" and use_gpu_grid:
+        xi_maxiter = int(tuning.get("xi_maxiter", 80))
+        best_params, _ = _tune_matern_grid_train_val_gpu(
+            Phi_tr,
+            y_tr,
+            val_ratio=val_ratio,
+            seed=tune_seed,
+            reg=reg,
+            xi_bounds=xi_bounds,
+            nu_grid=nu_grid,
+            xi_maxiter=xi_maxiter,
+            backend=readout_backend,
+            dtype=readout_dtype,
+            device=readout_device,
+        )
+    elif strategy == "grid":
         nu_grid = tuning.get("nu_grid", (0.5, 1.5, 2.5, 5.0))
         xi_maxiter = int(tuning.get("xi_maxiter", 80))
         best_params, _ = tune_matern_grid_train_val(
@@ -212,10 +349,22 @@ def _tune_and_fit_one_output(args: Tuple[int, np.ndarray]) -> Tuple[int, Dict[st
     reg = float(best_params["reg"])
 
     # fit KRR (dual) on all train_val
-    kernel = _build_kernel(xi=xi, nu=nu)
-    Ktt = kernel(Phi_tr, Phi_tr)
-    A = Ktt + reg * np.eye(Ktt.shape[0])
-    alpha = np.linalg.solve(A, y_tr)
+    if _resolve_readout_backend(readout_backend, nu=nu) == "cupy":
+        Ktt = matern_kernel_matrix(
+            Phi_tr,
+            Phi_tr,
+            xi=xi,
+            nu=nu,
+            backend=readout_backend,
+            dtype=readout_dtype,
+            device=readout_device,
+        )
+        alpha = asnumpy(gpu_solve_krr(Ktt, y_tr, reg=reg, backend=readout_backend, dtype=readout_dtype))
+    else:
+        kernel = _build_kernel(xi=xi, nu=nu)
+        Ktt = kernel(Phi_tr, Phi_tr)
+        A = Ktt + reg * np.eye(Ktt.shape[0])
+        alpha = np.linalg.solve(A, y_tr)
 
     return out_idx, dict(best_params), alpha
 
@@ -264,12 +413,18 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
             test_ratio: float = 0.2,
             split_seed: int = 0,
             tuning: Optional[Dict[str, Any]] = None,
+            readout_backend: str = "auto",
+            readout_dtype: str = "float64",
+            readout_device: int | None = None,
     ):
         self.featurizer = featurizer
         self.standardize = bool(standardize)
         self.test_ratio = float(test_ratio)
         self.split_seed = int(split_seed)
         self.tuning = tuning or {}
+        self.readout_backend = str(readout_backend)
+        self.readout_dtype = str(readout_dtype)
+        self.readout_device = None if readout_device is None else int(readout_device)
 
         # learned attrs
         self.scaler_: Optional[StandardScaler] = None
@@ -376,6 +531,9 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
         standardize = bool(preprocess.get("standardize", True))
 
         tuning = OmegaConf.to_container(model_cfg.get("tuning", {}), resolve=True) or {}
+        readout_backend = str(model_cfg.get("readout_backend", "auto"))
+        readout_dtype = str(model_cfg.get("readout_dtype", "float64"))
+        readout_device = model_cfg.get("readout_device", None)
 
         featurizer = QRCFeaturizer(
             qrc_cfg=qrc_cfg,
@@ -394,6 +552,9 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
             test_ratio=test_ratio,
             split_seed=split_seed,
             tuning=dict(tuning),
+            readout_backend=readout_backend,
+            readout_dtype=readout_dtype,
+            readout_device=readout_device,
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray, *, num_workers: int = 1):
@@ -454,13 +615,20 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
         self.n_outputs_ = L
 
         # quantum featurization (single expensive call)
-        Phi = self.featurizer.transform(X)  # (N,D)
+        Phi = asnumpy(self.featurizer.transform(X))  # (N,D); artifacts remain NumPy-compatible
 
         # split train_val vs test
-        if not self.train_idx_ or not self.test_idx_:
+        if self.train_idx_ is None or self.test_idx_ is None:
             tr_idx, te_idx = _train_test_split_indices(N, self.test_ratio, self.split_seed)
         else:
-            tr_idx, te_idx = self.train_idx_, self.test_idx_
+            tr_idx = np.asarray(self.train_idx_, dtype=int).reshape(-1)
+            te_idx = np.asarray(self.test_idx_, dtype=int).reshape(-1)
+            if tr_idx.size == 0 or te_idx.size == 0:
+                raise ValueError("Explicit train_idx_/test_idx_ must be non-empty.")
+            if np.intersect1d(tr_idx, te_idx).size:
+                raise ValueError("Explicit train_idx_/test_idx_ must not overlap.")
+            if tr_idx.max(initial=-1) >= N or te_idx.max(initial=-1) >= N:
+                raise ValueError(f"Explicit split contains index out of range for N={N}.")
 
         Phi_tr = Phi[tr_idx]
         Phi_te = Phi[te_idx]
@@ -495,8 +663,16 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
         requested = int(num_workers) if num_workers is not None else 1
         effective_workers = max(1, min(requested, L))
 
+        tuning_runtime = dict(self.tuning)
+        tuning_runtime.setdefault("readout_backend", self.readout_backend)
+        tuning_runtime.setdefault("readout_dtype", self.readout_dtype)
+        tuning_runtime.setdefault("readout_device", self.readout_device)
+
+        if resolve_backend(self.readout_backend) == "cupy":
+            effective_workers = 1
+
         if effective_workers == 1:
-            _mp_init(Phi_tr, dict(self.tuning))
+            _mp_init(Phi_tr, tuning_runtime)
             tuned = [_tune_and_fit_one_output(task) for task in tasks]
         else:
             try:
@@ -507,7 +683,7 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
             with ctx.Pool(
                     processes=effective_workers,
                     initializer=_mp_init,
-                    initargs=(Phi_tr, dict(self.tuning)),
+                    initargs=(Phi_tr, tuning_runtime),
             ) as pool:
                 tuned = pool.map(_tune_and_fit_one_output, tasks)
 
@@ -568,7 +744,21 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
 
         # single-output
         if not isinstance(self.kernel_, list):
-            Kxt = self.kernel_(Phi, self.X_train_features_)
+            bp = self.best_params_ if isinstance(self.best_params_, dict) else None
+            if bp is not None and _resolve_readout_backend(self.readout_backend, nu=float(bp["nu"])) == "cupy":
+                Kxt = asnumpy(
+                    matern_kernel_matrix(
+                        Phi,
+                        self.X_train_features_,
+                        xi=float(bp["xi"]),
+                        nu=float(bp["nu"]),
+                        backend=self.readout_backend,
+                        dtype=self.readout_dtype,
+                        device=self.readout_device,
+                    )
+                )
+            else:
+                Kxt = self.kernel_(Phi, self.X_train_features_)
             return Kxt @ self.alpha_
 
         # multi-output
@@ -580,7 +770,21 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
         L = alphas.shape[0]
         yhat = np.empty((L, Phi.shape[0]), dtype=float)
         for l in range(L):
-            Kxt = kernels[l](Phi, self.X_train_features_)
+            bp = self.best_params_[l] if isinstance(self.best_params_, list) else None
+            if bp is not None and _resolve_readout_backend(self.readout_backend, nu=float(bp["nu"])) == "cupy":
+                Kxt = asnumpy(
+                    matern_kernel_matrix(
+                        Phi,
+                        self.X_train_features_,
+                        xi=float(bp["xi"]),
+                        nu=float(bp["nu"]),
+                        backend=self.readout_backend,
+                        dtype=self.readout_dtype,
+                        device=self.readout_device,
+                    )
+                )
+            else:
+                Kxt = kernels[l](Phi, self.X_train_features_)
             yhat[l] = Kxt @ alphas[l]
         return yhat
 
@@ -686,6 +890,9 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
             "standardize": bool(getattr(self, "standardize", False)),
             "test_ratio": float(getattr(self, "test_ratio", 0.0)),
             "split_seed": int(getattr(self, "split_seed", 0)),
+            "readout_backend": str(getattr(self, "readout_backend", "auto")),
+            "readout_dtype": str(getattr(self, "readout_dtype", "float64")),
+            "readout_device": getattr(self, "readout_device", None),
             "n_outputs_": None if getattr(self, "n_outputs_", None) is None else int(self.n_outputs_),
             "Phi_shape": [int(Phi_full.shape[0]), int(Phi_full.shape[1])],
             "alpha_shape": list(map(int, alpha.shape)),
@@ -728,6 +935,9 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
         obj.standardize = bool(meta["standardize"])
         obj.test_ratio = float(meta["test_ratio"])
         obj.split_seed = int(meta["split_seed"])
+        obj.readout_backend = str(meta.get("readout_backend", getattr(obj, "readout_backend", "auto")))
+        obj.readout_dtype = str(meta.get("readout_dtype", getattr(obj, "readout_dtype", "float64")))
+        obj.readout_device = meta.get("readout_device", getattr(obj, "readout_device", None))
         obj.n_outputs_ = meta.get("n_outputs_", None)
 
         obj.best_params_ = meta.get("best_params_", None)
