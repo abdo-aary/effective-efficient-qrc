@@ -199,10 +199,15 @@ pytest -q
 If you use this codebase in academic work, please cite the QuaRK paper.
 
 ```bibtex
-@misc{quark_qrk,
-  title        = {QuaRK: A Quantum Reservoir Kernel for Time Series Learning},
-  author       = {Aaraba, Abdallah and Cherkaoui, Soumaya and Ahmad, Ola and Wang, Shengrui},
-  note         = {Preprint},
+@misc{quark_aaraba_2026,
+  doi = {10.48550/ARXIV.2602.13531},
+  url = {https://arxiv.org/abs/2602.13531},
+  author = {Aaraba, Abdallah and Cherkaoui, Soumaya and Ahmad, Ola and Wang, Shengrui},
+  keywords = {Machine Learning (cs.LG), Quantum Physics (quant-ph), FOS: Computer and information sciences, FOS: Computer and information sciences, FOS: Physical sciences, FOS: Physical sciences},
+  title = {QuaRK: A Quantum Reservoir Kernel for Time Series Learning},
+  publisher = {arXiv},
+  year = {2026},
+  copyright = {arXiv.org perpetual, non-exclusive license}
 }
 ```
 
