@@ -34,3 +34,9 @@ __pycache__/
 
 # reminder files
 reminder*
+
+docs/rebuttal/
+
+.cursor/
+
+.codex/
