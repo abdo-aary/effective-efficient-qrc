@@ -1,0 +1,10 @@
+_target_: src.qrc.run.reservoir_channel_runner.ExactReservoirChannelRunner
+
+state_dtype: complex128
+chunk_size: 512
+engine: cupy
+gpu_id: 0
+output_backend: cupy
+output_kind: expectation
+
+runner_kwargs: {}

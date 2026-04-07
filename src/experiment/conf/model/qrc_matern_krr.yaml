@@ -1,14 +1,14 @@
 defaults:
   - qrc/cfg@qrc.cfg: ring
-  - qrc/runner@qrc.runner: exact_aer
+  - qrc/runner@qrc.runner: reservoir_channel_cupy_direct
   - qrc/features/retriever@qrc.features.retriever: cs
   - qrc/features/observables@qrc.features.observables: k_local_pauli
   - qrc/pubs@qrc.pubs: ising_ring
   - training@training: default
-  - tuning@tuning: grid
+  - tuning@tuning: grid_gpu
   - _self_
 
 kind: qrc_matern_krr
-readout_backend: auto
+readout_backend: cupy
 readout_dtype: float64
 readout_device: 0

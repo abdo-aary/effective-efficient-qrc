@@ -137,25 +137,21 @@ class CSFeatureMapsRetriever(BaseFeatureMapsRetriever):
         if shots <= 0:
             raise ValueError(f"shots must be positive, got {shots}.")
 
-        # Basic qrc_cfg compatibility check
-        n = int(self.qrc_cfg.num_qubits)
-        dim = 1 << n
-        raw_states = results.states
-        use_cupy = self.backend == "cupy" or (self.backend == "auto" and is_cupy_array(raw_states))
-        xp = import_cupy() if use_cupy else np
-        states = xp.asarray(raw_states)
-        if states.ndim != 4:
-            raise ValueError(f"Expected results.states shape (N,R,dim,dim), got {states.shape}")
-        if states.shape[2:] != (dim, dim):
-            raise ValueError(f"State dim mismatch: expected {(dim, dim)}, got {states.shape[2:]}")
-
-        N, R = states.shape[0], states.shape[1]
         K = len(self.observables)
 
         # ------------------------
         # exact expectations μ
         # ------------------------
         mu_flat = self._exact.get_feature_maps(results)   # (N, R*K)
+        use_cupy = self.backend == "cupy" or (self.backend == "auto" and is_cupy_array(mu_flat))
+        xp = import_cupy() if use_cupy else np
+        mu_flat = xp.asarray(mu_flat)
+        if mu_flat.ndim != 2:
+            raise ValueError(f"Expected exact feature maps shape (N,R*K), got {mu_flat.shape}.")
+        if K == 0 or mu_flat.shape[1] % K != 0:
+            raise ValueError(f"Feature width {mu_flat.shape[1]} is incompatible with K={K}.")
+        N = int(mu_flat.shape[0])
+        R = int(mu_flat.shape[1] // K)
         mu = mu_flat.reshape(N, R, K)
 
         # For Pauli observables, μ ∈ [-1,1]. Clip for numerical drift.

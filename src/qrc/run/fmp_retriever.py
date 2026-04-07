@@ -27,7 +27,7 @@ from qiskit.quantum_info import Operator, SparsePauliOp
 
 from src.compute.backend import asnumpy, get_array_module, import_cupy, is_cupy_array
 from src.qrc.circuits.qrc_configs import BaseQRConfig
-from .circuit_run import Results
+from .circuit_run import ExactExpectationResults, Results
 
 
 class BaseFeatureMapsRetriever(ABC):
@@ -281,6 +281,29 @@ class ExactFeatureMapsRetriever(BaseFeatureMapsRetriever):
         ValueError
             If ``results.states`` has an unexpected shape or does not match ``qrc_cfg.num_qubits``.
         """
+        if isinstance(results, ExactExpectationResults):
+            raw_expectations = results.expectations
+            use_cupy = self.backend == "cupy" or (self.backend == "auto" and is_cupy_array(raw_expectations))
+            xp = import_cupy() if use_cupy else np
+            expectations = xp.asarray(raw_expectations)
+            if expectations.ndim != 3:
+                raise ValueError(f"Expected expectations shape (N,R,K), got {expectations.shape}")
+            N, R, K = expectations.shape
+            if K != len(self.observables):
+                raise ValueError(
+                    f"Expectation observable count mismatch: results has K={K}, retriever has {len(self.observables)}."
+                )
+            if getattr(results, "observable_labels", None):
+                labels = [self._pauli_label(op) for op in self.observables]
+                if all(label is not None for label in labels) and list(labels) != list(results.observable_labels):
+                    raise ValueError(
+                        "Expectation observable labels do not match retriever observable order: "
+                        f"{results.observable_labels!r} != {labels!r}."
+                    )
+            fmps = expectations.reshape(N, R * K)
+            self.fmps = fmps
+            return fmps
+
         raw_states = results.states
         use_cupy = self.backend == "cupy" or (self.backend == "auto" and is_cupy_array(raw_states))
         xp = import_cupy() if use_cupy else np

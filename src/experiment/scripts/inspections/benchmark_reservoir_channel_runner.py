@@ -15,8 +15,9 @@ import numpy as np
 
 from src.qrc.circuits.circuit_factory import CircuitFactory
 from src.qrc.circuits.qrc_configs import RingQRConfig
-from src.qrc.circuits.utils import angle_positioning_tanh
-from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactResults
+from src.qrc.circuits.utils import angle_positioning_tanh, generate_k_local_paulis
+from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactExpectationResults, ExactResults
+from src.qrc.run.fmp_retriever import ExactFeatureMapsRetriever
 from src.qrc.run.reservoir_channel_runner import ExactReservoirChannelRunner
 
 
@@ -35,11 +36,17 @@ def _make_pubs(*, N: int, w: int, d: int, n: int, R: int, seed: int):
     return cfg, pubs
 
 
-def _time(label: str, fn: Callable[[], ExactResults]) -> tuple[ExactResults, float]:
+def _result_shape(result: ExactResults | ExactExpectationResults) -> tuple[int, ...]:
+    if isinstance(result, ExactExpectationResults):
+        return tuple(result.expectations.shape)
+    return tuple(result.states.shape)
+
+
+def _time(label: str, fn: Callable[[], ExactResults | ExactExpectationResults]) -> tuple[ExactResults | ExactExpectationResults, float]:
     t0 = time.perf_counter()
     result = fn()
     dt = time.perf_counter() - t0
-    print(f"{label:>18s}: {dt:8.4f}s  states={result.states.shape}", flush=True)
+    print(f"{label:>18s}: {dt:8.4f}s  output={_result_shape(result)}", flush=True)
     return result, dt
 
 
@@ -60,9 +67,29 @@ def _run_case(
     include_reference: bool,
     include_aer: bool,
     aer_device: str,
+    direct_only: bool,
 ) -> None:
     print(f"\nCase: N={N}, R={R}, w={w}, d={d}, n={n}, chunk_size={chunk_size}", flush=True)
     cfg, pubs = _make_pubs(N=N, w=w, d=d, n=n, R=R, seed=seed)
+    observables = generate_k_local_paulis(locality=2, num_qubits=n)
+
+    if direct_only:
+        _time(
+            "cupy-direct",
+            lambda: ExactReservoirChannelRunner(
+                cfg,
+                engine="cupy",
+                chunk_size=chunk_size,
+                gpu_id=0,
+                output_backend="cupy",
+                output_kind="expectation",
+            ).run_pubs(
+                pubs=pubs,
+                angle_positioning_name="tanh",
+                observables=observables,
+            ),
+        )
+        return
 
     reference = None
     if include_reference:
@@ -95,6 +122,25 @@ def _run_case(
         print(f"{'cupy':>18s}: skipped ({exc})", flush=True)
     else:
         _compare_pair("cupy-batched", cupy, batched)
+        direct, _ = _time(
+            "cupy-direct",
+            lambda: ExactReservoirChannelRunner(
+                cfg,
+                engine="cupy",
+                chunk_size=chunk_size,
+                gpu_id=0,
+                output_backend="cupy",
+                output_kind="expectation",
+            ).run_pubs(
+                pubs=pubs,
+                angle_positioning_name="tanh",
+                observables=observables,
+            ),
+        )
+        direct_phi = ExactFeatureMapsRetriever(cfg, observables, backend="cupy").get_feature_maps(direct)
+        density_phi = ExactFeatureMapsRetriever(cfg, observables, backend="cupy").get_feature_maps(cupy)
+        max_abs = float(np.max(np.abs(direct_phi.get() - density_phi.get())))
+        print(f"{'direct-cupy':>18s}: feature_max_abs_diff={max_abs:.3e}", flush=True)
 
     if include_aer:
         aer, _ = _time(
@@ -117,14 +163,15 @@ def main() -> None:
     parser.add_argument("--small-N", type=int, default=16)
     parser.add_argument("--large-N", type=int, default=128)
     parser.add_argument("--w", type=int, default=25)
-    parser.add_argument("--d", type=int, default=3)
-    parser.add_argument("--n", type=int, default=5)
-    parser.add_argument("--R", type=int, default=3)
+    parser.add_argument("--d", "--input-dim", dest="d", type=int, default=3)
+    parser.add_argument("--n", "--num-qubits", dest="n", type=int, default=5)
+    parser.add_argument("--R", "--num-reservoirs", dest="R", type=int, default=3)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--chunk-size", type=int, default=2048)
     parser.add_argument("--skip-reference", action="store_true")
     parser.add_argument("--skip-aer", action="store_true")
     parser.add_argument("--aer-device", default="GPU", choices=("CPU", "GPU"))
+    parser.add_argument("--direct-only", action="store_true")
     args = parser.parse_args()
 
     _run_case(
@@ -138,6 +185,7 @@ def main() -> None:
         include_reference=not args.skip_reference,
         include_aer=not args.skip_aer,
         aer_device=args.aer_device,
+        direct_only=args.direct_only,
     )
     if args.large_N > 0:
         _run_case(
@@ -151,6 +199,7 @@ def main() -> None:
             include_reference=not args.skip_reference,
             include_aer=False,
             aer_device=args.aer_device,
+            direct_only=args.direct_only,
         )
 
 

@@ -221,6 +221,65 @@ class ExactResults(Results):
         raise TypeError(f"File {file} does not contain a valid ExactResults object.")
 
 
+class ExactExpectationResults(Results):
+    """Exact expectation-value results for a PUBS dataset.
+
+    This container is used by runners that can compute feature expectations
+    directly without materializing reduced density matrices. The expectations
+    use the same ordering as the retrievers:
+
+    ``expectations[i, r, k] = Tr(rho[i, r] O_k)``
+
+    where ``i`` indexes input windows, ``r`` indexes reservoir draws, and ``k``
+    indexes observables.
+    """
+
+    def __init__(self, *, expectations: Any, qrc_cfg: BaseQRConfig, observable_labels: list[str]) -> None:
+        self.expectations = expectations
+        self.qrc_cfg = qrc_cfg
+        # Alias expectations as ``states`` for the abstract result contract.
+        # Code that consumes this result should prefer ``expectations`` directly.
+        self.states = expectations
+        self.observable_labels = list(observable_labels)
+
+    def save(self, file: str | Path) -> None:
+        """Serialize :class:`ExactExpectationResults` to disk."""
+        path = Path(file)
+        expectations = self.expectations
+        if hasattr(expectations, "get"):
+            expectations = expectations.get()
+        with path.open("wb") as f:
+            pickle.dump(
+                {
+                    "cls": "ExactExpectationResults",
+                    "expectations": expectations,
+                    "qrc_cfg": self.qrc_cfg,
+                    "observable_labels": list(self.observable_labels),
+                },
+                f,
+                protocol=pickle.HIGHEST_PROTOCOL,
+            )
+
+    @staticmethod
+    def load(file: str | Path) -> "ExactExpectationResults":
+        """Load :class:`ExactExpectationResults` from disk."""
+        path = Path(file)
+        with path.open("rb") as f:
+            obj = pickle.load(f)
+
+        if isinstance(obj, ExactExpectationResults):
+            return obj
+
+        if isinstance(obj, dict) and obj.get("cls") == "ExactExpectationResults":
+            return ExactExpectationResults(
+                expectations=obj["expectations"],
+                qrc_cfg=obj["qrc_cfg"],
+                observable_labels=list(obj["observable_labels"]),
+            )
+
+        raise TypeError(f"File {file} does not contain a valid ExactExpectationResults object.")
+
+
 class BaseCircuitsRunner(ABC):
     """Interface for executing PUBS datasets.
 

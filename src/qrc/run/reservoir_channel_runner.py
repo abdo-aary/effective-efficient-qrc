@@ -16,14 +16,16 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from dataclasses import dataclass
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.circuit import Parameter
+from qiskit.quantum_info import Operator, SparsePauliOp
 
 from src.qrc.circuits.qrc_configs import BaseQRConfig
-from src.qrc.run.circuit_run import BaseCircuitsRunner, ExactResults, PUB
+from src.qrc.run.circuit_run import BaseCircuitsRunner, ExactExpectationResults, ExactResults, PUB
 
 
 _DEFAULT_ANGLE_SCALE = np.pi * (1.0 - 1e-6)
@@ -53,7 +55,9 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
     """Paper-equivalent reservoir-channel runner without Aer density matrices."""
 
     requires_angle_positioning_name = True
+    requires_observables = True
     _SUPPORTED_ENGINES = frozenset({"batched", "reference", "cupy"})
+    _SUPPORTED_OUTPUT_KINDS = frozenset({"density_matrix", "expectation"})
 
     def __init__(
         self,
@@ -66,6 +70,7 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         engine: str = "batched",
         gpu_id: int | None = None,
         output_backend: str = "numpy",
+        output_kind: str = "density_matrix",
     ) -> None:
         self.qrc_cfg = qrc_cfg
         self.state_dtype = np.dtype(state_dtype)
@@ -87,6 +92,13 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
             raise ValueError(f"output_backend must be 'numpy' or 'cupy', got {output_backend!r}.")
         if self.output_backend == "cupy" and self.engine != "cupy":
             raise ValueError("output_backend='cupy' requires engine='cupy'.")
+        self.output_kind = str(output_kind)
+        if self.output_kind not in self._SUPPORTED_OUTPUT_KINDS:
+            raise ValueError(
+                f"output_kind must be one of {sorted(self._SUPPORTED_OUTPUT_KINDS)}, got {output_kind!r}."
+            )
+        if self.output_kind == "expectation" and self.engine != "cupy":
+            raise ValueError("output_kind='expectation' is supported only with engine='cupy' in v1.")
         self._cupy: Any | None = None
         self._cupy_gate_cache: _GateIndexCache | None = None
         if self.engine == "cupy":
@@ -98,9 +110,10 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         pubs: list[PUB],
         *,
         angle_positioning_name: str,
+        observables: Sequence[Operator | SparsePauliOp] | None = None,
         chunk_size: int | None = None,
         **_: Any,
-    ) -> ExactResults:
+    ) -> ExactResults | ExactExpectationResults:
         if len(pubs) != 1:
             raise ValueError("ExactReservoirChannelRunner supports only single template PUB mode.")
         qc, vals = pubs[0]
@@ -117,6 +130,25 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         dim = 1 << n
         flat = vals.reshape(N * R, P)
         step = int(chunk_size or self.chunk_size)
+
+        if self.output_kind == "expectation":
+            if observables is None:
+                raise ValueError("output_kind='expectation' requires observables.")
+            pauli_masks, labels = self._pauli_masks_from_observables(observables, n=n)
+            expectations = self._run_flat_cupy_expectation_output(
+                flat=flat,
+                layout=layout,
+                angle_positioning_name=angle_positioning_name,
+                plus_state=self._plus_state(n).astype(self.state_dtype, copy=False),
+                chunk_size=step,
+                pauli_masks=pauli_masks,
+            )
+            return ExactExpectationResults(
+                expectations=expectations.reshape(N, R, len(labels)),
+                qrc_cfg=self.qrc_cfg,
+                observable_labels=labels,
+            )
+
         if self.engine == "cupy" and self.output_backend == "cupy":
             states_gpu = self._run_flat_cupy_output(
                 flat=flat,
@@ -365,6 +397,22 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         angle_positioning_name: str,
         plus_state: Any,
     ) -> Any:
+        states, weights = self._run_chunk_cupy_ensemble_device(
+            rows=rows,
+            layout=layout,
+            angle_positioning_name=angle_positioning_name,
+            plus_state=plus_state,
+        )
+        return self._density_from_ensemble_cupy(states, weights)
+
+    def _run_chunk_cupy_ensemble_device(
+        self,
+        *,
+        rows: Any,
+        layout: _SwapTemplateLayout,
+        angle_positioning_name: str,
+        plus_state: Any,
+    ) -> tuple[Any, Any]:
         cp = self._cupy or self._import_cupy()
         B = int(rows.shape[0])
         n = int(self.qrc_cfg.num_qubits)
@@ -398,7 +446,73 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
             weights[:, active_count] = 1.0 - lam
             active_count += 1
 
-        return self._density_from_ensemble_cupy(states[:, :active_count, :], weights[:, :active_count])
+        return states[:, :active_count, :], weights[:, :active_count]
+
+    def _run_flat_cupy_expectation_output(
+        self,
+        *,
+        flat: np.ndarray,
+        layout: _SwapTemplateLayout,
+        angle_positioning_name: str,
+        plus_state: np.ndarray,
+        chunk_size: int,
+        pauli_masks: list[tuple[int, int, int]],
+    ) -> Any:
+        cp = self._cupy or self._import_cupy()
+        device = cp.cuda.Device(self.gpu_id) if self.gpu_id is not None else nullcontext()
+        with device:
+            n = int(self.qrc_cfg.num_qubits)
+            K = len(pauli_masks)
+            out = cp.empty((flat.shape[0], K), dtype=cp.float64)
+            plus_gpu = cp.asarray(plus_state, dtype=cp.dtype(self.state_dtype.name))
+            for offset in range(0, flat.shape[0], int(chunk_size)):
+                end = min(offset + int(chunk_size), flat.shape[0])
+                rows_gpu = cp.asarray(flat[offset:end], dtype=cp.float64)
+                states, weights = self._run_chunk_cupy_ensemble_device(
+                    rows=rows_gpu,
+                    layout=layout,
+                    angle_positioning_name=angle_positioning_name,
+                    plus_state=plus_gpu,
+                )
+                out[offset:end] = self._expectations_from_ensemble_cupy(
+                    states=states,
+                    weights=weights,
+                    pauli_masks=pauli_masks,
+                    n=n,
+                )
+            cp.cuda.get_current_stream().synchronize()
+            if self.output_backend == "cupy":
+                return out
+            return cp.asnumpy(out)
+
+    def _expectations_from_ensemble_cupy(
+        self,
+        *,
+        states: Any,
+        weights: Any,
+        pauli_masks: list[tuple[int, int, int]],
+        n: int,
+    ) -> Any:
+        cp = self._cupy or self._import_cupy()
+        B = int(states.shape[0])
+        active_count = int(states.shape[1])
+        dim = 1 << int(n)
+        rows = cp.arange(dim, dtype=cp.uint32)
+        out = cp.empty((B, len(pauli_masks)), dtype=cp.float64)
+
+        for k, (xmask, zmask, ny) in enumerate(pauli_masks):
+            cols = rows ^ cp.uint32(xmask)
+            phase = self._pauli_phase_vector_cupy(zmask=zmask, ny=ny, dim=dim)
+            acc = cp.zeros((B,), dtype=cp.complex128)
+            for a in range(active_count):
+                psi = states[:, a, :]
+                # Mirrors ExactFeatureMapsRetriever's trace formula for
+                # rho = |psi><psi| without materializing rho.
+                exp_a = cp.sum(psi * cp.conj(psi[:, cols]) * phase[None, :], axis=1)
+                acc += weights[:, a] * exp_a
+            out[:, k] = acc.real
+
+        return out
 
     def _angle_positioning(self, z: np.ndarray, name: str) -> np.ndarray:
         if name == "linear":
@@ -414,6 +528,69 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         if name == "tanh":
             return self.angle_scale * cp.tanh(z)
         raise ValueError(f"Unsupported angle_positioning_name={name!r}; expected 'linear' or 'tanh'.")
+
+    @classmethod
+    def _pauli_masks_from_observables(
+        cls,
+        observables: Sequence[Operator | SparsePauliOp],
+        *,
+        n: int,
+    ) -> tuple[list[tuple[int, int, int]], list[str]]:
+        masks: list[tuple[int, int, int]] = []
+        labels: list[str] = []
+        for op in observables:
+            label = cls._single_term_pauli_label(op)
+            if label is None:
+                raise ValueError(
+                    "output_kind='expectation' supports only single-term SparsePauliOp observables in v1."
+                )
+            if len(label) != int(n):
+                raise ValueError(f"Observable label length {len(label)} != num_qubits {n}: {label!r}")
+            labels.append(label)
+            masks.append(cls._masks_from_pauli_label(label))
+        if not masks:
+            raise ValueError("output_kind='expectation' requires at least one observable.")
+        return masks, labels
+
+    @staticmethod
+    def _single_term_pauli_label(op: Operator | SparsePauliOp) -> str | None:
+        if isinstance(op, SparsePauliOp) and len(op.paulis) == 1:
+            return op.paulis[0].to_label()
+        return None
+
+    @staticmethod
+    def _masks_from_pauli_label(label: str) -> tuple[int, int, int]:
+        n = len(label)
+        xmask = 0
+        zmask = 0
+        ny = 0
+        for q in range(n):
+            ch = label[n - 1 - q]
+            if ch == "X":
+                xmask |= 1 << q
+            elif ch == "Z":
+                zmask |= 1 << q
+            elif ch == "Y":
+                xmask |= 1 << q
+                zmask |= 1 << q
+                ny += 1
+            elif ch != "I":
+                raise ValueError(f"Unsupported Pauli character {ch!r} in label {label!r}.")
+        return xmask, zmask, ny
+
+    def _pauli_phase_vector_cupy(self, *, zmask: int, ny: int, dim: int) -> Any:
+        cp = self._cupy or self._import_cupy()
+        rows_cpu = np.arange(dim, dtype=np.uint32)
+        parity_cpu = self._bitcount_parity(np.bitwise_and(rows_cpu, np.uint32(zmask)))
+        sign = cp.asarray(1.0 - 2.0 * parity_cpu.astype(np.float64), dtype=cp.float64)
+        return ((1j ** int(ny)) * sign).astype(cp.complex128, copy=False)
+
+    @staticmethod
+    def _bitcount_parity(arr: np.ndarray) -> np.ndarray:
+        if hasattr(np, "bit_count"):
+            return (np.bit_count(arr) & 1).astype(np.int8)
+        v = np.vectorize(lambda x: int(x).bit_count() & 1, otypes=[np.int8])
+        return v(arr)
 
     def _apply_reservoir_unitary(
         self,

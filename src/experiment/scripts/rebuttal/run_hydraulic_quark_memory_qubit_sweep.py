@@ -23,7 +23,7 @@ def main() -> None:
     parser.add_argument("--dataset-path", type=Path, default=None)
     parser.add_argument("--data-root", type=Path, default=DEFAULT_TSER_DATA_ROOT)
     parser.add_argument("--out-root", type=Path, default=DEFAULT_REAL_RESULTS_ROOT)
-    parser.add_argument("--runner", default="reservoir_channel_cupy")
+    parser.add_argument("--runner", default="reservoir_channel_cupy_direct")
     parser.add_argument("--method-seed", type=int, default=0)
     parser.add_argument("--num-workers", type=int, default=1)
     parser.add_argument("--backend", choices=("auto", "cupy", "numpy"), default="cupy")

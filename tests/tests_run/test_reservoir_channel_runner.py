@@ -5,13 +5,13 @@ pytest.importorskip("qiskit_aer")
 
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from qiskit.quantum_info import DensityMatrix, SparsePauliOp, Statevector
+from qiskit.quantum_info import DensityMatrix, Operator, SparsePauliOp, Statevector
 
 from src.models.qrc_featurizer import QRCFeaturizer
 from src.qrc.circuits.circuit_factory import CircuitFactory
 from src.qrc.circuits.qrc_configs import RingQRConfig
 from src.qrc.circuits.utils import angle_positioning_linear, angle_positioning_tanh, generate_k_local_paulis
-from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactResults
+from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactExpectationResults, ExactResults
 from src.qrc.run.cs_fmp_retriever import CSFeatureMapsRetriever
 from src.qrc.run.fmp_retriever import ExactFeatureMapsRetriever
 from src.qrc.run.reservoir_channel_runner import ExactReservoirChannelRunner
@@ -46,6 +46,17 @@ def _run_channel(cfg, pubs, *, angle_positioning_name="linear", engine="batched"
         pubs=pubs,
         angle_positioning_name=angle_positioning_name,
     )
+
+
+def _require_cupy():
+    cp = pytest.importorskip("cupy")
+    try:
+        device_count = cp.cuda.runtime.getDeviceCount()
+    except cp.cuda.runtime.CUDARuntimeError as exc:
+        pytest.skip(f"CuPy is installed but CUDA is unavailable: {exc}")
+    if device_count < 1:
+        pytest.skip("No CUDA device available for CuPy reservoir-channel test.")
+    return cp
 
 
 def _assert_density_matrix_close(got, expected, atol=1e-10):
@@ -238,6 +249,138 @@ def test_reservoir_channel_cupy_output_backend_feeds_gpu_retrievers_when_availab
     assert cp.asnumpy(cp.max(cp.abs(cs_gpu_1))) <= 1.0
 
 
+def test_reservoir_channel_cupy_direct_expectations_match_density_and_aer_when_available():
+    cp = _require_cupy()
+
+    cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=41)
+    X = np.random.default_rng(42).uniform(-0.5, 0.5, size=(2, 3, 2))
+    pubs = _make_pubs(cfg, X, angle_positioning=angle_positioning_tanh, R=2, lam_0=0.23, seed=43)
+    observables = generate_k_local_paulis(locality=2, num_qubits=2)
+
+    density = ExactReservoirChannelRunner(
+        cfg,
+        state_dtype="complex128",
+        chunk_size=4,
+        engine="cupy",
+        gpu_id=0,
+        output_backend="cupy",
+    ).run_pubs(pubs=pubs, angle_positioning_name="tanh")
+    direct = ExactReservoirChannelRunner(
+        cfg,
+        state_dtype="complex128",
+        chunk_size=4,
+        engine="cupy",
+        gpu_id=0,
+        output_backend="cupy",
+        output_kind="expectation",
+    ).run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
+
+    assert isinstance(direct, ExactExpectationResults)
+    assert isinstance(direct.expectations, cp.ndarray)
+    assert direct.expectations.shape == (2, 2, len(observables))
+
+    density_phi = ExactFeatureMapsRetriever(cfg, observables, backend="cupy").get_feature_maps(density)
+    direct_phi = ExactFeatureMapsRetriever(cfg, observables, backend="cupy").get_feature_maps(direct)
+    aer_phi = ExactFeatureMapsRetriever(cfg, observables, backend="numpy").get_feature_maps(_run_aer(cfg, pubs))
+
+    np.testing.assert_allclose(cp.asnumpy(direct_phi), cp.asnumpy(density_phi), atol=1e-10, rtol=0.0)
+    np.testing.assert_allclose(cp.asnumpy(direct_phi), aer_phi, atol=1e-10, rtol=0.0)
+
+
+def test_reservoir_channel_cupy_direct_cshadow_is_seed_deterministic_when_available():
+    cp = _require_cupy()
+
+    cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=44)
+    X = np.random.default_rng(45).uniform(-0.5, 0.5, size=(2, 3, 2))
+    pubs = _make_pubs(cfg, X, angle_positioning=angle_positioning_tanh, R=2, lam_0=0.23, seed=46)
+    observables = generate_k_local_paulis(locality=2, num_qubits=2)
+
+    direct = ExactReservoirChannelRunner(
+        cfg,
+        state_dtype="complex128",
+        chunk_size=4,
+        engine="cupy",
+        gpu_id=0,
+        output_backend="cupy",
+        output_kind="expectation",
+    ).run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
+
+    cs_1 = CSFeatureMapsRetriever(cfg, observables, backend="cupy").get_feature_maps(
+        direct,
+        shots=200,
+        seed=2026,
+    )
+    cs_2 = CSFeatureMapsRetriever(cfg, observables, backend="cupy").get_feature_maps(
+        direct,
+        shots=200,
+        seed=2026,
+    )
+
+    assert isinstance(cs_1, cp.ndarray)
+    np.testing.assert_allclose(cp.asnumpy(cs_1), cp.asnumpy(cs_2), atol=0.0, rtol=0.0)
+    assert cp.asnumpy(cp.max(cp.abs(cs_1))) <= 1.0
+
+
+def test_reservoir_channel_cupy_direct_does_not_materialize_density(monkeypatch):
+    _require_cupy()
+
+    cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=47)
+    X = np.random.default_rng(48).uniform(-0.5, 0.5, size=(2, 3, 2))
+    pubs = _make_pubs(cfg, X, angle_positioning=angle_positioning_tanh, R=2, lam_0=0.23, seed=49)
+    observables = generate_k_local_paulis(locality=2, num_qubits=2)
+    runner = ExactReservoirChannelRunner(
+        cfg,
+        state_dtype="complex128",
+        chunk_size=4,
+        engine="cupy",
+        gpu_id=0,
+        output_backend="cupy",
+        output_kind="expectation",
+    )
+
+    def fail_density(*args, **kwargs):
+        raise AssertionError("direct expectation mode must not materialize density matrices")
+
+    monkeypatch.setattr(runner, "_density_from_ensemble_cupy", fail_density)
+    direct = runner.run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
+
+    assert isinstance(direct, ExactExpectationResults)
+
+
+def test_reservoir_channel_direct_validation_errors_when_available():
+    _require_cupy()
+
+    cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=50)
+    X = np.random.default_rng(51).uniform(-0.5, 0.5, size=(2, 3, 2))
+    pubs = _make_pubs(cfg, X, angle_positioning=angle_positioning_tanh, R=2, lam_0=0.23, seed=52)
+
+    with pytest.raises(ValueError, match="engine='cupy'"):
+        ExactReservoirChannelRunner(cfg, engine="batched", output_kind="expectation")
+
+    runner = ExactReservoirChannelRunner(cfg, engine="cupy", output_kind="expectation")
+    with pytest.raises(ValueError, match="requires observables"):
+        runner.run_pubs(pubs=pubs, angle_positioning_name="tanh")
+
+    with pytest.raises(ValueError, match="single-term SparsePauliOp"):
+        runner.run_pubs(
+            pubs=pubs,
+            angle_positioning_name="tanh",
+            observables=[Operator(np.eye(4, dtype=complex))],
+        )
+
+
+def test_exact_retriever_rejects_mismatched_expectation_observable_count():
+    cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=53)
+    results = ExactExpectationResults(
+        expectations=np.zeros((2, 1, 2), dtype=float),
+        qrc_cfg=cfg,
+        observable_labels=["IZ", "ZI"],
+    )
+
+    with pytest.raises(ValueError, match="observable count mismatch"):
+        ExactFeatureMapsRetriever(cfg, [SparsePauliOp("IZ")]).get_feature_maps(results)
+
+
 def test_reservoir_channel_config_defaults_to_batched():
     cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=16)
     node = OmegaConf.load("src/experiment/conf/model/qrc/runner/reservoir_channel.yaml")
@@ -255,6 +398,14 @@ def test_reservoir_channel_cupy_config_selects_gpu_engine():
     assert node.engine == "cupy"
     assert node.gpu_id == 0
     assert node.output_backend == "cupy"
+
+
+def test_reservoir_channel_cupy_direct_config_selects_expectation_output():
+    node = OmegaConf.load("src/experiment/conf/model/qrc/runner/reservoir_channel_cupy_direct.yaml")
+    assert node.engine == "cupy"
+    assert node.gpu_id == 0
+    assert node.output_backend == "cupy"
+    assert node.output_kind == "expectation"
 
 
 def test_reservoir_channel_featurizer_integration_uses_swap_family(monkeypatch):
@@ -278,3 +429,50 @@ def test_reservoir_channel_featurizer_integration_uses_swap_family(monkeypatch):
     pubs = _make_pubs(cfg, X, R=2, lam_0=0.31, seed=18)
     expected = ExactFeatureMapsRetriever(cfg, observables).get_feature_maps(_run_aer(cfg, pubs))
     np.testing.assert_allclose(Phi, expected, atol=1e-10, rtol=0.0)
+
+
+def test_reservoir_channel_cupy_direct_featurizer_matches_density_when_available():
+    cp = _require_cupy()
+
+    cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=54)
+    X = np.random.default_rng(55).uniform(-0.4, 0.4, size=(2, 3, 2))
+    observables = generate_k_local_paulis(locality=2, num_qubits=2)
+
+    direct_featurizer = QRCFeaturizer(
+        qrc_cfg=cfg,
+        runner=ExactReservoirChannelRunner(
+            cfg,
+            engine="cupy",
+            gpu_id=0,
+            output_backend="cupy",
+            output_kind="expectation",
+        ),
+        fmp_retriever=ExactFeatureMapsRetriever(cfg, observables, backend="cupy"),
+        pubs_family="ising_ring_swap",
+        angle_positioning_name="tanh",
+        pubs_kwargs={"num_reservoirs": 2, "lam_0": 0.31, "seed": 56, "eps": 1e-8},
+        runner_kwargs={},
+        fmp_kwargs={},
+    )
+
+    density_featurizer = QRCFeaturizer(
+        qrc_cfg=cfg,
+        runner=ExactReservoirChannelRunner(
+            cfg,
+            engine="cupy",
+            gpu_id=0,
+            output_backend="cupy",
+        ),
+        fmp_retriever=ExactFeatureMapsRetriever(cfg, observables, backend="cupy"),
+        pubs_family="ising_ring_swap",
+        angle_positioning_name="tanh",
+        pubs_kwargs={"num_reservoirs": 2, "lam_0": 0.31, "seed": 56, "eps": 1e-8},
+        runner_kwargs={},
+        fmp_kwargs={},
+    )
+
+    direct_phi = direct_featurizer.transform(X)
+    density_phi = density_featurizer.transform(X)
+
+    assert isinstance(direct_phi, cp.ndarray)
+    np.testing.assert_allclose(cp.asnumpy(direct_phi), cp.asnumpy(density_phi), atol=1e-10, rtol=0.0)
