@@ -54,12 +54,67 @@ from src.settings import PROJECT_ROOT_PATH
 PROJECT_ROOT = Path(PROJECT_ROOT_PATH)
 DEFAULT_REAL_DATA_ROOT = PROJECT_ROOT / "storage/data/real/tser"
 DEFAULT_REAL_RESULTS_ROOT = PROJECT_ROOT / "storage/results/rebuttal/real_world"
+DEFAULT_REAL_TRIAGE_RESULTS_ROOT = PROJECT_ROOT / "storage/results/rebuttal/real_world_triage"
 DEFAULT_REAL_RESPONSE_DIR = PROJECT_ROOT / "docs/rebuttal/responses"
 QUARK_READOUT_RETUNE_METHOD = "quark_reservoir_channel_readout_retune"
 QUARK_KERNEL_READOUT_RETUNE_METHOD = "quark_reservoir_channel_kernel_readout_retune"
 READOUT_RETUNE_LAMBDA_GRID = 10.0 ** np.arange(-6.0, 10.5, 0.5)
 READOUT_RETUNE_XI_GRID = 10.0 ** np.arange(-1.0, 3.5, 0.5)
 READOUT_RETUNE_NU_GRID = np.asarray([0.5, 1.5, 2.5, 5.0], dtype=float)
+TRIAGE_CANDIDATE_DATASETS = (
+    "live_fuel_moisture",
+    "manganese_concentration",
+    "iron_concentration",
+    "copper_concentration",
+    "gas_sensor_array_acetone",
+    "gas_sensor_array_ethanol",
+    "electric_motor_temperature",
+    "hydraulic_systems",
+)
+TRIAGE_CLASSICAL_METHODS = (
+    "raw_ridge",
+    "raw_matern_krr",
+    "matched_random_features_matern_krr",
+    "rff_ridge",
+    "esn",
+)
+TRIAGE_QUARK_REGIMES: dict[str, list[str]] = {
+    "paper_direct_n5": [
+        "model/qrc/features/retriever=exact",
+        "model.qrc.cfg.num_qubits=5",
+        "model.qrc.features.observables.locality=2",
+        "model.qrc.pubs.num_reservoirs=3",
+        "model.qrc.pubs.lam_0=0.1",
+    ],
+    "hydraulic_best_direct_n8": [
+        "model/qrc/features/retriever=exact",
+        "model.qrc.cfg.num_qubits=8",
+        "model.qrc.features.observables.locality=2",
+        "model.qrc.pubs.num_reservoirs=3",
+        "model.qrc.pubs.lam_0=0.5",
+    ],
+    "high_compression_relief_n10": [
+        "model/qrc/features/retriever=exact",
+        "model.qrc.cfg.num_qubits=10",
+        "model.qrc.features.observables.locality=2",
+        "model.qrc.pubs.num_reservoirs=3",
+        "model.qrc.pubs.lam_0=0.5",
+    ],
+    "truncated_direct_n10_lam0p5": [
+        "model/qrc/features/retriever=exact",
+        "model.qrc.cfg.num_qubits=10",
+        "model.qrc.features.observables.locality=2",
+        "model.qrc.pubs.num_reservoirs=3",
+        "model.qrc.pubs.lam_0=0.5",
+    ],
+    "truncated_direct_n12_lam0p5": [
+        "model/qrc/features/retriever=exact",
+        "model.qrc.cfg.num_qubits=12",
+        "model.qrc.features.observables.locality=2",
+        "model.qrc.pubs.num_reservoirs=3",
+        "model.qrc.pubs.lam_0=0.5",
+    ],
+}
 
 
 def run_real_classical_baseline(
@@ -636,16 +691,7 @@ def aggregate_real_world_results(
     aggregate_dir = out_root / "aggregate"
     aggregate_dir.mkdir(parents=True, exist_ok=True)
 
-    rows: list[dict[str, str]] = []
-    for metrics_path in sorted(out_root.glob("**/metrics.csv")):
-        if "aggregate" in metrics_path.parts:
-            continue
-        with metrics_path.open("r", encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if not include_quark and str(row.get("method", "")).startswith("quark_"):
-                    continue
-                rows.append({col: row.get(col, "") for col in METRICS_COLUMNS})
+    rows = read_real_metric_rows(out_root, include_quark=include_quark)
 
     if not rows:
         raise FileNotFoundError(f"No metrics.csv files found under {out_root}.")
@@ -679,6 +725,24 @@ def aggregate_real_world_results(
         metric=metric,
     )
     return aggregate_dir
+
+
+def read_real_metric_rows(
+    out_root: str | Path,
+    *,
+    include_quark: bool = True,
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for metrics_path in sorted(Path(out_root).glob("**/metrics.csv")):
+        if "aggregate" in metrics_path.parts:
+            continue
+        with metrics_path.open("r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if not include_quark and str(row.get("method", "")).startswith("quark_"):
+                    continue
+                rows.append({col: row.get(col, "") for col in METRICS_COLUMNS})
+    return rows
 
 
 def load_real_benchmark_data(dataset_path: str | Path) -> BenchmarkData:
@@ -1117,6 +1181,9 @@ def compose_real_quark_config(
         overrides.append("model.qrc.pubs.projection_backend=cupy")
         overrides.append(f"model.qrc.pubs.projection_device={0 if device is None else int(device)}")
         overrides.append("model.qrc.features.retriever.backend=cupy")
+    else:
+        overrides.append("model.qrc.pubs.projection_backend=numpy")
+        overrides.append("model.qrc.features.retriever.backend=numpy")
     with initialize_config_dir(config_dir=str(config_dir), version_base=None):
         return compose(config_name="reg_sweep_experiment", overrides=overrides)
 
@@ -1178,18 +1245,275 @@ def format_metric(value: Any) -> str:
     return f"{val:.4g}"
 
 
-def build_dataset_cards(out_root: str | Path) -> str:
+def build_dataset_card_rows(
+    data_root: str | Path = DEFAULT_REAL_DATA_ROOT,
+    *,
+    datasets: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:
+    root = Path(data_root)
+    if not root.exists():
+        return []
+    dataset_filter = {str(dataset) for dataset in datasets} if datasets else None
+    rows: list[dict[str, Any]] = []
+    for dataset_dir in sorted(path for path in root.iterdir() if path.is_dir()):
+        if dataset_filter is not None and dataset_dir.name not in dataset_filter:
+            continue
+        try:
+            dataset_path = resolve_real_dataset_path(dataset_dir)
+        except (FileNotFoundError, ValueError):
+            continue
+        meta_path = dataset_path.with_suffix(".meta.json")
+        meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+        preprocess = dict(meta.get("preprocess") or {})
+        w = int(meta.get("w") or 0)
+        d = int(meta.get("d") or 0)
+        rows.append(
+            {
+                "dataset": str(meta.get("dataset_id") or dataset_dir.name),
+                "dataset_name": str(meta.get("dataset_name") or dataset_dir.name),
+                "target_name": str(meta.get("target_name") or ""),
+                "split_source": str(meta.get("split_source") or ""),
+                "source": str(meta.get("source") or meta.get("download_url") or ""),
+                "description": str(meta.get("description") or ""),
+                "N": int(meta.get("N") or 0),
+                "n_train": int(meta.get("n_train") or 0),
+                "n_test": int(meta.get("n_test") or 0),
+                "w": w,
+                "d": d,
+                "raw_dim": int(w * d),
+                "missing_or_imputed": int(preprocess.get("nan_count_train", 0))
+                + int(preprocess.get("nan_count_test", 0)),
+                "artifact": str(dataset_path),
+            }
+        )
+    return rows
+
+
+def build_dataset_cards(
+    out_root: str | Path,
+    *,
+    data_root: str | Path = DEFAULT_REAL_DATA_ROOT,
+    datasets: Sequence[str] | None = None,
+) -> str:
+    _ = out_root
+    rows = build_dataset_card_rows(data_root, datasets=datasets)
     cards = ["# Real-World Dataset Cards", ""]
-    data_root = PROJECT_ROOT / "storage/data/real/tser"
-    for meta_path in sorted(data_root.glob("*/*.meta.json")):
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        cards.append(f"## {meta.get('dataset_id', meta_path.parent.name)}")
-        cards.append(f"- Source: {meta.get('source', '')}")
-        cards.append(f"- Description: {meta.get('description', '')}")
-        cards.append(f"- Shape: `N={meta.get('N')}`, `w={meta.get('w')}`, `d={meta.get('d')}`")
-        cards.append(f"- Split: `n_train={meta.get('n_train')}`, `n_test={meta.get('n_test')}`")
+    if not rows:
+        cards.append("_No prepared datasets found._")
         cards.append("")
+        return "\n".join(cards)
+    cards.extend(
+        [
+            "| Dataset | N | Train | Test | w | d | raw_dim | Missing/Imputed | Target | Split | Source |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|",
+        ]
+    )
+    for row in rows:
+        cards.append(
+            "| {dataset} | {N} | {n_train} | {n_test} | {w} | {d} | {raw_dim} | "
+            "{missing_or_imputed} | {target_name} | {split_source} | {source} |".format(**row)
+        )
+    cards.append("")
     return "\n".join(cards)
+
+
+def build_classical_triage_rows(
+    metric_rows: Sequence[Mapping[str, str]],
+    *,
+    dataset_card_rows: Sequence[Mapping[str, Any]] = (),
+    metric: str = "nrmse_train_y_std",
+    max_promoted: int = 3,
+) -> list[dict[str, Any]]:
+    card_by_dataset = {str(row["dataset"]): row for row in dataset_card_rows}
+    values: dict[str, dict[str, float]] = {}
+    for row in metric_rows:
+        if row.get("split") != "test" or row.get("metric") != metric:
+            continue
+        method = str(row.get("method", ""))
+        if method.startswith("quark_"):
+            continue
+        try:
+            value = float(row.get("value", ""))
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(value):
+            values.setdefault(str(row.get("dataset", "")), {})[method] = value
+
+    decisions: list[dict[str, Any]] = []
+    for dataset, method_values in sorted(values.items()):
+        if dataset_card_rows and dataset not in card_by_dataset:
+            continue
+        if not method_values:
+            continue
+        best_method, best_value = min(method_values.items(), key=lambda item: item[1])
+        raw_ridge = method_values.get("raw_ridge", np.nan)
+        raw_matern = method_values.get("raw_matern_krr", np.nan)
+        matched = method_values.get("matched_random_features_matern_krr", np.nan)
+        nonlinear = [
+            value
+            for method, value in method_values.items()
+            if method in {"raw_matern_krr", "matched_random_features_matern_krr", "rff_ridge", "esn"}
+        ]
+        nonlinear_disagreement = float(max(nonlinear) - min(nonlinear)) if nonlinear else np.nan
+        raw_ridge_weak = bool(np.isfinite(raw_ridge) and raw_ridge > 0.55)
+
+        if best_value <= 0.30:
+            decision = "reject_classical_crushed"
+            candidate = False
+        elif best_value <= 0.55:
+            decision = "watchlist"
+            candidate = False
+        else:
+            decision = "promote"
+            candidate = True
+        if best_value > 0.30 and raw_ridge_weak and np.isfinite(nonlinear_disagreement) and nonlinear_disagreement >= 0.20:
+            decision = "promote_nonlinear_disagreement"
+            candidate = True
+
+        raw_dim = int(card_by_dataset.get(dataset, {}).get("raw_dim", 0) or 0)
+        score = float(np.log1p(max(raw_dim, 0)) * best_value)
+        decisions.append(
+            {
+                "dataset": dataset,
+                "decision": decision,
+                "selected_for_quark": False,
+                "best_classical_method": best_method,
+                "best_classical_test_nrmse": float(best_value),
+                "raw_ridge_test_nrmse": raw_ridge,
+                "raw_matern_test_nrmse": raw_matern,
+                "matched_random_features_test_nrmse": matched,
+                "nonlinear_disagreement": nonlinear_disagreement,
+                "raw_dim": raw_dim,
+                "difficulty_score": score,
+                "candidate": candidate,
+            }
+        )
+
+    promoted = [row for row in decisions if bool(row["candidate"])]
+    promoted = sorted(promoted, key=lambda row: (float(row["difficulty_score"]), int(row["raw_dim"])), reverse=True)
+    selected = {row["dataset"] for row in promoted[: int(max_promoted)]}
+    for row in decisions:
+        row["selected_for_quark"] = row["dataset"] in selected
+        if row["candidate"] and not row["selected_for_quark"]:
+            row["decision"] = str(row["decision"]) + "_deferred_top3_cap"
+    return decisions
+
+
+def build_quark_triage_rows(
+    metric_rows: Sequence[Mapping[str, str]],
+    classical_rows: Sequence[Mapping[str, Any]],
+    *,
+    metric: str = "nrmse_train_y_std",
+) -> list[dict[str, Any]]:
+    classical_by_dataset = {str(row["dataset"]): row for row in classical_rows}
+    quark_values: dict[str, dict[str, float]] = {}
+    for row in metric_rows:
+        if row.get("split") != "test" or row.get("metric") != metric:
+            continue
+        method = str(row.get("method", ""))
+        if not method.startswith("quark_"):
+            continue
+        try:
+            value = float(row.get("value", ""))
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(value):
+            quark_values.setdefault(str(row.get("dataset", "")), {})[method] = value
+
+    rows: list[dict[str, Any]] = []
+    for dataset, method_values in sorted(quark_values.items()):
+        if classical_rows and dataset not in classical_by_dataset:
+            continue
+        if not method_values:
+            continue
+        best_quark_method, best_quark = min(method_values.items(), key=lambda item: item[1])
+        classical = classical_by_dataset.get(dataset, {})
+        best_classical = float(classical.get("best_classical_test_nrmse", np.nan))
+        matched = float(classical.get("matched_random_features_test_nrmse", np.nan))
+        raw_matern = float(classical.get("raw_matern_test_nrmse", np.nan))
+        status = "needs_classical_context"
+        if np.isfinite(best_classical):
+            close_to_best = best_quark <= best_classical * 1.05 or best_quark <= best_classical + 0.05
+            beats_matched = np.isfinite(matched) and best_quark <= matched - 0.05
+            if close_to_best or beats_matched:
+                status = "rebuttal_positive"
+            elif np.isfinite(raw_matern) and best_quark > raw_matern * 1.20:
+                has_n10 = any("_n10" in method for method in method_values)
+                status = "drop_after_n10" if has_n10 else "diagnostic_only"
+            else:
+                status = "watchlist"
+        rows.append(
+            {
+                "dataset": dataset,
+                "status": status,
+                "best_quark_method": best_quark_method,
+                "best_quark_test_nrmse": best_quark,
+                "best_classical_method": classical.get("best_classical_method", ""),
+                "best_classical_test_nrmse": best_classical,
+                "matched_random_features_test_nrmse": matched,
+                "raw_matern_test_nrmse": raw_matern,
+            }
+        )
+    return rows
+
+
+def write_real_dataset_triage_outputs(
+    out_root: str | Path = DEFAULT_REAL_TRIAGE_RESULTS_ROOT,
+    *,
+    data_root: str | Path = DEFAULT_REAL_DATA_ROOT,
+    datasets: Sequence[str] | None = None,
+    metric: str = "nrmse_train_y_std",
+    max_promoted: int = 3,
+) -> Path:
+    out_root = Path(out_root)
+    aggregate_dir = out_root / "aggregate"
+    aggregate_dir.mkdir(parents=True, exist_ok=True)
+    metric_rows = read_real_metric_rows(out_root, include_quark=True)
+    dataset_rows = build_dataset_card_rows(data_root, datasets=datasets)
+    classical_rows = build_classical_triage_rows(
+        metric_rows,
+        dataset_card_rows=dataset_rows,
+        metric=metric,
+        max_promoted=max_promoted,
+    )
+    quark_rows = build_quark_triage_rows(metric_rows, classical_rows, metric=metric)
+
+    (aggregate_dir / "dataset_cards.md").write_text(
+        build_dataset_cards(out_root, data_root=data_root, datasets=datasets),
+        encoding="utf-8",
+    )
+    (aggregate_dir / "classical_triage_table.md").write_text(
+        build_triage_markdown_table(classical_rows, title="Classical Triage Decisions"),
+        encoding="utf-8",
+    )
+    (aggregate_dir / "quark_triage_table.md").write_text(
+        build_triage_markdown_table(quark_rows, title="QuaRK Triage Results"),
+        encoding="utf-8",
+    )
+    write_dict_csv(aggregate_dir / "triage_decisions.csv", classical_rows)
+    write_dict_csv(aggregate_dir / "quark_triage.csv", quark_rows)
+    return aggregate_dir
+
+
+def build_triage_markdown_table(rows: Sequence[Mapping[str, Any]], *, title: str) -> str:
+    if not rows:
+        return f"# {title}\n\n_No rows available._\n"
+    keys = list(rows[0].keys())
+    lines = [f"# {title}", ""]
+    lines.append("| " + " | ".join(keys) + " |")
+    lines.append("|" + "|".join("---" for _ in keys) + "|")
+    for row in rows:
+        lines.append("| " + " | ".join(format_triage_cell(row.get(key, "")) for key in keys) + " |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def format_triage_cell(value: Any) -> str:
+    if isinstance(value, (float, np.floating)):
+        return format_metric(value)
+    if isinstance(value, (bool, np.bool_)):
+        return "yes" if bool(value) else "no"
+    return str(value)
 
 
 def update_real_world_response_drafts(

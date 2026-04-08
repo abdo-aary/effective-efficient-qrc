@@ -4,6 +4,8 @@ import numpy as np
 
 from src.data.real_tser import (
     HYDRAULIC_SENSOR_SPECS,
+    TSER_DATASETS,
+    get_tser_spec,
     parse_tser_row,
     parse_tser_ts_file,
     prepare_real_dataset,
@@ -12,6 +14,9 @@ from src.data.real_tser import (
 from src.experiment.classical_baselines import CLASSICAL_METHODS
 from src.experiment.real_world_rebuttal import (
     aggregate_real_world_results,
+    build_classical_triage_rows,
+    build_dataset_card_rows,
+    build_quark_triage_rows,
     eigensolve_krr_lambda_sweep,
     load_real_benchmark_data,
     load_real_split,
@@ -19,7 +24,9 @@ from src.experiment.real_world_rebuttal import (
     run_cached_quark_readout_retune,
     run_real_classical_baseline,
     run_real_quark,
+    write_real_dataset_triage_outputs,
 )
+from src.experiment.scripts.rebuttal.run_real_dataset_triage import main as triage_main
 
 
 def _row(offset: float, *, dims: int = 8, length: int = 4, label: float = 0.0) -> str:
@@ -64,6 +71,24 @@ def _write_fixture_hydraulic(raw_root, *, n_rows: int = 6, length_seconds: int =
         dtype=float,
     )[:n_rows]
     np.savetxt(raw_root / "profile.txt", profile, delimiter="\t", fmt="%.6f")
+
+
+def test_new_triage_tser_specs_resolve_expected_zenodo_files():
+    expected = {
+        "manganese_concentration": ("11236670", "ManganeseConcentration"),
+        "iron_concentration": ("11236615", "IronConcentration"),
+        "copper_concentration": ("11235478", "CopperConcentration"),
+        "gas_sensor_array_acetone": ("11235589", "GasSensorArrayAcetone"),
+        "gas_sensor_array_ethanol": ("11235596", "GasSensorArrayEthanol"),
+        "electric_motor_temperature": ("11235562", "ElectricMotorTemperature"),
+    }
+
+    for key, (record_id, dataset_name) in expected.items():
+        assert key in TSER_DATASETS
+        spec = get_tser_spec(key)
+        assert spec.record_id == record_id
+        assert spec.train_file == f"{dataset_name}_TRAIN.ts"
+        assert spec.test_file == f"{dataset_name}_TEST.ts"
 
 
 def test_parse_tser_ts_file_handles_multivariate_missing_values(tmp_path):
@@ -117,6 +142,32 @@ def test_prepare_tser_dataset_writes_windows_and_split_sidecars(tmp_path):
     assert split.train_idx.tolist() == [0, 1, 2, 3, 4]
     assert split.test_idx.tolist() == [5, 6]
     assert np.isfinite(data.X).all()
+
+
+def test_dataset_card_rows_include_shape_raw_dim_and_missing_counts(tmp_path):
+    raw_root = tmp_path / "raw"
+    raw_dir = raw_root / "benzene_concentration"
+    raw_dir.mkdir(parents=True)
+    _write_fixture_tser(raw_dir / "BenzeneConcentration_TRAIN.ts", n_rows=5)
+    _write_fixture_tser(raw_dir / "BenzeneConcentration_TEST.ts", n_rows=2, label_offset=10.0)
+
+    prepare_tser_dataset(
+        "benzene_concentration",
+        raw_root=raw_root,
+        out_root=tmp_path / "data",
+        download=False,
+        overwrite=True,
+    )
+
+    rows = build_dataset_card_rows(tmp_path / "data", datasets=["benzene_concentration"])
+
+    assert len(rows) == 1
+    assert rows[0]["dataset"] == "benzene_concentration"
+    assert rows[0]["N"] == 7
+    assert rows[0]["w"] == 4
+    assert rows[0]["d"] == 8
+    assert rows[0]["raw_dim"] == 32
+    assert rows[0]["missing_or_imputed"] == 7
 
 
 def test_prepare_hydraulic_dataset_writes_high_dimensional_windows(tmp_path):
@@ -195,6 +246,166 @@ def test_real_world_classical_suite_and_aggregation_on_tiny_fixture(tmp_path):
     assert "<!-- BEGIN real_world_rebuttal -->" in (tmp_path / "responses" / "global_view.md").read_text(
         encoding="utf-8"
     )
+
+
+def _metric_row(dataset: str, method: str, value: float) -> dict[str, str]:
+    return {
+        "dataset": dataset,
+        "method": method,
+        "method_seed": "0",
+        "split": "test",
+        "metric": "nrmse_train_y_std",
+        "value": str(float(value)),
+    }
+
+
+def test_triage_decision_logic_rejects_watchlists_and_promotes():
+    rows = [
+        _metric_row("easy", "raw_matern_krr", 0.2),
+        _metric_row("medium", "raw_matern_krr", 0.4),
+        _metric_row("hard", "raw_matern_krr", 0.7),
+        _metric_row("hard", "raw_ridge", 0.8),
+        _metric_row("disagree", "raw_ridge", 0.9),
+        _metric_row("disagree", "raw_matern_krr", 0.35),
+        _metric_row("disagree", "rff_ridge", 0.75),
+    ]
+    cards = [
+        {"dataset": "easy", "raw_dim": 10},
+        {"dataset": "medium", "raw_dim": 20},
+        {"dataset": "hard", "raw_dim": 30},
+        {"dataset": "disagree", "raw_dim": 40},
+    ]
+
+    decisions = build_classical_triage_rows(rows, dataset_card_rows=cards, max_promoted=2)
+    by_dataset = {row["dataset"]: row for row in decisions}
+
+    assert by_dataset["easy"]["decision"] == "reject_classical_crushed"
+    assert by_dataset["medium"]["decision"] == "watchlist"
+    assert by_dataset["hard"]["decision"] == "promote"
+    assert by_dataset["hard"]["selected_for_quark"] is True
+    assert by_dataset["disagree"]["decision"].startswith("promote_nonlinear_disagreement")
+
+
+def test_triage_decision_logic_filters_to_requested_dataset_cards():
+    rows = [
+        _metric_row("copper_concentration", "raw_matern_krr", 0.7),
+        _metric_row("gas_sensor_array_acetone", "raw_matern_krr", 0.8),
+    ]
+    cards = [{"dataset": "copper_concentration", "raw_dim": 10}]
+
+    decisions = build_classical_triage_rows(rows, dataset_card_rows=cards, max_promoted=3)
+
+    assert [row["dataset"] for row in decisions] == ["copper_concentration"]
+
+
+def test_quark_triage_status_marks_rebuttal_positive_and_drop_after_n10():
+    classical = [
+        {
+            "dataset": "positive",
+            "best_classical_method": "raw_matern_krr",
+            "best_classical_test_nrmse": 0.5,
+            "matched_random_features_test_nrmse": 0.7,
+            "raw_matern_test_nrmse": 0.5,
+        },
+        {
+            "dataset": "drop",
+            "best_classical_method": "raw_matern_krr",
+            "best_classical_test_nrmse": 0.2,
+            "matched_random_features_test_nrmse": 0.4,
+            "raw_matern_test_nrmse": 0.2,
+        },
+    ]
+    rows = [
+        _metric_row("positive", "quark_reservoir_channel_cupy_direct_paper_direct_n5", 0.52),
+        _metric_row("drop", "quark_reservoir_channel_cupy_direct_high_compression_relief_n10", 0.7),
+    ]
+
+    quark = build_quark_triage_rows(rows, classical)
+    by_dataset = {row["dataset"]: row for row in quark}
+
+    assert by_dataset["positive"]["status"] == "rebuttal_positive"
+    assert by_dataset["drop"]["status"] == "drop_after_n10"
+
+
+def test_quark_triage_status_filters_to_classical_context_rows():
+    classical = [
+        {
+            "dataset": "copper_concentration",
+            "best_classical_method": "raw_matern_krr",
+            "best_classical_test_nrmse": 0.8,
+            "matched_random_features_test_nrmse": 0.9,
+            "raw_matern_test_nrmse": 0.8,
+        }
+    ]
+    rows = [
+        _metric_row("copper_concentration", "quark_reservoir_channel_cupy_direct_n10", 0.9),
+        _metric_row("gas_sensor_array_acetone", "quark_reservoir_channel_cupy_direct_n10", 0.7),
+    ]
+
+    quark = build_quark_triage_rows(rows, classical)
+
+    assert [row["dataset"] for row in quark] == ["copper_concentration"]
+
+
+def test_triage_outputs_write_decision_artifacts(tmp_path):
+    out_root = tmp_path / "results"
+    run_dir = out_root / "hard" / "split=official_tser" / "raw_matern_krr" / "seed=0"
+    run_dir.mkdir(parents=True)
+    with (run_dir / "metrics.csv").open("w", encoding="utf-8") as f:
+        f.write(",".join(["method", "dataset", "split", "metric", "value", "method_seed"]) + "\n")
+        f.write("raw_matern_krr,hard,test,nrmse_train_y_std,0.7,0\n")
+
+    data_dir = tmp_path / "data" / "hard"
+    data_dir.mkdir(parents=True)
+    np.savez_compressed(data_dir / "hard.npz", X=np.zeros((4, 2, 3)), y=np.zeros((1, 4)))
+    (data_dir / "latest_dataset.txt").write_text("hard.npz\n", encoding="utf-8")
+    (data_dir / "hard.meta.json").write_text(
+        """{
+  "dataset_id": "hard",
+  "dataset_name": "Hard",
+  "target_name": "hard",
+  "split_source": "official_tser",
+  "source": "local",
+  "description": "fixture",
+  "N": 4,
+  "n_train": 3,
+  "n_test": 1,
+  "w": 2,
+  "d": 3,
+  "preprocess": {"nan_count_train": 0, "nan_count_test": 0}
+}
+""",
+        encoding="utf-8",
+    )
+
+    aggregate_dir = write_real_dataset_triage_outputs(out_root, data_root=tmp_path / "data", datasets=["hard"])
+
+    assert (aggregate_dir / "dataset_cards.md").exists()
+    assert (aggregate_dir / "classical_triage_table.md").exists()
+    assert (aggregate_dir / "triage_decisions.csv").exists()
+    assert "hard" in (aggregate_dir / "triage_decisions.csv").read_text(encoding="utf-8")
+
+
+def test_triage_script_dry_run_prints_planned_actions(capsys, tmp_path):
+    triage_main(
+        [
+            "--datasets",
+            "live_fuel_moisture",
+            "--stages",
+            "all",
+            "--data-root",
+            str(tmp_path / "data"),
+            "--out-root",
+            str(tmp_path / "results"),
+            "--dry-run",
+        ]
+    )
+
+    captured = capsys.readouterr().out
+    assert "prepare datasets=live_fuel_moisture" in captured
+    assert "run classical baselines datasets=live_fuel_moisture" in captured
+    assert "write triage decisions" in captured
+    assert "run QuaRK regimes datasets=<selected_by_triage>" in captured
 
 
 def test_real_world_quark_runner_preserves_official_split_on_tiny_fixture(tmp_path):
