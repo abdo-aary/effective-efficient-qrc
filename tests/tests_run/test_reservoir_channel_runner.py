@@ -356,6 +356,10 @@ def test_reservoir_channel_direct_validation_errors_when_available():
 
     with pytest.raises(ValueError, match="engine='cupy'"):
         ExactReservoirChannelRunner(cfg, engine="batched", output_kind="expectation")
+    with pytest.raises(ValueError, match="max_history must be positive"):
+        ExactReservoirChannelRunner(cfg, engine="cupy", output_kind="expectation", max_history=0)
+    with pytest.raises(ValueError, match="max_history truncation"):
+        ExactReservoirChannelRunner(cfg, engine="cupy", max_history=64)
 
     runner = ExactReservoirChannelRunner(cfg, engine="cupy", output_kind="expectation")
     with pytest.raises(ValueError, match="requires observables"):
@@ -367,6 +371,71 @@ def test_reservoir_channel_direct_validation_errors_when_available():
             angle_positioning_name="tanh",
             observables=[Operator(np.eye(4, dtype=complex))],
         )
+
+
+def test_reservoir_channel_cupy_direct_max_history_full_matches_exact_when_available():
+    cp = _require_cupy()
+
+    cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=57)
+    X = np.random.default_rng(58).uniform(-0.5, 0.5, size=(2, 3, 2))
+    pubs = _make_pubs(cfg, X, angle_positioning=angle_positioning_tanh, R=2, lam_0=0.5, seed=59)
+    observables = generate_k_local_paulis(locality=2, num_qubits=2)
+
+    exact = ExactReservoirChannelRunner(
+        cfg,
+        engine="cupy",
+        gpu_id=0,
+        output_backend="cupy",
+        output_kind="expectation",
+        chunk_size=4,
+    ).run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
+    truncated_full = ExactReservoirChannelRunner(
+        cfg,
+        engine="cupy",
+        gpu_id=0,
+        output_backend="cupy",
+        output_kind="expectation",
+        max_history=4,
+        chunk_size=4,
+    ).run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
+
+    assert isinstance(truncated_full, ExactExpectationResults)
+    np.testing.assert_allclose(
+        cp.asnumpy(truncated_full.expectations),
+        cp.asnumpy(exact.expectations),
+        atol=1e-10,
+        rtol=0.0,
+    )
+
+
+def test_reservoir_channel_cupy_direct_truncation_error_is_tail_bounded_when_available():
+    cp = _require_cupy()
+
+    cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=60)
+    X = np.random.default_rng(61).uniform(-0.5, 0.5, size=(2, 5, 2))
+    pubs = _make_pubs(cfg, X, angle_positioning=angle_positioning_tanh, R=1, lam_0=0.5, seed=62)
+    observables = generate_k_local_paulis(locality=2, num_qubits=2)
+
+    exact = ExactReservoirChannelRunner(
+        cfg,
+        engine="cupy",
+        gpu_id=0,
+        output_backend="cupy",
+        output_kind="expectation",
+        chunk_size=4,
+    ).run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
+    truncated = ExactReservoirChannelRunner(
+        cfg,
+        engine="cupy",
+        gpu_id=0,
+        output_backend="cupy",
+        output_kind="expectation",
+        max_history=2,
+        chunk_size=4,
+    ).run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
+
+    max_abs = float(cp.max(cp.abs(exact.expectations - truncated.expectations)).get())
+    assert max_abs <= 0.5**2 + 1e-10
 
 
 def test_exact_retriever_rejects_mismatched_expectation_observable_count():
@@ -406,6 +475,16 @@ def test_reservoir_channel_cupy_direct_config_selects_expectation_output():
     assert node.gpu_id == 0
     assert node.output_backend == "cupy"
     assert node.output_kind == "expectation"
+
+
+def test_reservoir_channel_cupy_direct_truncated_config_selects_max_history():
+    node = OmegaConf.load("src/experiment/conf/model/qrc/runner/reservoir_channel_cupy_direct_truncated64.yaml")
+    assert node.engine == "cupy"
+    assert node.gpu_id == 0
+    assert node.output_backend == "cupy"
+    assert node.output_kind == "expectation"
+    assert node.max_history == 64
+    assert node.chunk_size == 256
 
 
 def test_reservoir_channel_featurizer_integration_uses_swap_family(monkeypatch):
@@ -476,3 +555,51 @@ def test_reservoir_channel_cupy_direct_featurizer_matches_density_when_available
 
     assert isinstance(direct_phi, cp.ndarray)
     np.testing.assert_allclose(cp.asnumpy(direct_phi), cp.asnumpy(density_phi), atol=1e-10, rtol=0.0)
+
+
+def test_reservoir_channel_cupy_direct_truncated_featurizer_matches_exact_when_history_full():
+    cp = _require_cupy()
+
+    cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=63)
+    X = np.random.default_rng(64).uniform(-0.4, 0.4, size=(2, 3, 2))
+    observables = generate_k_local_paulis(locality=2, num_qubits=2)
+
+    exact_featurizer = QRCFeaturizer(
+        qrc_cfg=cfg,
+        runner=ExactReservoirChannelRunner(
+            cfg,
+            engine="cupy",
+            gpu_id=0,
+            output_backend="cupy",
+            output_kind="expectation",
+        ),
+        fmp_retriever=ExactFeatureMapsRetriever(cfg, observables, backend="cupy"),
+        pubs_family="ising_ring_swap",
+        angle_positioning_name="tanh",
+        pubs_kwargs={"num_reservoirs": 2, "lam_0": 0.5, "seed": 65, "eps": 1e-8},
+        runner_kwargs={},
+        fmp_kwargs={},
+    )
+    truncated_featurizer = QRCFeaturizer(
+        qrc_cfg=cfg,
+        runner=ExactReservoirChannelRunner(
+            cfg,
+            engine="cupy",
+            gpu_id=0,
+            output_backend="cupy",
+            output_kind="expectation",
+            max_history=4,
+        ),
+        fmp_retriever=ExactFeatureMapsRetriever(cfg, observables, backend="cupy"),
+        pubs_family="ising_ring_swap",
+        angle_positioning_name="tanh",
+        pubs_kwargs={"num_reservoirs": 2, "lam_0": 0.5, "seed": 65, "eps": 1e-8},
+        runner_kwargs={},
+        fmp_kwargs={},
+    )
+
+    exact_phi = exact_featurizer.transform(X)
+    truncated_phi = truncated_featurizer.transform(X)
+
+    assert isinstance(truncated_phi, cp.ndarray)
+    np.testing.assert_allclose(cp.asnumpy(truncated_phi), cp.asnumpy(exact_phi), atol=1e-10, rtol=0.0)

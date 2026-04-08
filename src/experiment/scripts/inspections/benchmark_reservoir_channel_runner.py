@@ -68,8 +68,12 @@ def _run_case(
     include_aer: bool,
     aer_device: str,
     direct_only: bool,
+    max_history: int | None,
 ) -> None:
-    print(f"\nCase: N={N}, R={R}, w={w}, d={d}, n={n}, chunk_size={chunk_size}", flush=True)
+    print(
+        f"\nCase: N={N}, R={R}, w={w}, d={d}, n={n}, chunk_size={chunk_size}, max_history={max_history}",
+        flush=True,
+    )
     cfg, pubs = _make_pubs(N=N, w=w, d=d, n=n, R=R, seed=seed)
     observables = generate_k_local_paulis(locality=2, num_qubits=n)
 
@@ -83,6 +87,7 @@ def _run_case(
                 gpu_id=0,
                 output_backend="cupy",
                 output_kind="expectation",
+                max_history=max_history,
             ).run_pubs(
                 pubs=pubs,
                 angle_positioning_name="tanh",
@@ -131,6 +136,7 @@ def _run_case(
                 gpu_id=0,
                 output_backend="cupy",
                 output_kind="expectation",
+                max_history=max_history,
             ).run_pubs(
                 pubs=pubs,
                 angle_positioning_name="tanh",
@@ -172,6 +178,7 @@ def main() -> None:
     parser.add_argument("--skip-aer", action="store_true")
     parser.add_argument("--aer-device", default="GPU", choices=("CPU", "GPU"))
     parser.add_argument("--direct-only", action="store_true")
+    parser.add_argument("--max-history", type=int, default=None)
     args = parser.parse_args()
 
     _run_case(
@@ -186,6 +193,7 @@ def main() -> None:
         include_aer=not args.skip_aer,
         aer_device=args.aer_device,
         direct_only=args.direct_only,
+        max_history=args.max_history,
     )
     if args.large_N > 0:
         _run_case(
@@ -200,6 +208,7 @@ def main() -> None:
             include_aer=False,
             aer_device=args.aer_device,
             direct_only=args.direct_only,
+            max_history=args.max_history,
         )
 
 

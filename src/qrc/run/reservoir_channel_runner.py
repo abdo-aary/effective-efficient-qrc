@@ -71,6 +71,7 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         gpu_id: int | None = None,
         output_backend: str = "numpy",
         output_kind: str = "density_matrix",
+        max_history: int | None = None,
     ) -> None:
         self.qrc_cfg = qrc_cfg
         self.state_dtype = np.dtype(state_dtype)
@@ -99,6 +100,14 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
             )
         if self.output_kind == "expectation" and self.engine != "cupy":
             raise ValueError("output_kind='expectation' is supported only with engine='cupy' in v1.")
+        self.max_history = None if max_history is None else int(max_history)
+        if self.max_history is not None:
+            if self.max_history < 1:
+                raise ValueError(f"max_history must be positive when provided, got {max_history}.")
+            if self.engine != "cupy" or self.output_kind != "expectation":
+                raise ValueError(
+                    "max_history truncation is supported only with engine='cupy' and output_kind='expectation'."
+                )
         self._cupy: Any | None = None
         self._cupy_gate_cache: _GateIndexCache | None = None
         if self.engine == "cupy":
@@ -418,9 +427,12 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         n = int(self.qrc_cfg.num_qubits)
         dim = 1 << n
         dtype = cp.dtype(self.state_dtype.name)
+        history_cap = int(layout.w + 1)
+        if self.max_history is not None:
+            history_cap = min(history_cap, int(self.max_history))
 
-        states = cp.zeros((B, layout.w + 1, dim), dtype=dtype)
-        weights = cp.zeros((B, layout.w + 1), dtype=cp.float64)
+        states = cp.zeros((B, history_cap, dim), dtype=dtype)
+        weights = cp.zeros((B, history_cap), dtype=cp.float64)
         states[:, 0, :] = plus_state[None, :]
         weights[:, 0] = 1.0
 
@@ -430,6 +442,7 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         hz_vals = rows[:, layout.hz_cols]
 
         active_count = 1
+        overwrite_slot = 0
         for t in range(layout.w):
             theta = self._angle_positioning_cupy(rows[:, layout.z_cols[t]], angle_positioning_name)
             active_states = states[:, :active_count, :]
@@ -442,9 +455,17 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
             )
 
             weights[:, :active_count] *= lam[:, None]
-            states[:, active_count, :] = plus_state[None, :]
-            weights[:, active_count] = 1.0 - lam
-            active_count += 1
+            if active_count < history_cap:
+                reset_slot = active_count
+                active_count += 1
+            else:
+                # Once the finite-memory buffer is full, overwrite the oldest
+                # branch. Its omitted contribution is bounded by the geometric
+                # tail mass of the contractive channel.
+                reset_slot = overwrite_slot
+                overwrite_slot = (overwrite_slot + 1) % history_cap
+            states[:, reset_slot, :] = plus_state[None, :]
+            weights[:, reset_slot] = 1.0 - lam
 
         return states[:, :active_count, :], weights[:, :active_count]
 
