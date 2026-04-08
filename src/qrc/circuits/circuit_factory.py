@@ -395,6 +395,7 @@ class CircuitFactory:
             eps: float = 1e-8,
             projection_backend: str = "numpy",
             projection_device: int | None = 0,
+            dynamics_mode: str = "random",
     ):
         """
         Create PUBs for a dataset X across multiple reservoirs (SWAP dilation variant).
@@ -452,6 +453,11 @@ class CircuitFactory:
             eps=eps,
         )
         parameters_reservoirs = np.asarray(parameters_reservoirs, dtype=float)
+        dynamics_mode = str(dynamics_mode)
+        if dynamics_mode == "zero":
+            parameters_reservoirs[:, :-1] = 0.0
+        elif dynamics_mode != "random":
+            raise ValueError(f"Unknown dynamics_mode={dynamics_mode!r}; expected 'random' or 'zero'.")
         assert parameters_reservoirs.shape[0] == R, (
             f"Expected parameters_reservoirs shape (R,P), got {parameters_reservoirs.shape} with R={R}"
         )

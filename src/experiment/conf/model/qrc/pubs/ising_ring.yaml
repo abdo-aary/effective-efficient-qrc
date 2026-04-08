@@ -8,3 +8,4 @@ seed: ${seed}
 eps: 1e-8
 projection_backend: cupy
 projection_device: 0
+dynamics_mode: random

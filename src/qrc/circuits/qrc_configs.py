@@ -27,7 +27,7 @@ import numpy as np
 
 
 def sample_jl_projections_gaussian(input_dim: int, n: int, seed: int) -> np.ndarray:
-    """Sample a Gaussian Johnson–Lindenstrauss projection matrix.
+    r"""Sample a Gaussian Johnson–Lindenstrauss projection matrix.
 
     The returned matrix :math:`\Pi \in \mathbb{R}^{d \times \n}` has entries
     distributed as :math:`\mathcal{N}(0, 1/\n)`. Applying
@@ -62,6 +62,23 @@ def sample_jl_projections_gaussian(input_dim: int, n: int, seed: int) -> np.ndar
     """
     rng = np.random.default_rng(seed)
     projection = rng.normal(loc=0.0, scale=1.0 / np.sqrt(n), size=(input_dim, n))
+    return projection
+
+
+def sample_identity_pad_projection(input_dim: int, n: int) -> np.ndarray:
+    """Build an identity-padded projection from ``R^d`` into ``R^n``.
+
+    This is intended for the no-JL ablation when ``d <= n``. Applying
+    ``z = x @ Pi`` preserves the input coordinates in the first ``d`` projected
+    coordinates and leaves the remaining coordinates at zero.
+    """
+
+    input_dim = int(input_dim)
+    n = int(n)
+    if input_dim > n:
+        raise ValueError(f"identity_pad projection requires input_dim <= num_qubits, got {input_dim} > {n}.")
+    projection = np.zeros((input_dim, n), dtype=float)
+    projection[np.arange(input_dim), np.arange(input_dim)] = 1.0
     return projection
 
 
@@ -132,16 +149,30 @@ class RingQRConfig(BaseQRConfig):
         JL projection matrix of shape ``(input_dim, num_qubits)``.
     """
 
-    def __init__(self, input_dim: int, num_qubits: int, seed: int = 12345):
+    def __init__(
+        self,
+        input_dim: int,
+        num_qubits: int,
+        seed: int = 12345,
+        projection_mode: str = "gaussian_jl",
+    ):
         self.topology = ring_topology(num_qubits=num_qubits)
         self.input_dim = int(input_dim)
         self.num_qubits = int(num_qubits)
         self.seed = int(seed)
-        self.projection = sample_jl_projections_gaussian(
-            input_dim=self.input_dim,
-            n=self.num_qubits,
-            seed=self.seed,
-        )
+        self.projection_mode = str(projection_mode)
+        if self.projection_mode == "gaussian_jl":
+            self.projection = sample_jl_projections_gaussian(
+                input_dim=self.input_dim,
+                n=self.num_qubits,
+                seed=self.seed,
+            )
+        elif self.projection_mode == "identity_pad":
+            self.projection = sample_identity_pad_projection(input_dim=self.input_dim, n=self.num_qubits)
+        else:
+            raise ValueError(
+                f"Unknown projection_mode={self.projection_mode!r}; expected 'gaussian_jl' or 'identity_pad'."
+            )
 
 
 def ring_topology(num_qubits: int) -> QRTopologyConfig:
