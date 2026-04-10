@@ -1,0 +1,58 @@
+{
+  "varma": {
+    "default_volterra": 0.6293879522217769,
+    "no_jl_volterra": 0.606072309972333,
+    "best_n6_volterra": 0.4787881569030882,
+    "shot_curve": {
+      "100": 1.0476764724210779,
+      "500": 0.9016272870913171,
+      "1000": 0.8345508980225147,
+      "5000": 0.7449704183629527,
+      "10000": 0.7014639843131706
+    }
+  },
+  "real": {
+    "pilot_datasets": [
+      "copper_concentration",
+      "gas_sensor_array_acetone",
+      "gas_sensor_array_ethanol",
+      "iron_concentration",
+      "live_fuel_moisture",
+      "manganese_concentration"
+    ],
+    "benchmark_datasets": [
+      "beijing_pm25",
+      "benzene_concentration",
+      "copper_concentration",
+      "electric_motor_temperature",
+      "gas_sensor_array_acetone",
+      "gas_sensor_array_ethanol",
+      "hydraulic_systems",
+      "iron_concentration",
+      "live_fuel_moisture",
+      "manganese_concentration"
+    ],
+    "lambda_recommendation": {
+      "lam0": 0.5,
+      "num_pairs": 18,
+      "num_datasets": 6,
+      "quark_mean": 0.9748815930073237,
+      "quark_std": 0.03953850539580331,
+      "esn_mean": 1.0526073146746229,
+      "esn_std": 0.11303321535148826,
+      "delta_mean": -0.07772572166729902,
+      "quark_seed_wins": 12
+    },
+    "shot_recommendation": {
+      "shots": 3000,
+      "num_runs": 31,
+      "shot_mean": 0.9850649478019033,
+      "shot_std": 0.044340858775133114,
+      "exact_mean": 0.9728549815554255,
+      "mean_delta_to_exact": 0.012209966246478151,
+      "max_delta_to_exact": 0.06442706098939366
+    },
+    "better_count": 5,
+    "num_benchmark_rows": 10
+  }
+}

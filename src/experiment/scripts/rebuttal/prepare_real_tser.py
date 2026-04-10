@@ -10,7 +10,16 @@ from src.data.real_tser import (
 )
 
 
-def main() -> None:
+def build_dry_run_actions(args: argparse.Namespace) -> list[str]:
+    return [
+        "prepare TSER datasets="
+        + ",".join(args.datasets)
+        + f" out_root={args.out_root}"
+        + (" download=false" if args.no_download else " download=true")
+    ]
+
+
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Download and convert real-world TSER datasets.")
     parser.add_argument("--datasets", nargs="+", default=list(REAL_DATASET_KEYS), choices=sorted(REAL_DATASET_KEYS))
     parser.add_argument("--raw-root", type=Path, default=None)
@@ -27,7 +36,13 @@ def main() -> None:
     parser.add_argument("--hydraulic-split-strategy", choices=("random", "chronological"), default="random")
     parser.add_argument("--include-unstable-hydraulic", action="store_true")
     parser.add_argument("--hydraulic-length-seconds", type=int, default=60)
-    args = parser.parse_args()
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+
+    if args.dry_run:
+        for action in build_dry_run_actions(args):
+            print(action)
+        return
 
     for dataset in args.datasets:
         out_dir = prepare_real_dataset(

@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--stages",
         nargs="+",
-        default=["prepare", "classical", "aggregate"],
+        default=["prepare", "quark_architecture", "shots", "aggregate"],
         choices=(
             "prepare",
             "classical",

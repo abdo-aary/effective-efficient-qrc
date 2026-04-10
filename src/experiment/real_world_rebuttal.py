@@ -17,26 +17,22 @@ from sklearn.gaussian_process.kernels import Matern as SkMatern
 
 from src.compute.backend import asnumpy, resolve_backend
 from src.data.factory import load_windows_dataset
-from src.experiment.classical_baselines import (
-    CLASSICAL_METHODS,
-    FEATURE_DIM_METHODS,
+from src.experiment.temporal_baselines import (
     METRICS_COLUMNS,
     RIDGE_ALPHA_GRID,
     REG_GRID,
     BenchmarkData,
     SplitData,
+    TEMPORAL_BASELINE_METHODS,
     build_markdown_table,
+    fit_esn_matern_krr,
+    fit_esn_matern_krr_from_saved_params,
     fit_esn_ridge,
-    fit_matern_krr_features,
-    fit_rff_ridge,
-    fit_ridge_features,
     json_safe,
-    make_matched_random_features,
     make_metric_rows,
     method_run_dir,
     mean_squared_error,
     matern_nu_grid_for_backend,
-    standardize_features,
     standardize_flattened_windows,
     write_baseline_plot,
     write_dict_csv,
@@ -61,60 +57,6 @@ QUARK_KERNEL_READOUT_RETUNE_METHOD = "quark_reservoir_channel_kernel_readout_ret
 READOUT_RETUNE_LAMBDA_GRID = 10.0 ** np.arange(-6.0, 10.5, 0.5)
 READOUT_RETUNE_XI_GRID = 10.0 ** np.arange(-1.0, 3.5, 0.5)
 READOUT_RETUNE_NU_GRID = np.asarray([0.5, 1.5, 2.5, 5.0], dtype=float)
-TRIAGE_CANDIDATE_DATASETS = (
-    "live_fuel_moisture",
-    "manganese_concentration",
-    "iron_concentration",
-    "copper_concentration",
-    "gas_sensor_array_acetone",
-    "gas_sensor_array_ethanol",
-    "electric_motor_temperature",
-    "hydraulic_systems",
-)
-TRIAGE_CLASSICAL_METHODS = (
-    "raw_ridge",
-    "raw_matern_krr",
-    "matched_random_features_matern_krr",
-    "rff_ridge",
-    "esn",
-)
-TRIAGE_QUARK_REGIMES: dict[str, list[str]] = {
-    "paper_direct_n5": [
-        "model/qrc/features/retriever=exact",
-        "model.qrc.cfg.num_qubits=5",
-        "model.qrc.features.observables.locality=2",
-        "model.qrc.pubs.num_reservoirs=3",
-        "model.qrc.pubs.lam_0=0.1",
-    ],
-    "hydraulic_best_direct_n8": [
-        "model/qrc/features/retriever=exact",
-        "model.qrc.cfg.num_qubits=8",
-        "model.qrc.features.observables.locality=2",
-        "model.qrc.pubs.num_reservoirs=3",
-        "model.qrc.pubs.lam_0=0.5",
-    ],
-    "high_compression_relief_n10": [
-        "model/qrc/features/retriever=exact",
-        "model.qrc.cfg.num_qubits=10",
-        "model.qrc.features.observables.locality=2",
-        "model.qrc.pubs.num_reservoirs=3",
-        "model.qrc.pubs.lam_0=0.5",
-    ],
-    "truncated_direct_n10_lam0p5": [
-        "model/qrc/features/retriever=exact",
-        "model.qrc.cfg.num_qubits=10",
-        "model.qrc.features.observables.locality=2",
-        "model.qrc.pubs.num_reservoirs=3",
-        "model.qrc.pubs.lam_0=0.5",
-    ],
-    "truncated_direct_n12_lam0p5": [
-        "model/qrc/features/retriever=exact",
-        "model.qrc.cfg.num_qubits=12",
-        "model.qrc.features.observables.locality=2",
-        "model.qrc.pubs.num_reservoirs=3",
-        "model.qrc.pubs.lam_0=0.5",
-    ],
-}
 
 
 def run_real_classical_baseline(
@@ -124,12 +66,13 @@ def run_real_classical_baseline(
     out_root: str | Path = DEFAULT_REAL_RESULTS_ROOT,
     method_seed: int = 0,
     feature_dim: int = 315,
+    reuse_esn_source_run: str | Path | None = None,
     backend: str = "auto",
     device: int | None = 0,
 ) -> Path:
     method = str(method)
-    if method not in CLASSICAL_METHODS:
-        raise ValueError(f"Unknown classical baseline method={method!r}.")
+    if method not in TEMPORAL_BASELINE_METHODS:
+        raise ValueError(f"Unknown temporal baseline method={method!r}.")
 
     t0 = time.perf_counter()
     dataset_path = resolve_real_dataset_path(dataset_path)
@@ -138,65 +81,9 @@ def run_real_classical_baseline(
     run_root = real_dataset_output_root(out_root, dataset.dataset_id, split.split_source)
     run_dir = method_run_dir(run_root, method, method_seed=method_seed, feature_dim=feature_dim)
     run_dir.mkdir(parents=True, exist_ok=True)
+    _, raw_scaler = standardize_flattened_windows(dataset.X, split.train_idx)
 
-    raw_std, raw_scaler = standardize_flattened_windows(dataset.X, split.train_idx)
-    if method == "raw_matern_krr":
-        result = fit_matern_krr_features(
-            raw_std,
-            dataset.y2d,
-            split,
-            dataset.task_names,
-            method="raw_matern_krr",
-            method_seed=method_seed,
-            backend=backend,
-            device=device,
-        )
-        final_feature_dim = dataset.raw_dim
-    elif method == "raw_ridge":
-        result = fit_ridge_features(
-            raw_std,
-            dataset.y2d,
-            split,
-            dataset.task_names,
-            method="raw_ridge",
-            method_seed=method_seed,
-            backend=backend,
-            device=device,
-        )
-        final_feature_dim = dataset.raw_dim
-    elif method == "matched_random_features_matern_krr":
-        features, feature_meta = make_matched_random_features(
-            raw_std,
-            raw_dim=dataset.raw_dim,
-            feature_dim=feature_dim,
-            seed=method_seed,
-        )
-        features, _ = standardize_features(features, split.train_idx)
-        result = fit_matern_krr_features(
-            features,
-            dataset.y2d,
-            split,
-            dataset.task_names,
-            method="matched_random_features_matern_krr",
-            method_seed=method_seed,
-            extra_summary=feature_meta,
-            backend=backend,
-            device=device,
-        )
-        final_feature_dim = feature_dim
-    elif method == "rff_ridge":
-        result = fit_rff_ridge(
-            raw_std,
-            dataset.y2d,
-            split,
-            dataset.task_names,
-            method_seed=method_seed,
-            feature_dim=feature_dim,
-            backend=backend,
-            device=device,
-        )
-        final_feature_dim = feature_dim
-    elif method == "esn":
+    if method == "esn":
         result = fit_esn_ridge(
             dataset.X,
             dataset.y2d,
@@ -207,6 +94,33 @@ def run_real_classical_baseline(
             backend=backend,
             device=device,
         )
+        final_feature_dim = feature_dim
+    elif method == "esn_matern_krr":
+        if reuse_esn_source_run is None:
+            result = fit_esn_matern_krr(
+                dataset.X,
+                dataset.y2d,
+                split,
+                dataset.task_names,
+                method_seed=method_seed,
+                feature_dim=feature_dim,
+                backend=backend,
+                device=device,
+            )
+        else:
+            source_run = Path(reuse_esn_source_run)
+            source_params = json.loads((source_run / "best_params.json").read_text(encoding="utf-8"))
+            result = fit_esn_matern_krr_from_saved_params(
+                dataset.X,
+                dataset.y2d,
+                split,
+                dataset.task_names,
+                method_seed=method_seed,
+                feature_dim=feature_dim,
+                saved_best_params=source_params,
+                backend=backend,
+                device=device,
+            )
         final_feature_dim = feature_dim
     else:  # pragma: no cover
         raise AssertionError(method)
@@ -230,6 +144,7 @@ def run_real_classical_baseline(
             "out_root": str(Path(out_root)),
             "method_seed": int(method_seed),
             "feature_dim": int(feature_dim),
+            "reuse_esn_source_run": None if reuse_esn_source_run is None else str(Path(reuse_esn_source_run)),
             "backend": str(backend),
             "device": None if device is None else int(device),
             "raw_dim": int(dataset.raw_dim),

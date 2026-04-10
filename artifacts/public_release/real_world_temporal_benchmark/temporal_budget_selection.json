@@ -1,0 +1,44 @@
+{
+  "global_lambda_0": 0.5,
+  "recommended_shots": 3000,
+  "lambda_selection": {
+    "lam0": 0.5,
+    "num_pairs": 18,
+    "num_datasets": 6,
+    "quark_mean": 0.9748815930073237,
+    "quark_std": 0.03953850539580331,
+    "esn_mean": 1.0526073146746229,
+    "esn_std": 0.11303321535148826,
+    "delta_mean": -0.07772572166729902,
+    "quark_seed_wins": 12
+  },
+  "shot_selection": {
+    "shots": 3000,
+    "num_runs": 31,
+    "shot_mean": 0.9850649478019033,
+    "shot_std": 0.044340858775133114,
+    "exact_mean": 0.9728549815554255,
+    "mean_delta_to_exact": 0.012209966246478151,
+    "max_delta_to_exact": 0.06442706098939366
+  },
+  "datasets_for_lambda_and_shots": [
+    "copper_concentration",
+    "gas_sensor_array_acetone",
+    "gas_sensor_array_ethanol",
+    "iron_concentration",
+    "live_fuel_moisture",
+    "manganese_concentration"
+  ],
+  "datasets_for_final_table": [
+    "beijing_pm25",
+    "benzene_concentration",
+    "copper_concentration",
+    "electric_motor_temperature",
+    "gas_sensor_array_acetone",
+    "gas_sensor_array_ethanol",
+    "hydraulic_systems",
+    "iron_concentration",
+    "live_fuel_moisture",
+    "manganese_concentration"
+  ]
+}

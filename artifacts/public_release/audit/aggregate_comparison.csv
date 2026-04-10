@@ -1,0 +1,4 @@
+artifact,saved_path,status,saved_row_count,canonical_row_count,note
+real_world_final_table,storage/results/rebuttal/real_world_temporal_budget/aggregate/temporal_budget_final_table.csv,stale_subset,4,10,Saved aggregate differs from canonical raw-metric rebuild.
+real_world_selection,storage/results/rebuttal/real_world_temporal_budget/aggregate/temporal_budget_selection.json,stale_subset,4,6,saved lambda-selection dataset count does not cover the 6-dataset pilot
+varma_ablation_wide,storage/results/rebuttal/varma_ablation/aggregate/ablation_wide.csv,verified,564,564,Saved wide table exists; claim extraction is rebuilt from raw metrics rather than trusted directly.

@@ -134,8 +134,9 @@ CLASSICAL_METHODS = {
     "matched_random_features_matern_krr",
     "rff_ridge",
     "esn",
+    "esn_matern_krr",
 }
-FEATURE_DIM_METHODS = {"matched_random_features_matern_krr", "rff_ridge", "esn"}
+FEATURE_DIM_METHODS = {"matched_random_features_matern_krr", "rff_ridge", "esn", "esn_matern_krr"}
 
 
 @dataclass(frozen=True)
@@ -239,6 +240,18 @@ def run_classical_baseline(
         final_feature_dim = feature_dim
     elif method == "esn":
         result = fit_esn_ridge(
+            dataset.X,
+            dataset.y2d,
+            split,
+            dataset.task_names,
+            method_seed=method_seed,
+            feature_dim=feature_dim,
+            backend=backend,
+            device=device,
+        )
+        final_feature_dim = feature_dim
+    elif method == "esn_matern_krr":
+        result = fit_esn_matern_krr(
             dataset.X,
             dataset.y2d,
             split,
@@ -1267,6 +1280,174 @@ def fit_esn_ridge(
 
     return make_result(
         method="esn",
+        method_seed=method_seed,
+        task_names=task_names,
+        y2d=y2d,
+        split=split,
+        y_train_pred=y_train_pred,
+        y_test_pred=y_test_pred,
+        best_params=best_params,
+        feature_dim=int(feature_dim),
+        raw_dim=None,
+    )
+
+
+def fit_esn_matern_krr(
+    X: np.ndarray,
+    y2d: np.ndarray,
+    split: SplitData,
+    task_names: Sequence[str],
+    *,
+    method_seed: int,
+    feature_dim: int,
+    backend: str = "numpy",
+    device: int | None = None,
+) -> dict[str, Any]:
+    combos = list(
+        itertools.product(ESN_SPECTRAL_RADIUS_GRID, ESN_INPUT_SCALE_GRID, ESN_LEAK_RATE_GRID)
+    )
+    best_by_task: list[dict[str, Any] | None] = [None for _ in task_names]
+
+    for spectral_radius, input_scale, leak_rate in combos:
+        features = make_esn_features(
+            X,
+            train_idx=split.train_idx,
+            feature_dim=feature_dim,
+            seed=method_seed,
+            spectral_radius=float(spectral_radius),
+            input_scale=float(input_scale),
+            leak_rate=float(leak_rate),
+            backend=backend,
+            device=device,
+        )
+        features, _ = standardize_features(features, split.train_idx)
+        combo_result = fit_matern_krr_features(
+            features,
+            y2d,
+            split,
+            task_names,
+            method="esn_matern_krr",
+            method_seed=method_seed,
+            backend=backend,
+            device=device,
+        )
+        for task_i, task_name in enumerate(task_names):
+            params = dict(combo_result["best_params"][task_i])
+            current_val = float(params.get("lambda_val_mse", np.inf))
+            current = best_by_task[task_i]
+            if current is None or current_val < current["val_mse"]:
+                best_params = dict(params)
+                best_params.update(
+                    {
+                        "task": task_name,
+                        "selected_spectral_radius": float(spectral_radius),
+                        "selected_input_scale": float(input_scale),
+                        "selected_leak_rate": float(leak_rate),
+                    }
+                )
+                best_by_task[task_i] = {
+                    "val_mse": current_val,
+                    "y_train_pred": np.asarray(combo_result["y_train_pred"][task_i], dtype=float).copy(),
+                    "y_test_pred": np.asarray(combo_result["y_test_pred"][task_i], dtype=float).copy(),
+                    "best_params": best_params,
+                }
+
+    y_train_pred = np.empty((y2d.shape[0], split.train_idx.size), dtype=float)
+    y_test_pred = np.empty((y2d.shape[0], split.test_idx.size), dtype=float)
+    best_params: list[dict[str, Any]] = []
+    for task_i in range(y2d.shape[0]):
+        best = best_by_task[task_i]
+        assert best is not None
+        y_train_pred[task_i] = np.asarray(best["y_train_pred"], dtype=float)
+        y_test_pred[task_i] = np.asarray(best["y_test_pred"], dtype=float)
+        best_params.append(dict(best["best_params"]))
+
+    return make_result(
+        method="esn_matern_krr",
+        method_seed=method_seed,
+        task_names=task_names,
+        y2d=y2d,
+        split=split,
+        y_train_pred=y_train_pred,
+        y_test_pred=y_test_pred,
+        best_params=best_params,
+        feature_dim=int(feature_dim),
+        raw_dim=None,
+    )
+
+
+def fit_esn_matern_krr_from_saved_params(
+    X: np.ndarray,
+    y2d: np.ndarray,
+    split: SplitData,
+    task_names: Sequence[str],
+    *,
+    method_seed: int,
+    feature_dim: int,
+    saved_best_params: Sequence[Mapping[str, Any]],
+    backend: str = "numpy",
+    device: int | None = None,
+) -> dict[str, Any]:
+    params_list = [dict(p) for p in saved_best_params]
+    if not params_list:
+        raise ValueError("saved_best_params must contain at least one task entry.")
+    if len(params_list) not in {1, len(task_names)}:
+        raise ValueError(
+            f"saved_best_params has {len(params_list)} entries, expected 1 or {len(task_names)} for task_names."
+        )
+    if len(params_list) == 1 and len(task_names) > 1:
+        params_list = [dict(params_list[0]) for _ in task_names]
+
+    y_train_pred = np.empty((y2d.shape[0], split.train_idx.size), dtype=float)
+    y_test_pred = np.empty((y2d.shape[0], split.test_idx.size), dtype=float)
+    best_params: list[dict[str, Any]] = []
+
+    for task_i, task_name in enumerate(task_names):
+        saved = dict(params_list[task_i])
+        spectral_radius = saved.get("selected_spectral_radius")
+        input_scale = saved.get("selected_input_scale")
+        leak_rate = saved.get("selected_leak_rate")
+        if spectral_radius is None or input_scale is None or leak_rate is None:
+            raise ValueError(
+                "saved_best_params must include selected_spectral_radius, selected_input_scale, and selected_leak_rate."
+            )
+        features = make_esn_features(
+            X,
+            train_idx=split.train_idx,
+            feature_dim=feature_dim,
+            seed=method_seed,
+            spectral_radius=float(spectral_radius),
+            input_scale=float(input_scale),
+            leak_rate=float(leak_rate),
+            backend=backend,
+            device=device,
+        )
+        features, _ = standardize_features(features, split.train_idx)
+        task_result = fit_matern_krr_features(
+            features,
+            y2d[task_i : task_i + 1],
+            split,
+            [task_name],
+            method="esn_matern_krr",
+            method_seed=method_seed,
+            backend=backend,
+            device=device,
+        )
+        y_train_pred[task_i] = np.asarray(task_result["y_train_pred"][0], dtype=float)
+        y_test_pred[task_i] = np.asarray(task_result["y_test_pred"][0], dtype=float)
+        task_params = dict(task_result["best_params"][0])
+        task_params.update(
+            {
+                "task": task_name,
+                "selected_spectral_radius": float(spectral_radius),
+                "selected_input_scale": float(input_scale),
+                "selected_leak_rate": float(leak_rate),
+            }
+        )
+        best_params.append(task_params)
+
+    return make_result(
+        method="esn_matern_krr",
         method_seed=method_seed,
         task_names=task_names,
         y2d=y2d,

@@ -5,7 +5,7 @@ import csv
 import numpy as np
 import pytest
 
-from src.experiment.classical_baselines import METRICS_COLUMNS
+from src.experiment.temporal_baselines import METRICS_COLUMNS
 from src.experiment.scripts.rebuttal.run_varma_ablation_suite import main as varma_ablation_main
 from src.experiment.varma_ablation import (
     DEFAULT_VARMA_ABLATION_RESULTS_ROOT,
@@ -123,7 +123,7 @@ def test_varma_ablation_aggregation_separates_architecture_and_scaling(tmp_path)
             out_root,
             ablation="architecture",
             dataset="varma_e2_three__N=96__w=25__d=3__s=2",
-            method="raw_ridge",
+            method="quark_reservoir_channel_cupy_direct_arch_baseline_n5_R3_k2_lam0p1",
             task="volterra",
             value=0.3,
         ),
@@ -150,7 +150,9 @@ def test_varma_ablation_aggregation_separates_architecture_and_scaling(tmp_path)
     assert (aggregate_dir / "varma_wd_scaling_table.md").exists()
     assert (aggregate_dir / "ablation_long.csv").exists()
     assert len(read_varma_ablation_metric_rows(out_root)) == 2
-    assert "raw_ridge" in (aggregate_dir / "architecture_ablation_table.md").read_text(encoding="utf-8")
+    assert "quark_reservoir_channel_cupy_direct_arch_baseline_n5_R3_k2_lam0p1" in (
+        aggregate_dir / "architecture_ablation_table.md"
+    ).read_text(encoding="utf-8")
     assert "w=10" not in (aggregate_dir / "architecture_ablation_table.md").read_text(encoding="utf-8")
     assert "quark_reservoir" in (aggregate_dir / "varma_wd_scaling_table.md").read_text(encoding="utf-8")
 
