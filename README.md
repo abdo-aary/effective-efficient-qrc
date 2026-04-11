@@ -20,7 +20,7 @@ This release is intentionally narrower than the broader internal rebuttal worksp
 ## Results Included In This Release
 
 - `artifacts/public_release/varma_ablation/`
-  Canonical VARMA claim tables and the retained finite-shot ablation table.
+  Canonical VARMA claim tables, the fixed architecture sweep table, and the retained finite-shot ablation table.
 - `artifacts/public_release/real_world_temporal_benchmark/`
   Final 10-dataset QuaRK vs `ESN+Matérn` table, lambda/shot selection summaries, and the dataset manifest.
 - `artifacts/public_release/audit/`

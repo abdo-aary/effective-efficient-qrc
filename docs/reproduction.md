@@ -40,7 +40,11 @@ Canonical outputs are synced into:
 
 - `artifacts/public_release/varma_ablation/canonical_varma_claim_table.csv`
 - `artifacts/public_release/varma_ablation/canonical_varma_claim_table.md`
+- `artifacts/public_release/varma_ablation/canonical_architecture_ablation_table.csv`
+- `artifacts/public_release/varma_ablation/canonical_architecture_ablation_table.md`
 - `artifacts/public_release/varma_ablation/finite_shot_ablation_table.md`
+
+The retained architecture table covers the fixed `w=25, d=3` QuaRK-only mechanism sweep over `n`, `R`, `k`, `lambda`, JL/no-JL, and the zero-dynamics diagnostic. The broader `w/d` scaling study is intentionally not part of the public release surface.
 
 ## 3. Run The Real-World Temporal Benchmark
 

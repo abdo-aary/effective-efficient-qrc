@@ -19,7 +19,7 @@ The retained classical comparison is the temporal baseline surface:
 This public surface is intentionally restricted to:
 
 - ESN state generation
-- ESN+rige support when needed internally
+- ESN+ridge support when needed internally
 - ESN+Matérn as the retained public baseline
 
 The broader historical classical-baseline collection is not part of the public release story.
@@ -48,6 +48,12 @@ The public release artifacts live under:
 - `artifacts/public_release/audit/`
 
 These files are the public source of truth for the released empirical claims.
+
+Within `artifacts/public_release/varma_ablation/`, the retained public VARMA surface is:
+
+- the canonical claim table used in the rebuttal text,
+- the fixed `w=25, d=3` QuaRK-only architecture sweep table,
+- and the finite-shot ablation table.
 
 ## 5. What Is Intentionally Not Part Of The Public Release Story
 

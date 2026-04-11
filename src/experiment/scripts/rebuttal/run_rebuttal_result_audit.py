@@ -4,6 +4,7 @@ import argparse
 import csv
 import inspect
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -244,6 +245,95 @@ def _build_varma_claim_rows(varma_root: Path, out_root: Path) -> tuple[list[dict
     (out_root / "canonical_varma_claim_table.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     write_dict_csv(out_root / "canonical_varma_claim_table.csv", summary_rows)
     return summary_rows, canonical
+
+
+def _varma_architecture_family_rank(method: str) -> tuple[int, str]:
+    base = str(method)
+    if base.endswith("_kernel_readout_retune"):
+        base = base[: -len("_kernel_readout_retune")]
+    if "arch_baseline_" in base:
+        return 0, base
+    if "arch_no_jl_" in base:
+        return 1, base
+    if re.search(r"arch_sweep_n\d+_R3_k2_lam0p1$", base) and "_n5_R3_" not in base:
+        return 2, base
+    if re.search(r"arch_sweep_n5_R\d+_k2_lam0p1$", base) and "_R3_" not in base:
+        return 3, base
+    if re.search(r"arch_sweep_n5_R3_k\d+_lam0p1$", base) and "_k2_" not in base:
+        return 4, base
+    if "arch_sweep_n5_R3_k2_lam" in base and not base.endswith("lam0p1"):
+        return 5, base
+    if "arch_zero_dynamics_" in base:
+        return 6, base
+    return 7, base
+
+
+def _build_varma_architecture_table(varma_root: Path, out_root: Path) -> list[dict[str, Any]]:
+    rows = read_varma_ablation_metric_rows(varma_root)
+    wide_rows = build_varma_ablation_wide_rows(rows, out_root=varma_root, metric="mse")
+    spec = architecture_dataset_spec()
+    task_order = {
+        "one_step_forecast": 0,
+        "exp_fading_linear": 1,
+        VARMA_VOLTERRA_TASK: 2,
+    }
+
+    filtered_rows: list[dict[str, Any]] = []
+    for row in wide_rows:
+        if str(row.get("ablation")) != "architecture":
+            continue
+        if int(row.get("w", -1)) != int(spec.w) or int(row.get("d", -1)) != int(spec.d):
+            continue
+        method = str(row.get("method", ""))
+        if not (method.startswith("quark_") and "_arch_" in method):
+            continue
+        filtered_rows.append(
+            {
+                "ablation": str(row["ablation"]),
+                "dataset": str(row["dataset"]),
+                "w": int(row["w"]),
+                "d": int(row["d"]),
+                "task": str(row["task"]),
+                "method": method,
+                "method_seed": int(row["method_seed"]),
+                "n_train": int(row["n_train"]),
+                "n_test": int(row["n_test"]),
+                "feature_dim": int(row["feature_dim"]),
+                "raw_dim": int(row["raw_dim"]),
+                "artifact_dir": str(row["artifact_dir"]),
+                "train_mse": float(row["train_mse"]),
+                "test_mse": float(row["test_mse"]),
+            }
+        )
+
+    filtered_rows.sort(
+        key=lambda row: (
+            task_order.get(str(row["task"]), 99),
+            *_varma_architecture_family_rank(str(row["method"])),
+            int(row["feature_dim"]),
+            1 if str(row["method"]).endswith("_kernel_readout_retune") else 0,
+            str(row["method"]),
+            int(row["method_seed"]),
+        )
+    )
+
+    write_dict_csv(out_root / "canonical_architecture_ablation_table.csv", filtered_rows)
+
+    lines = [
+        "# Canonical Architecture Ablation Table",
+        "",
+        "| w | d | task | method | test_mse | train_mse | feature_dim | raw_dim | n_train | n_test |",
+        "|---|---:|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in filtered_rows:
+        lines.append(
+            "| "
+            + f"{row['w']} | {row['d']} | {row['task']} | {row['method']} | "
+            + f"{float(row['test_mse']):.4g} | {float(row['train_mse']):.4g} | "
+            + f"{row['feature_dim']} | {row['raw_dim']} | {row['n_train']} | {row['n_test']} |"
+        )
+    (out_root / "canonical_architecture_ablation_table.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return filtered_rows
 
 
 def _build_real_world_canonical_tables(real_root: Path, data_root: Path, out_root: Path) -> dict[str, Any]:
@@ -1093,6 +1183,7 @@ def main(argv: list[str] | None = None) -> None:
     canonical_payload: dict[str, Any] = {}
     if "canonical" in stages or "checklist" in stages:
         varma_rows, varma_summary = _build_varma_claim_rows(args.varma_root, args.out_root)
+        architecture_rows = _build_varma_architecture_table(args.varma_root, args.out_root)
         real_summary = _build_real_world_canonical_tables(args.real_root, args.real_data_root, args.out_root)
         canonical_payload = {
             "varma": varma_summary,
@@ -1111,6 +1202,7 @@ def main(argv: list[str] | None = None) -> None:
                 "no_jl_volterra": varma_summary["no_jl_volterra"],
                 "best_n6_volterra": varma_summary["best_n6_volterra"],
                 "shot_curve": varma_summary["shot_curve"],
+                "architecture_rows": int(len(architecture_rows)),
             },
             "real": {
                 "pilot_datasets": list(REAL_WORLD_PILOT_DATASETS),
@@ -1124,6 +1216,7 @@ def main(argv: list[str] | None = None) -> None:
         (args.out_root / "canonical_summary.json").write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
         print(args.out_root / "canonical_summary.json")
         print(args.out_root / "canonical_varma_claim_table.md")
+        print(args.out_root / "canonical_architecture_ablation_table.md")
         print(args.out_root / "canonical_real_world" / "temporal_budget_final_table.md")
 
     if "code_audit" in stages:

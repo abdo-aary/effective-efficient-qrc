@@ -56,7 +56,7 @@ def _write_dataset_manifest(real_root: Path) -> None:
     md_path = real_root / "dataset_manifest.md"
     fieldnames = ["dataset", "N", "n_train", "n_test", "w", "d", "raw_dim"]
     with csv_path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(DATASET_MANIFEST_ROWS)
     md_lines = [
@@ -87,6 +87,14 @@ def sync_public_release_artifacts() -> Path:
     _copy(
         PROJECT_ROOT / "storage/results/rebuttal/result_audit/canonical_varma_claim_table.md",
         varma_root / "canonical_varma_claim_table.md",
+    )
+    _copy(
+        PROJECT_ROOT / "storage/results/rebuttal/result_audit/canonical_architecture_ablation_table.csv",
+        varma_root / "canonical_architecture_ablation_table.csv",
+    )
+    _copy(
+        PROJECT_ROOT / "storage/results/rebuttal/result_audit/canonical_architecture_ablation_table.md",
+        varma_root / "canonical_architecture_ablation_table.md",
     )
     _copy(
         PROJECT_ROOT / "storage/results/rebuttal/varma_ablation/aggregate/finite_shot_ablation_table.md",

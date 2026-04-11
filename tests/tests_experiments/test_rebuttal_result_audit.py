@@ -8,6 +8,7 @@ import numpy as np
 
 import src.experiment.classical_baselines as cb
 import src.experiment.scripts.rebuttal.run_real_quark_temporal_budget_comparison as temporal
+import src.experiment.scripts.rebuttal.run_rebuttal_result_audit as audit
 
 
 def _write_tiny_dataset(root: Path, *, N: int = 36, w: int = 5, d: int = 3, L: int = 3) -> Path:
@@ -224,3 +225,87 @@ def test_recommend_global_lambda_and_shots_choose_expected_rows():
 
     assert lambda_rec["lam0"] == 0.5
     assert shot_rec["shots"] == 3000
+
+
+def test_build_varma_architecture_table_filters_to_quark_only(tmp_path: Path, monkeypatch):
+    sample_rows = [
+        {
+            "ablation": "architecture",
+            "dataset": "varma_e2_three__N=6000__w=25__d=3__s=100",
+            "w": 25,
+            "d": 3,
+            "task": "volterra",
+            "method": "quark_reservoir_channel_cupy_direct_arch_baseline_n5_R3_k2_lam0p1",
+            "method_seed": 0,
+            "n_train": 5000,
+            "n_test": 1000,
+            "feature_dim": 315,
+            "raw_dim": 75,
+            "artifact_dir": str(tmp_path / "baseline"),
+            "train_mse": 1e-8,
+            "test_mse": 0.629388,
+        },
+        {
+            "ablation": "architecture",
+            "dataset": "varma_e2_three__N=6000__w=25__d=3__s=100",
+            "w": 25,
+            "d": 3,
+            "task": "volterra",
+            "method": "quark_reservoir_channel_cupy_direct_arch_sweep_n5_R8_k2_lam0p1",
+            "method_seed": 0,
+            "n_train": 5000,
+            "n_test": 1000,
+            "feature_dim": 840,
+            "raw_dim": 75,
+            "artifact_dir": str(tmp_path / "r8"),
+            "train_mse": 1e-8,
+            "test_mse": 0.5661,
+        },
+        {
+            "ablation": "architecture",
+            "dataset": "varma_e2_three__N=6000__w=25__d=3__s=100",
+            "w": 25,
+            "d": 3,
+            "task": "volterra",
+            "method": "esn",
+            "method_seed": 0,
+            "n_train": 5000,
+            "n_test": 1000,
+            "feature_dim": 315,
+            "raw_dim": 75,
+            "artifact_dir": str(tmp_path / "esn"),
+            "train_mse": 1e-8,
+            "test_mse": 0.01,
+        },
+        {
+            "ablation": "varma_wd_scaling",
+            "dataset": "varma_e2_three__N=6000__w=50__d=10__s=100",
+            "w": 50,
+            "d": 10,
+            "task": "volterra",
+            "method": "quark_reservoir_channel_cupy_direct_varma_grid_fixed_n5_R3_k2_lam0p1",
+            "method_seed": 0,
+            "n_train": 5000,
+            "n_test": 1000,
+            "feature_dim": 315,
+            "raw_dim": 500,
+            "artifact_dir": str(tmp_path / "grid"),
+            "train_mse": 1e-8,
+            "test_mse": 0.8,
+        },
+    ]
+
+    monkeypatch.setattr(audit, "read_varma_ablation_metric_rows", lambda root: [{"ignored": True}])
+    monkeypatch.setattr(audit, "build_varma_ablation_wide_rows", lambda rows, out_root, metric: sample_rows)
+
+    rows = audit._build_varma_architecture_table(tmp_path / "varma", tmp_path / "out")
+
+    assert len(rows) == 2
+    assert all(str(row["method"]).startswith("quark_") for row in rows)
+    assert all(str(row["ablation"]) == "architecture" for row in rows)
+    assert all(int(row["w"]) == 25 and int(row["d"]) == 3 for row in rows)
+
+    md_text = (tmp_path / "out" / "canonical_architecture_ablation_table.md").read_text(encoding="utf-8")
+    assert "quark_reservoir_channel_cupy_direct_arch_baseline_n5_R3_k2_lam0p1" in md_text
+    assert "quark_reservoir_channel_cupy_direct_arch_sweep_n5_R8_k2_lam0p1" in md_text
+    assert "esn" not in md_text
