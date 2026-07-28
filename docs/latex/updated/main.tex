@@ -1,0 +1,43 @@
+\documentclass[10pt]{article}
+\usepackage{tmlr}
+% Camera-ready: \usepackage[accepted]{tmlr}
+% De-anonymized preprint: \usepackage[preprint]{tmlr}
+
+\input{preamble.tex}
+\input{math_commands.tex}
+
+\title{QuaRK: A Resource-Aware Quantum Reservoir Kernel for Temporal Learning}
+
+% Keep the review source anonymous. Replace only after acceptance or when
+% preparing a de-anonymized preprint with the corresponding tmlr option.
+\author{\name Anonymous Authors}
+
+\def\month{MM}
+\def\year{YYYY}
+\def\openreview{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Learning from temporal data requires a representation that retains useful history while controlling statistical and computational complexity. We introduce \textsc{QuaRK}, a quantum-reservoir-based temporal learning framework that combines a finite-set Johnson--Lindenstrauss projection, independently parameterized reset-contractive quantum reservoirs, local-observable features, and a regularized Mat\'ern kernel readout. The analysis separates four properties that are sometimes conflated in quantum reservoir learning. First, the reset channel yields exact trace-norm contraction and a geometrically fading dependence on initialization. Second, distinct exact feature vectors can be interpolated by a finite-norm Mat\'ern RKHS readout, a conditional capacity statement that does not assert injectivity of the quantum feature map. Third, local Pauli observables admit a classical-shadow measurement guarantee whose finite-shot error can be propagated to a fixed readout. Fourth, for a fixed exact featurizer and stationary beta-mixing input--output data, an independent-block argument gives a one-sided risk bound with an explicit effective block count and a finite-window truncation term. These results provide a resource-aware and assumption-explicit foundation for evaluating quantum reservoir kernels without asserting quantum advantage, hardware-noise robustness, or superiority to classical temporal models.
+\end{abstract}
+
+\input{sections/introduction.tex}
+\input{sections/related_work.tex}
+\input{sections/problem_setting.tex}
+\input{sections/method.tex}
+\input{sections/theory.tex}
+\input{sections/experiments.tex}
+\input{sections/discussion.tex}
+\input{sections/conclusion.tex}
+
+\bibliography{references}
+\bibliographystyle{tmlr}
+
+\appendix
+\input{appendices/technical_background.tex}
+\input{appendices/proofs.tex}
+
+\end{document}

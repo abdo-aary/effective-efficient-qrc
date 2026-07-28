@@ -1,0 +1,409 @@
+\section{Proofs}
+\label{app:proofs}
+
+\subsection{Finite-set JL projection}
+
+\begin{proof}
+For a fixed nonzero vector \(v\), concentration of
+\(\norm{\Pi v}_2^2/\norm v_2^2\) around one gives
+\[
+    \Prob\!\left(
+      \abs{\norm{\Pi v}_2^2-\norm v_2^2}
+      >\varepsilon\norm v_2^2
+    \right)
+    \leq 2e^{-c_0\varepsilon^2n}
+\]
+for a universal \(c_0>0\). Apply this inequality to the fewer than \(M^2/2\)
+nonzero differences \(u-v\) and take a union bound. Choosing
+\(n\geq C\varepsilon^{-2}\log(M/\delta)\) for a sufficiently large universal
+\(C\) makes the total failure probability at most \(\delta\). This is the
+standard finite-set JL argument \citep{DasguptaGupta2003,Woodruff2014}.
+\end{proof}
+
+\subsection{Trace-norm contraction}
+
+\begin{proof}
+The reset component cancels when two outputs with the same input are
+subtracted:
+\[
+    T_{r,x}(\rho)-T_{r,x}(\rho')
+    =
+    \lambda_rV_r(x)(\rho-\rho')V_r(x)^\dagger.
+\]
+Homogeneity and unitary invariance of the trace norm give
+\cref{eq:exact-contraction}.
+
+Iterating the equality for \(w\) common inputs yields
+\[
+    \traceNorm{\rho_0^{(r)}-\rho_0^{\prime(r)}}
+    \leq
+    \lambda_r^w
+    \traceNorm{\rho_{-w}^{(r)}-\rho_{-w}^{\prime(r)}}
+    \leq2\lambda_r^w.
+\]
+To construct the causal state, initialize the recursion at time \(-m\) in an
+arbitrary density operator and call the resulting time-zero state
+\(\rho_0^{[m]}\). If \(m'>m\), regard the recursion started at \(-m'\) as
+having some density operator at time \(-m\). The last \(m\) updates are common,
+so
+\[
+    \traceNorm{\rho_0^{[m']}-\rho_0^{[m]}}
+    \leq2\lambda_r^m.
+\]
+Thus \((\rho_0^{[m]})_m\) is Cauchy in the finite-dimensional trace-norm
+space and converges. The bound also shows that the limit is independent of
+the chosen initial states. Shifting the argument in time produces a unique
+causal state sequence.
+\end{proof}
+
+\subsection{Finite-window feature error}
+
+\begin{proof}
+For every \(r\) and \(O\in\cO\), \cref{lem:contraction} and trace duality give
+\[
+    \abs{
+      \Tr\!\left[
+        O\bigl(\rho_{\infty,0}^{(r)}-\rho_{w,0}^{(r)}\bigr)
+      \right]
+    }
+    \leq
+    \opNorm{O}
+    \traceNorm{\rho_{\infty,0}^{(r)}-\rho_{w,0}^{(r)}}
+    \leq2\lambda_r^w.
+\]
+Squaring and summing over \(r\) and \(O\) yields
+\[
+    \norm{\PhiInf-\PhiWin}_2^2
+    \leq4|\cO|\sum_{r=1}^R\lambda_r^{2w}.
+\]
+Taking square roots proves the first inequality. The second follows from
+\(\lambda_r\leq\lambdaMax\).
+\end{proof}
+
+\subsection{Mat\'ern RKHS section stability}
+
+\begin{proof}
+The reproducing property and normalization give
+\begin{align*}
+    \norm{\kappa(z,\cdot)-\kappa(z',\cdot)}_{\cH_\kappa}^2
+    &=
+    \kappa(z,z)+\kappa(z',z')-2\kappa(z,z')\\
+    &=
+    2\left(1-\varphi_{\nu,\xi}(\norm{z-z'}_2)\right).
+\end{align*}
+Let \(u=z-z'\). Using the spectral representation in
+\cref{eq:matern-bochner}, the elementary inequality
+\(1-\cos t\leq t^2/2\), and
+\cref{eq:matern-spectral-covariance},
+\begin{align*}
+    2(1-\kappa(z,z'))
+    &=
+    2\E[1-\cos(\Omega^\top u)]\\
+    &\leq
+    \E[(\Omega^\top u)^2]\\
+    &=
+    u^\top\E[\Omega\Omega^\top]u\\
+    &=
+    \frac{\nu}{(\nu-1)\xi^2}\norm u_2^2.
+\end{align*}
+Taking square roots proves the claim.
+\end{proof}
+
+\subsection{Prediction and loss truncation}
+
+\begin{proof}
+For any \(h\in\Hball\), the reproducing property,
+\cref{lem:matern-stability}, and \cref{prop:feature-truncation} imply
+\begin{align*}
+    \abs{h(\PhiInf)-h(\PhiWin)}
+    &=
+    \abs{
+      \ip{h}{
+        \kappa(\PhiInf,\cdot)-\kappa(\PhiWin,\cdot)
+      }_{\cH_\kappa}
+    }\\
+    &\leq
+    \Lambda
+    \norm{
+      \kappa(\PhiInf,\cdot)-\kappa(\PhiWin,\cdot)
+    }_{\cH_\kappa}\\
+    &\leq
+    \frac{2\Lambda}{\xi}
+    \sqrt{
+      \frac{\nu|\cO|}{\nu-1}
+      \sum_{r=1}^R\lambda_r^{2w}
+    }.
+\end{align*}
+This is \cref{eq:prediction-truncation}.
+
+For \(u,v\in[-\Lambda,\Lambda]\) and \(\abs y\leq Y\),
+\[
+    \abs{(u-y)^2-(v-y)^2}
+    =
+    \abs{u-v}\abs{u+v-2y}
+    \leq2(\Lambda+Y)\abs{u-v}.
+\]
+Both predictions are in \([-\Lambda,\Lambda]\) by
+\cref{eq:prediction-bound}. Apply the last display pointwise with
+\(u=h(\PhiInf)\), \(v=h(\PhiWin)\), use the prediction bound above, and take
+expectations. This gives
+\(\abs{\risk_\infty(h)-\risk_w(h)}\leq\tau_w\).
+\end{proof}
+
+\subsection{Conditional interpolation}
+
+\begin{proof}
+The Mat\'ern spectral density is positive everywhere. For any
+\(\bm c\in\R^N\), Bochner's representation gives
+\[
+    \bm c^\top K\bm c
+    =
+    \int_{\R^p}
+    \left|
+      \sum_{i=1}^N c_i e^{\ii\omega^\top z_i}
+    \right|^2
+    p(\omega)\,d\omega.
+\]
+When the \(z_i\) are distinct and \(\bm c\neq0\), the exponential polynomial
+inside the integral is not identically zero. Since \(p(\omega)>0\), the
+integral is strictly positive. Hence \(K\) is positive definite and
+invertible.
+
+Let \(\bm\alpha=K^{-1}\bm y\) and
+\[
+    h_\star(\cdot)
+    =
+    \sum_{i=1}^N\alpha_i\kappa(z_i,\cdot).
+\]
+Then
+\[
+    (h_\star(z_1),\ldots,h_\star(z_N))^\top
+    =
+    K\bm\alpha
+    =
+    \bm y
+\]
+and
+\[
+    \norm{h_\star}_{\cH_\kappa}^2
+    =
+    \bm\alpha^\top K\bm\alpha
+    =
+    \bm y^\top K^{-1}\bm y
+    =
+    \Lambda_\star^2.
+\]
+Thus \(h_\star\) is feasible for every \(\Lambda\geq\Lambda_\star\) and has
+zero empirical risk.
+
+For \(0\leq\Lambda\leq\Lambda_\star\), the function
+\(h_\Lambda=(\Lambda/\Lambda_\star)h_\star\) is feasible and satisfies
+\[
+    h_\Lambda(z_i)-y_i
+    =
+    -\left(1-\frac{\Lambda}{\Lambda_\star}\right)y_i.
+\]
+Its empirical risk is the right-hand side of
+\cref{eq:conditional-interpolation}; the minimum over the ball cannot be
+larger. The case \(\bm y=0\) is immediate.
+\end{proof}
+
+\subsection{Mixing of the window process}
+
+\begin{proof}
+By stationarity it is enough to compare the sigma-algebra generated by
+\((W_j)_{j\leq0}\) with that generated by \((W_j)_{j\geq a}\). Every raw
+variable occurring in a past window has time index at most zero, so
+\[
+    \sigma(W_j:j\leq0)
+    \subseteq
+    \sigma(Z_t:t\leq0).
+\]
+The first raw input appearing in \(W_a\) has index \(as-w+1\), and all raw
+variables in later windows occur no earlier. Therefore
+\[
+    \sigma(W_j:j\geq a)
+    \subseteq
+    \sigma(Z_t:t\geq as-w+1).
+\]
+Monotonicity of \(\beta(\cdot,\cdot)\) under sigma-algebra inclusion gives
+\[
+    \beta_W(a)
+    \leq
+    \beta_Z(as-w+1)
+    \leq
+    \beta_Z(as-w),
+\]
+where the last inequality uses that mixing coefficients are nonincreasing.
+For \(a=1\) and \(s=w+g\), \(as-w=g\).
+\end{proof}
+
+\subsection{One-sided dependent-data risk bound}
+
+\begin{proof}
+For \(h\in\Hball\), define
+\[
+    f_h(W_j)
+    =
+    \left(
+      h(\PhiWin(X_{js-w+1:js}))-Y_{js}
+    \right)^2.
+\]
+By \cref{eq:prediction-bound} and \(\abs{Y_t}\leq Y\),
+\[
+    0\leq f_h(W_j)\leq B,
+    \qquad B=(\Lambda+Y)^2.
+\]
+The class \(\cF_\Lambda=\set{f_h:h\in\Hball}\) is fixed independently of the
+sample by \cref{ass:fixed-design}. Apply \cref{eq:mr-background} to the
+stationary window process. By \cref{lem:window-mixing},
+\[
+    \beta_W(a)
+    \leq\beta_Z(as-w),
+\]
+so the assumed \(\delta'>0\) is sufficient for the source theorem and gives,
+simultaneously for all \(h\in\Hball\),
+\[
+    \risk_w(h)
+    \leq
+    \erisk_{N,w}(h)
+    +\hRad_{\cS_\mu}(\cF_\Lambda)
+    +3(\Lambda+Y)^2
+      \sqrt{\frac{\log(4/\delta')}{2\mu}}.
+\]
+Finally, \cref{cor:loss-truncation} gives
+\(\risk_\infty(h)\leq\risk_w(h)+\tau_w\). Combining the two inequalities
+proves \cref{eq:empirical-rad-bound}.
+\end{proof}
+
+\subsection{Closed-form RKHS complexity bound}
+
+\begin{proof}
+Condition on the selected sample
+\(\cS_\mu=((u_j,y_j))_{j=1}^\mu\), where
+\(u_j=\PhiWin(x_j)\). Define
+\[
+    \psi_j(t)
+    :=
+    (t-y_j)^2-y_j^2.
+\]
+On \(t\in[-\Lambda,\Lambda]\), \(\psi_j(0)=0\) and \(\psi_j\) is
+\(L\)-Lipschitz with \(L=2(\Lambda+Y)\). The terms \(y_j^2\) do not affect
+Rademacher complexity under \cref{eq:rademacher-definition}: they add a
+quantity independent of \(h\) whose expectation over \(\bm\sigma\) is zero.
+The Rademacher contraction lemma therefore gives
+\begin{equation}
+    \hRad_{\cS_\mu}(\cF_\Lambda)
+    \leq
+    2(\Lambda+Y)
+    \hRad_{\cS_\mu}(\mathcal G_\Lambda).
+    \label{eq:loss-contraction-proof}
+\end{equation}
+
+Writing \(\kappa_{u_j}=\kappa(u_j,\cdot)\), and identifying \(\Hball\) with its prediction class on the selected features, the reproducing property and
+Cauchy--Schwarz yield
+\begin{align*}
+    \hRad_{\cS_\mu}(\mathcal G_\Lambda)
+    &=
+    \E_{\bm\sigma}\!\left[
+      \sup_{\norm{h}_{\cH_\kappa}\leq\Lambda}
+      \frac2\mu
+      \ip{h}{\sum_{j=1}^\mu\sigma_j\kappa_{u_j}}_{\cH_\kappa}
+    \right]\\
+    &=
+    \frac{2\Lambda}{\mu}
+    \E_{\bm\sigma}
+    \norm{\sum_{j=1}^\mu\sigma_j\kappa_{u_j}}_{\cH_\kappa}\\
+    &\leq
+    \frac{2\Lambda}{\mu}
+    \sqrt{
+      \E_{\bm\sigma}
+      \norm{\sum_{j=1}^\mu\sigma_j\kappa_{u_j}}_{\cH_\kappa}^2
+    }\\
+    &=
+    \frac{2\Lambda}{\mu}
+    \sqrt{\sum_{j=1}^\mu\kappa(u_j,u_j)}
+    =
+    \frac{2\Lambda}{\sqrt\mu}.
+\end{align*}
+Combining this with \cref{eq:loss-contraction-proof} gives
+\[
+    \hRad_{\cS_\mu}(\cF_\Lambda)
+    \leq
+    \frac{4\Lambda(\Lambda+Y)}{\sqrt\mu}.
+\]
+Substitution into \cref{eq:empirical-rad-bound}, followed by the definition of
+\(\tau_w\), proves \cref{eq:closed-generalization}.
+\end{proof}
+
+\subsection{Geometrically mixing case}
+
+\begin{proof}
+Since \(\mu=N/(2a)\) and \(a\geq1\),
+\begin{align*}
+    4(\mu-1)\beta_Z(as-w)
+    &\leq
+    \frac{2N}{a}\beta_0e^{-c(as-w)}\\
+    &\leq
+    2N\beta_0e^{cw}e^{-cas}.
+\end{align*}
+The choice in \cref{eq:geometric-block-choice} makes the last expression at
+most \(\delta/2\), so \(\delta'\geq\delta/2\). It also gives
+\(a=O(\log(N/\delta))\) with the remaining quantities fixed. Since
+\(\mu=N/(2a)\), both stochastic terms in
+\cref{eq:closed-generalization} are
+\(O(\sqrt{a/N})=O(\sqrt{\log(N/\delta)/N})\).
+
+If \(2a\) does not divide the available sample size, retain
+\(2a\lfloor N/(2a)\rfloor\) observations. The number discarded is smaller
+than \(2a\), and stationarity permits applying the same result to the retained
+consecutive segment.
+\end{proof}
+
+\subsection{Local-Pauli shadow requirement}
+
+\begin{proof}
+For local random Pauli measurements, a Pauli string of weight \(q\leq k\)
+has squared shadow norm \(3^q\leq3^k\). The median-of-means classical-shadow
+guarantee applied to \(M\) observables therefore gives
+\[
+    S
+    \geq
+    C_{\mathrm{sh}}3^k\varepsilon^{-2}
+    \log(2M/\delta_{\mathrm{sh}})
+\]
+for a universal constant \(C_{\mathrm{sh}}\); see
+\citet{HuangKuengPreskill2020}. For \(NR\) independently prepared reservoir
+states, assign failure probability
+\(\delta_{\mathrm{sh}}=\delta_{\mathrm{tot}}/(NR)\) to each state and take a
+union bound. Each of the \(NR\) states requires \(S\) snapshots, giving
+\(NRS\) state preparations.
+\end{proof}
+
+\subsection{Finite-shot feature perturbations}
+
+\begin{proof}
+There are \(R|\cO|\) feature coordinates, so the coordinate-wise assumption
+implies
+\[
+    \norm{\widehat\Phi_w-\PhiWin}_2
+    \leq\sqrt{R|\cO|}\,\varepsilon.
+\]
+The reproducing property and \cref{lem:matern-stability} give
+\begin{align*}
+    \abs{h(\widehat\Phi_w)-h(\PhiWin)}
+    &\leq
+    \Lambda
+    \norm{
+      \kappa(\widehat\Phi_w,\cdot)
+      -\kappa(\PhiWin,\cdot)
+    }_{\cH_\kappa}\\
+    &\leq
+    \frac{\Lambda}{\xi}
+    \sqrt{\frac{\nu R|\cO|}{\nu-1}}\,
+    \varepsilon.
+\end{align*}
+This proves \cref{eq:shot-prediction}. Both predictions lie in
+\([-\Lambda,\Lambda]\). Applying the squared-loss Lipschitz inequality from
+the proof of \cref{cor:loss-truncation} proves \cref{eq:shot-loss}.
+\end{proof}

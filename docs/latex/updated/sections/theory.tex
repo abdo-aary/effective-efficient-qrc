@@ -1,0 +1,413 @@
+\section{Theory}
+\label{sec:theory}
+
+This section separates the geometric, dynamical, approximation, statistical,
+and measurement statements used to analyze \textsc{QuaRK}. Proofs are in
+\cref{app:proofs}.
+
+\subsection{Standing assumptions}
+
+\begin{assumption}[Fixed design and bounded observations]
+\label{ass:fixed-design}
+The projection \(\Pi\), channel parameters, initialization states, observable
+family \(\cO\), window parameters \(w,s\), and Mat\'ern parameters
+\((\nu,\xi)\) are fixed independently of the analyzed sample. The observables
+satisfy \(\opNorm{O}\leq1\), the labels satisfy \(\abs{Y_t}\leq Y\) almost
+surely, and the Mat\'ern kernel is normalized. The main risk bound uses exact
+expectations and \(\nu>1\).
+\end{assumption}
+
+The fixed-design condition allows the theorem to hold uniformly over
+\(h\in\Hball\). It does not provide uniform control over projections,
+reservoirs, kernels, or hyperparameters selected using the same observations.
+
+\subsection{Finite-set projection}
+
+\begin{proposition}[Finite-set JL projection]
+\label{prop:jl}
+Let \(\mathcal P\subset\R^d\) contain \(M\geq2\) points. For
+\(\varepsilon,\delta\in(0,1)\), there is a universal constant \(C>0\) such
+that, if
+\[
+    n\geq
+    C\varepsilon^{-2}\log\!\left(\frac{M}{\delta}\right)
+\]
+and \(\Pi_{ij}\overset{\mathrm{i.i.d.}}{\sim}\mathcal N(0,1/n)\), then with
+probability at least \(1-\delta\),
+\[
+    (1-\varepsilon)\norm{u-v}_2^2
+    \leq\norm{\Pi u-\Pi v}_2^2
+    \leq(1+\varepsilon)\norm{u-v}_2^2
+\]
+simultaneously for all \(u,v\in\mathcal P\). For the points occurring in
+\(N\) windows of length \(w\), one may take \(M\leq wN\).
+\end{proposition}
+
+\paragraph{What this establishes.}
+For a specified finite set and distortion target, the number of encoded
+coordinates---and hence the logical reservoir width in the stated
+implementation---need only grow logarithmically with the number of points.
+
+\paragraph{What this does not establish.}
+The proposition does not make the angle encoding or reservoir feature map
+injective, does not imply improved prediction, and does not remove the
+\(d\)-dependent classical cost of applying \(\Pi\).
+
+\subsection{Contraction, causal states, and finite windows}
+
+\begin{lemma}[Exact trace-norm contraction]
+\label{lem:contraction}
+For every sub-reservoir \(r\), input \(x\), and pair of density operators
+\(\rho,\rho'\),
+\begin{equation}
+    \traceNorm{T_{r,x}(\rho)-T_{r,x}(\rho')}
+    =
+    \lambda_r\traceNorm{\rho-\rho'}.
+    \label{eq:exact-contraction}
+\end{equation}
+Consequently, for each input history there is a unique causal state obtained
+as the initialization time tends to \(-\infty\). Two trajectories driven by
+the same last \(w\) inputs satisfy
+\begin{equation}
+    \traceNorm{\rho_0^{(r)}-\rho_0^{\prime(r)}}
+    \leq2\lambda_r^w.
+    \label{eq:state-forgetting}
+\end{equation}
+\end{lemma}
+
+\paragraph{What this establishes.}
+The state recursion has the echo-state property in the sense of a unique
+input-determined causal solution, and initialization dependence vanishes
+geometrically in trace norm.
+
+\paragraph{What this does not establish.}
+Contraction alone does not imply that different input histories produce
+different states, that a larger \(\lambda_r\) is more accurate, or that the
+chosen family of reservoirs is universal.
+
+\begin{proposition}[Finite-window feature error]
+\label{prop:feature-truncation}
+Under \cref{ass:fixed-design}, for every input history,
+\begin{align}
+    \norm{\PhiInf(x_{-\infty:0})-\PhiWin(x_{-w+1:0})}_2
+    &\leq
+    2\sqrt{|\cO|\sum_{r=1}^R\lambda_r^{2w}}
+    \label{eq:feature-truncation}\\
+    &\leq
+    2\sqrt{R|\cO|}\,\lambdaMax^w,
+    \qquad
+    \lambdaMax:=\max_r\lambda_r.
+\end{align}
+\end{proposition}
+
+\paragraph{What this establishes.}
+The exact concatenated observable vector of a finite-window recursion
+approaches the feature vector of the causal infinite-history state at an
+explicit rate.
+
+\paragraph{What this does not establish.}
+The estimate is a worst-case initialization bound. It need not be tight, and
+it does not include finite shots or physical noise.
+
+\subsection{Mat\'ern stability and truncation of loss}
+
+\begin{lemma}[Mat\'ern RKHS section stability]
+\label{lem:matern-stability}
+Let \(\kappa\) be the normalized Mat\'ern kernel in
+\cref{eq:matern-profile,eq:matern-kernel} with \(\nu>1\). Then
+\begin{equation}
+    \norm{\kappa(z,\cdot)-\kappa(z',\cdot)}_{\cH_\kappa}
+    \leq
+    \frac1{\xi}\sqrt{\frac{\nu}{\nu-1}}\norm{z-z'}_2.
+    \label{eq:matern-section-lipschitz}
+\end{equation}
+\end{lemma}
+
+\begin{corollary}[Prediction and loss truncation]
+\label{cor:loss-truncation}
+For every \(h\in\Hball\),
+\begin{align}
+    \abs{
+      h(\PhiInf)-h(\PhiWin)
+    }
+    &\leq
+    \frac{2\Lambda}{\xi}
+    \sqrt{
+      \frac{\nu|\cO|}{\nu-1}
+      \sum_{r=1}^R\lambda_r^{2w}
+    },
+    \label{eq:prediction-truncation}\\
+    \abs{\risk_\infty(h)-\risk_w(h)}
+    &\leq
+    \tau_w,
+    \label{eq:risk-truncation}
+\end{align}
+where
+\begin{equation}
+    \tau_w
+    :=
+    \frac{4\Lambda(\Lambda+Y)}{\xi}
+    \sqrt{
+      \frac{\nu|\cO|}{\nu-1}
+      \sum_{r=1}^R\lambda_r^{2w}
+    }.
+    \label{eq:tau-window}
+\end{equation}
+\end{corollary}
+
+\paragraph{What this establishes.}
+The dynamical forgetting rate propagates through every fixed readout in the
+RKHS ball and through bounded squared loss.
+
+\paragraph{What this does not establish.}
+The result is not an excess-risk or consistency theorem. In particular, for a
+fixed \(w\), \(\tau_w\) remains a nonzero upper bound as the sample size grows.
+
+\subsection{Conditional interpolation capacity}
+
+\begin{theorem}[Conditional finite-sample interpolation]
+\label{thm:interpolation}
+Let \(z_i=\PhiWin(x_i)\in\R^p\), \(i\in[N]\), be pairwise distinct exact
+feature vectors, and let \(K_{ij}=\kappa(z_i,z_j)\). The Mat\'ern Gram matrix
+\(K\) is positive definite. If \(\bm y\neq0\), define
+\[
+    \Lambda_\star
+    :=
+    \sqrt{\bm y^\top K^{-1}\bm y}.
+\]
+Then there is an \(h_\star\in\cH_\kappa\) with
+\(\norm{h_\star}_{\cH_\kappa}=\Lambda_\star\) and
+\(h_\star(z_i)=y_i\) for all \(i\). Therefore:
+\begin{enumerate}
+    \item for \(\Lambda\geq\Lambda_\star\),
+    \[
+        \min_{\norm{h}_{\cH_\kappa}\leq\Lambda}
+        \erisk_{N,w}(h)=0;
+    \]
+    \item for \(0\leq\Lambda\leq\Lambda_\star\),
+    \begin{equation}
+        \min_{\norm{h}_{\cH_\kappa}\leq\Lambda}
+        \erisk_{N,w}(h)
+        \leq
+        \left(1-\frac{\Lambda}{\Lambda_\star}\right)^2
+        \frac{\norm{\bm y}_2^2}{N}.
+        \label{eq:conditional-interpolation}
+    \end{equation}
+\end{enumerate}
+If \(\bm y=0\), the zero function interpolates with norm zero.
+\end{theorem}
+
+\paragraph{What this establishes.}
+Once the feature vectors are distinct, a finite readout norm suffices to
+interpolate their labels, and scaling the interpolant gives a constructive
+training-risk upper bound below that norm.
+
+\paragraph{What this does not establish.}
+Distinctness is an assumption, not a consequence of
+\cref{prop:jl,lem:contraction}. The theorem does not establish feature-map
+injectivity, favorable conditioning of \(K\), good test risk, or a property
+unavailable to a comparable classical feature map.
+
+\subsection{Beta mixing of strided windows}
+
+\begin{lemma}[Mixing coefficient of the window process]
+\label{lem:window-mixing}
+Let \(W\) be the process in \cref{eq:window-process} with stride \(s=w+g\).
+For every integer \(a\geq1\),
+\begin{equation}
+    \beta_W(a)
+    \leq
+    \beta_Z(as-w).
+    \label{eq:window-mixing}
+\end{equation}
+In particular, \(\beta_W(1)\leq\beta_Z(g)\).
+\end{lemma}
+
+The bound is conservative by one time index under
+\cref{eq:beta-definition}: the first raw input in a future window at window
+lag \(a\) occurs at \(as-w+1\), and monotonicity of beta coefficients yields
+\cref{eq:window-mixing}.
+
+\paragraph{What this establishes.}
+Dependence between window observations can be controlled by the mixing of the
+underlying input--output process at the actual raw-time separation.
+
+\paragraph{What this does not establish.}
+Nonoverlapping or gapped windows are not independent unless the corresponding
+mixing coefficient is zero.
+
+\subsection{Generalization with dependent windows}
+
+For a sample \(\cS_\mu=(\widetilde W_1,\ldots,\widetilde W_\mu)\), define the
+empirical Rademacher complexity using the convention
+\begin{equation}
+    \hRad_{\cS_\mu}(\cF)
+    :=
+    \E_{\bm\sigma}\!\left[
+      \sup_{f\in\cF}
+      \frac2\mu\sum_{j=1}^\mu\sigma_j f(\widetilde W_j)
+    \right],
+    \quad
+    \sigma_j\overset{\mathrm{i.i.d.}}{\sim}\mathrm{Unif}\{-1,+1\}.
+    \label{eq:rademacher-definition}
+\end{equation}
+For a length-\(N=2\mu a\) sequence of windows, \(\cS_\mu\) denotes one fixed
+position from each of the \(\mu\) odd blocks of length \(a\), as in the
+independent-block construction of \citet{MohriRostamizadeh2008}. Let
+\[
+    \cF_\Lambda
+    :=
+    \set{
+      (x_{-w+1:0},y)
+      \mapsto
+      (h(\PhiWin(x_{-w+1:0}))-y)^2:
+      h\in\Hball
+    }.
+\]
+
+\begin{theorem}[One-sided risk bound for beta-mixing windows]
+\label{thm:generalization}
+Suppose \cref{ass:fixed-design} holds and \(Z\) is stationary and beta mixing.
+Let \(N=2\mu a\), with \(\mu,a\in\N\), and set
+\begin{equation}
+    \delta'
+    :=
+    \delta-4(\mu-1)\beta_Z(as-w).
+    \label{eq:delta-prime}
+\end{equation}
+For every \(\delta\in(0,1)\) satisfying \(\delta'>0\), with probability at
+least \(1-\delta\), simultaneously for all \(h\in\Hball\),
+\begin{equation}
+    \risk_\infty(h)
+    \leq
+    \erisk_{N,w}(h)
+    +\hRad_{\cS_\mu}(\cF_\Lambda)
+    +3(\Lambda+Y)^2
+      \sqrt{\frac{\log(4/\delta')}{2\mu}}
+    +\tau_w.
+    \label{eq:empirical-rad-bound}
+\end{equation}
+\end{theorem}
+
+\begin{corollary}[Closed-form RKHS bound]
+\label{cor:closed-generalization}
+Under the conditions of \cref{thm:generalization}, with the same probability,
+simultaneously for all \(h\in\Hball\),
+\begin{align}
+    \risk_\infty(h)
+    \leq\erisk_{N,w}(h)
+    &+\frac{4\Lambda(\Lambda+Y)}{\sqrt{\mu}}
+    +3(\Lambda+Y)^2
+      \sqrt{\frac{\log(4/\delta')}{2\mu}}
+    \notag\\
+    &+
+    \frac{4\Lambda(\Lambda+Y)}{\xi}
+    \sqrt{
+      \frac{\nu|\cO|}{\nu-1}
+      \sum_{r=1}^R\lambda_r^{2w}
+    }.
+    \label{eq:closed-generalization}
+\end{align}
+\end{corollary}
+
+\paragraph{What this establishes.}
+The theorem upper-bounds infinite-history true risk by finite-window training
+risk, a complexity term based on \(\mu=N/(2a)\) approximately independent
+blocks, a confidence term, and an explicit window approximation term. It is
+uniform over the fixed-design RKHS ball and therefore applies to the
+empirical-risk minimizer within that ball.
+
+\paragraph{What this does not establish.}
+This is not a two-sided absolute generalization-gap bound. Increasing \(N\)
+with \(a=1\) and fixed \(g\) can violate \(\delta'>0\), so the theorem does not
+justify a fixed-design \(1/\sqrt N\) claim. It also does not cover
+data-dependent model selection, finite-shot training features, nonstationary
+data, unbounded labels, excess risk relative to a Bayes predictor, or quantum
+advantage.
+
+\begin{corollary}[Geometrically mixing case]
+\label{cor:geometric-mixing}
+Suppose, in addition, that
+\(\beta_Z(q)\leq\beta_0e^{-cq}\) for constants \(\beta_0,c>0\), and keep
+\(w\) and \(s\) fixed. For a compatible sample size \(N=2\mu a\), choose
+\begin{equation}
+    a
+    \geq
+    \left\lceil
+      \max\left\{
+        1,\,
+        \frac1{cs}
+        \log\!\left(\frac{4\beta_0e^{cw}N}{\delta}\right)
+      \right\}
+    \right\rceil.
+    \label{eq:geometric-block-choice}
+\end{equation}
+Then \(\delta'\geq\delta/2\). For fixed
+\(\Lambda,Y,\delta,\beta_0,c,w,s\), the two stochastic terms in
+\cref{eq:closed-generalization} are
+\[
+    O\!\left(\sqrt{\frac{\log(N/\delta)}{N}}\right).
+\]
+If \(N\) is not compatible with the chosen \(a\), the result applies after
+discarding at most \(2a-1\) terminal observations.
+\end{corollary}
+
+The truncation term \(\tau_w\) remains in this corollary. A consistency claim
+would require a joint schedule for \(w\), \(s\), \(a\), and the readout class;
+such a result is not asserted here.
+
+\subsection{Finite-shot local-observable estimation}
+
+\begin{proposition}[Local-Pauli classical-shadow requirement]
+\label{prop:shadows}
+Suppose \(\cO\) contains \(M=|\cO|\) Pauli strings of weight at most \(k\).
+Under independent local random Pauli measurements, there is a universal
+constant \(C_{\mathrm{sh}}>0\) such that
+\begin{equation}
+    S
+    \geq
+    C_{\mathrm{sh}}\,3^k\varepsilon^{-2}
+    \log\!\left(\frac{2M}{\delta_{\mathrm{sh}}}\right)
+    \label{eq:shadow-samples}
+\end{equation}
+snapshots of one reservoir state suffice for simultaneous additive error at
+most \(\varepsilon\) for all observables, with probability at least
+\(1-\delta_{\mathrm{sh}}\).
+
+For \(N\) windows and \(R\) separately prepared sub-reservoir states, replacing
+\(\delta_{\mathrm{sh}}\) by \(\delta_{\mathrm{tot}}/(NR)\) gives a simultaneous
+guarantee over all exact feature coordinates. This requires \(S\) snapshots
+per state and \(NRS\) state preparations in total.
+\end{proposition}
+
+\begin{corollary}[Stability of a fixed readout to measurement error]
+\label{cor:measurement-stability}
+Suppose every coordinate of \(\widehat\Phi_w-\PhiWin\) has magnitude at most
+\(\varepsilon\). For every fixed \(h\in\Hball\),
+\begin{align}
+    \abs{h(\widehat\Phi_w)-h(\PhiWin)}
+    &\leq
+    \frac{\Lambda}{\xi}
+    \sqrt{\frac{\nu R|\cO|}{\nu-1}}\,\varepsilon,
+    \label{eq:shot-prediction}\\
+    \abs{
+      \ell(h(\widehat\Phi_w),y)
+      -\ell(h(\PhiWin),y)
+    }
+    &\leq
+    \frac{2\Lambda(\Lambda+Y)}{\xi}
+    \sqrt{\frac{\nu R|\cO|}{\nu-1}}\,\varepsilon
+    \label{eq:shot-loss}
+\end{align}
+whenever \(\abs y\leq Y\).
+\end{corollary}
+
+\paragraph{What this establishes.}
+Locality controls the shot exponent for the stated measurement ensemble, and
+uniform coordinate error has an explicit effect on evaluating a fixed
+readout.
+
+\paragraph{What this does not establish.}
+The result does not analyze a readout retrained on noisy features, coherent
+gate error, reset error, decoherence, correlated shots, or device execution.
+Finite-shot simulation is therefore not real-hardware validation.

@@ -1,0 +1,135 @@
+\section{Problem Setting}
+\label{sec:problem-setting}
+
+\subsection{Temporal data and histories}
+
+Let \(Z=(Z_t)_{t\in\Z}\), with \(Z_t=(X_t,Y_t)\), be a stationary stochastic
+process on \(\R^d\times\R\). We write
+\(x_{-\infty:0}=(\ldots,x_{-1},x_0)\) for a semi-infinite input history and
+\[
+    x_{-w+1:0}=(x_{-w+1},\ldots,x_0)\in(\R^d)^w
+\]
+for its last \(w\) inputs. A temporal predictor maps a history to a scalar.
+The target is not assumed to have finite memory; finite windows are instead an
+implementable approximation whose error will be controlled through reservoir
+contraction.
+
+For a window length \(w\geq1\) and integer stride \(s=w+g\), where \(g\geq0\), define the stationary
+window process
+\begin{equation}
+    W_j
+    :=
+    \bigl(X_{js-w+1:js},Y_{js}\bigr),
+    \qquad j\in\Z.
+    \label{eq:window-process}
+\end{equation}
+The observed sample is \(\cD_N=(W_1,\ldots,W_N)\). Windows need not be
+independent, even when they do not overlap.
+
+\subsection{Quantum-reservoir features}
+
+There are \(R\) independently parameterized sub-reservoirs. Sub-reservoir
+\(r\) has an \(n\)-qubit state \(\rho_t^{(r)}\) and an input-dependent channel
+\(T_{r,x}\). For a history, its causal state at time zero is denoted
+\(\rho_{\infty,0}^{(r)}(x_{-\infty:0})\). For a finite window, we initialize
+the channel at time \(-w\) in a fixed state \(\rho_{\mathrm{init}}^{(r)}\)
+and denote its state after consuming the window by
+\(\rho_{w,0}^{(r)}(x_{-w+1:0})\).
+
+Let \(\cO\) be a finite family of Hermitian observables satisfying
+\(\opNorm{O}\leq1\). The exact infinite-history and finite-window feature maps
+are
+\begin{align}
+    \PhiInf(x_{-\infty:0})
+    &:=
+    \bigl(
+      \Tr[O\rho_{\infty,0}^{(r)}]
+    \bigr)_{r\in[R],\,O\in\cO},
+    \label{eq:infinite-feature}\\
+    \PhiWin(x_{-w+1:0})
+    &:=
+    \bigl(
+      \Tr[O\rho_{w,0}^{(r)}]
+    \bigr)_{r\in[R],\,O\in\cO}
+    \in\R^{p},
+    \qquad p=R|\cO|.
+    \label{eq:window-feature}
+\end{align}
+These are concatenations of expectations from a tuple of states. No
+tensor-product state is needed to define the learner or analyze its memory.
+An estimated feature vector \(\widehat\Phi_w\) obtained with a finite number
+of measurements is a separate random object.
+
+\subsection{Kernel readout and risks}
+
+Let \(\kappa:\R^p\times\R^p\to\R\) be a normalized Mat\'ern kernel and
+\(\cH_\kappa\) its RKHS. For a radius \(\Lambda>0\), define
+\[
+    \Hball
+    :=
+    \set{h\in\cH_\kappa:\norm{h}_{\cH_\kappa}\leq\Lambda}.
+\]
+Normalization means \(\kappa(z,z)=1\), so the reproducing property gives
+\begin{equation}
+    \abs{h(z)}
+    \leq\norm{h}_{\cH_\kappa}\sqrt{\kappa(z,z)}
+    \leq\Lambda
+    \quad\text{for every }h\in\Hball.
+    \label{eq:prediction-bound}
+\end{equation}
+
+For squared loss \(\ell(\widehat y,y)=(\widehat y-y)^2\), define the
+infinite-history risk
+\begin{equation}
+    \risk_\infty(h)
+    :=
+    \E\!\left[
+      \ell\bigl(h(\PhiInf(X_{-\infty:0})),Y_0\bigr)
+    \right],
+    \label{eq:infinite-risk}
+\end{equation}
+the finite-window risk
+\begin{equation}
+    \risk_w(h)
+    :=
+    \E\!\left[
+      \ell\bigl(h(\PhiWin(X_{-w+1:0})),Y_0\bigr)
+    \right],
+    \label{eq:window-risk}
+\end{equation}
+and the empirical finite-window risk
+\begin{equation}
+    \erisk_{N,w}(h)
+    :=
+    \frac1N\sum_{j=1}^N
+    \ell\bigl(h(\PhiWin(X_{js-w+1:js})),Y_{js}\bigr).
+    \label{eq:empirical-risk}
+\end{equation}
+The theoretical learning result compares \(\risk_\infty\) with
+\(\erisk_{N,w}\). It therefore has both a statistical component
+\(\risk_w-\erisk_{N,w}\) and a deterministic window-truncation component
+\(\risk_\infty-\risk_w\).
+
+\subsection{Dependence and fixed-design scope}
+
+For sub-sigma-algebras \(\mathcal A,\mathcal B\), write
+\(\beta(\mathcal A,\mathcal B)\) for their absolute-regularity coefficient.
+We use the convention
+\begin{equation}
+    \beta_Z(q)
+    :=
+    \sup_{t\in\Z}
+    \beta\!\left(
+      \sigma(Z_u:u\leq t),
+      \sigma(Z_u:u\geq t+q)
+    \right),
+    \qquad q\geq0.
+    \label{eq:beta-definition}
+\end{equation}
+The process is beta mixing if \(\beta_Z(q)\to0\).
+
+All learning guarantees below condition on the projection, reservoir
+parameters, observable family, Mat\'ern parameters, window length, stride, and
+initialization. These objects must be fixed independently of the sample to
+which the theorem is applied. Uniformity is over the RKHS ball
+\(\Hball\), not over data-dependent architecture or hyperparameter choices.

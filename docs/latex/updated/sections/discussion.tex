@@ -1,0 +1,71 @@
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+\paragraph{What is specific to the quantum reservoir.}
+The state update, its reset-channel implementation, and the observable
+measurement process are quantum. The statistical readout and the JL
+preprocessing are classical. The theory proves useful structural properties
+of this complete construction, but it does not isolate a predictive benefit
+that cannot be reproduced by a classical nonlinear reservoir or random
+feature map. The appropriate comparative question is therefore empirical and
+must use matched feature, readout, split, and model-selection protocols.
+
+\paragraph{Fixed-design learning theory.}
+\Cref{thm:generalization} is uniform over an RKHS norm ball after the
+projection, reservoirs, observable family, window scheme, and kernel
+hyperparameters have been fixed independently of the analyzed sample. If
+these choices are selected on training or validation data, the theorem must
+be combined with a separate model-selection argument. Bounded labels and
+stationary beta mixing are substantive assumptions; nonstationarity,
+heavy-tailed outcomes, and online adaptation are outside the current result.
+
+\paragraph{Effective sample size.}
+The independent-block parameter \(a\) is not a cosmetic proof variable.
+Increasing \(a\) weakens the coupling penalty through
+\(\beta_Z(as-w)\) but decreases the effective block count
+\(\mu=N/(2a)\). Consequently, the theory does not predict a universal
+\(1/\sqrt N\) curve for a fixed gap. Under geometric mixing, the explicit
+block schedule in \cref{cor:geometric-mixing} yields a logarithmic degradation
+from the independent rate.
+
+\paragraph{Window approximation.}
+Contraction produces a transparent finite-window error, but it also imposes a
+memory trade-off. Stronger contraction decreases the worst-case effect of the
+remote past; it may simultaneously suppress task-relevant history. The bound
+does not select \(w\) or \(\lambda_r\), nor does it imply monotonic predictive
+improvement as either parameter changes.
+
+\paragraph{Measurement and hardware scope.}
+The generalization theorem uses exact expectations. The shadow result covers
+finite sampling under a particular randomized local-Pauli measurement model,
+and \cref{cor:measurement-stability} concerns evaluation of a fixed readout.
+Neither result covers training instability from noisy Gram matrices, gate
+noise, reset error, decoherence, calibration drift, or correlated device
+measurements. The reset circuit in \cref{fig:reset-dilation} is an
+implementable dilation, not real-device validation.
+
+\paragraph{Resource interpretation.}
+The JL statement controls the logical encoded width for a finite point set;
+it does not remove the input-dimension dependence of classical projection.
+Sequential spatial reuse can keep peak quantum width at one reservoir plus
+reset ancillas, but it increases the number of executions. Local shadows
+reduce the dependence on the number of requested observables to a logarithm
+for fixed locality while retaining a \(3^k\) dependence on locality. Finally,
+dense kernel ridge regression has quadratic memory and cubic training time
+unless an additional approximation or solver is introduced.
+
+\paragraph{No advantage claim.}
+Nothing in the interpolation or generalization result distinguishes quantum
+features from arbitrary fixed features satisfying the same assumptions.
+Accordingly, this work does not claim quantum advantage, asymptotic runtime
+speedup, state-of-the-art accuracy, or general superiority over classical
+temporal models. Its practical case must rest on transparent operating-point
+comparisons after the empirical section is completed.
+
+\paragraph{Societal impact.}
+The present work develops a general-purpose learning method and does not
+introduce a domain-specific deployment. Its principal foreseeable risks are
+the ordinary risks of time-series prediction---unreliable extrapolation,
+distribution shift, and overconfidence---together with inflated resource or
+advantage claims in an early-stage quantum setting. The explicit assumptions
+and limitations are intended to reduce those risks.

@@ -1,0 +1,67 @@
+\section{Related Work}
+\label{sec:related-work}
+
+\paragraph{Reservoir computing and fading memory.}
+Echo-state networks and liquid-state machines introduced the principle of
+driving a fixed recurrent system and training only its readout
+\citep{Jaeger2001,MaassNatschlagerMarkram2002}. Fading memory formalizes
+continuity of a causal filter with respect to increasingly remote inputs
+\citep{BoydChua1985}. Contractive state updates provide a direct sufficient
+condition for the echo-state and fading-memory properties, while universality
+and risk analyses study different questions: the functions representable by
+families of reservoirs and the statistical behavior of their learned
+readouts, respectively \citep{GrigoryevaOrtega2018,GononGrigoryevaOrtega2020}.
+Our contraction result concerns one fixed reset-based architecture and is not
+a universality theorem.
+
+\paragraph{Quantum reservoir computing.}
+Quantum reservoir computing uses quantum dynamics as the driven state system
+\citep{FujiiNakajima2017}. Existing proposals study dissipative dynamics,
+reset mechanisms, noisy processors, weak or repeated measurements, and
+spatial multiplexing
+\citep{ChenNurdin2019,ChenNurdinYamamoto2020,NakajimaEtAl2019,
+MolteniDestriPrati2023,MujalEtAl2023,HuEtAl2024}. Finite-dimensional quantum
+reservoir filters and the role of input dependence have also received formal
+treatment \citep{MartinezPenaOrtega2023}. \textsc{QuaRK} uses a reset channel
+because its contraction coefficient is exact and directly tunable. Multiple
+reservoir instances enlarge the classical observable vector, but they may be
+executed sequentially on reused hardware; consequently, the instance count is
+not automatically a peak-width requirement.
+
+\paragraph{Quantum features and kernel readouts.}
+Quantum feature methods encode classical data into states or measurement
+statistics before applying a classical learner
+\citep{SchuldKilloran2019,HuangBroughtonEtAl2021}. \textsc{QuaRK} belongs to
+this broad family, with the important difference that its features are
+generated dynamically from a temporal window rather than independently from
+one static input. The Mat\'ern readout is an ordinary classical positive
+definite kernel on the measured feature vectors. Its role here is both
+algorithmic---kernel ridge regression provides a regularized nonlinear
+readout---and analytic---the normalized kernel bounds predictions in an RKHS
+ball and its spectral second moment controls sensitivity to feature
+perturbations \citep{Genton2001,PorcuEtAl2024,HofmannScholkopfSmola2008}.
+Calling the complete pipeline quantum-reservoir-based does not imply that its
+kernel has no comparable classical construction.
+
+\paragraph{Random projection and measurement.}
+The JL lemma preserves the geometry of a finite point set under a random
+linear projection whose target dimension depends logarithmically on the set
+size \citep{DasguptaGupta2003,Woodruff2014}. We use this result to account for
+the width needed to encode the observed finite set. It leaves the classical
+cost of multiplying by the projection matrix and the subsequent dynamics
+untouched. For measurement, classical shadows can estimate many observables
+from shared randomized measurements \citep{HuangKuengPreskill2020}. Under
+local random Pauli measurements, a Pauli string of weight at most \(k\) has a
+shadow-norm-squared scaling of \(3^k\); this is the factor used in our resource
+statement.
+
+\paragraph{Learning with dependent observations.}
+Independent-block arguments compare a beta-mixing sequence to independent
+blocks and yield uniform learning bounds in terms of an effective block count
+\citep{Yu1994,MohriRostamizadeh2008,DedeckerEtAl2007}. Our result applies this
+machinery to a process of strided temporal windows. It differs from an
+i.i.d.\ bound in two linked ways: the confidence condition contains the
+mixing coefficient at the block separation, and the stochastic terms scale
+with the number of blocks rather than the raw number of windows. The analysis
+is conditional on a fixed featurizer and does not cover data-dependent
+selection among reservoir or kernel configurations.
