@@ -1,0 +1,57 @@
+\section{Framework and background.}\label{sec:framework}
+\subsection{Notation}
+
+We denote by $\sZ_- := \{\dots, -2, -1, 0\}$ the set of non-positive integers, by $\sN$ the non-negative integers, and for $m\in\sN^\ast$ we write $[m]:=\{1,\dots,m\}$; for any set $\gA$, $|\gA|$ denotes its cardinality. Random objects are written in uppercase (e.g.\ $X_t,Y_t$) and processes in bold roman (e.g.\ $\rmX=(X_t:t\in\sZ_-)$, $\rmIO=((X_t,Y_t):t\in\sZ_-)$), while a (finite) observed trajectory is written in bold lowercase, $\rvx=(x_t:t\in\sZ_-)\in\gIZ$ with $x_t\in\gI\subset\sR^d$ and $y_t\in\gY\subset\sR$; a length-$w$ window ending at time $\tau$ is $X_\tau^w:=(X_{\tau-w+1},\dots,X_\tau)\in(\gI)^w$ with realization $\rvx_\tau^w=(x_{\tau-w+1},\dots,x_\tau)$, and a windows dataset is $\gD=\{(\rvx_i,y_i)\}_{i=1}^N$ (we use $\E_P[\cdot]$ and $\Pr(\cdot)$ for expectation/probability under the law $P$). For an $n$-qubit register, $\gH:=\sC^{2^n}$, $\gSH$ is the space of density operators, and $\gBH$ is the space of bounded operators on $\gH$; we use Dirac notation, set $\ketbra{+}^{\otimes n} := \otimes_{i=1}^n \ketbra{+}$, and write $\braket{O}_{\rho}:=\Trc{O\rho}$ for the expectation of an observable $O$. We write $\normeuc{\cdot}$ for the Euclidean norm, and $\normHS{\cdot}$, $\normTr{\cdot}$, and $\normop{\cdot}$ for the Hilbert--Schmidt, trace, and operator norms, respectively. For spatial multiplexing with $R\ge1$ sub-reservoirs we work on $\gH^{\otimes R}:=\bigotimes_{r=1}^R\gH$ and $\gBH^R:=\gB(\gH^{\otimes R})$; with a mild abuse of notation, $\gSH^R$ denotes the corresponding state space and, in particular, the product states $\bigotimes_{r=1}^R\rho^{(r)}$ with each $\rho^{(r)}\in\gSH$. Finally, $\gO$ denotes the set of measured $k$-local observables, $m:\gSH^R\to\sR^{R|\gO|}$ the moment map producing features $\Phi=m\circ H^T$, and $\kappa$ is the Mat\'ern kernel with RKHS $\gHkp$ and norm $\normkp{\cdot}$; $K$ denotes the associated Gram matrix and $\lambda_{\rm reg}$ the Tikhonov regularization parameter.
+
+%\TBDcomment{[State the difference between time series and processes]}
+
+\subsection{Learning temporal data processes.}\label{subsec:learning-temporal-data}
+Let 
+$\rmIO = \pth{(X_t, Y_t): t \in \sZ_-}$, where $ X_t \in \gI$ and $Y_t \in \gY$, be a semi-infinite input/output stochastic process\footnote{The probability space $(\Omega, \gA, \sP)$ is fixed for all random variables and processes.}, with $\gI \subset \sR^{d}$ being some bounded measurable input set such that $\sup_{x \in \gI}\normeuc{x} \leq \Upsilon_{\scriptscriptstyle X}$, and $\gY \subset \sR$ some bounded measurable real-valued output set satisfying $\sup_{y \in \gY} |y| \leq \Upsilon_{\scriptscriptstyle Y}$.
+We distinguish between the stochastic process and its realizations: the input/output process $\mathrm{IO}$ is a random object defined on a fixed probability space, while a (finite) time series corresponds to a single observed trajectory of this process, from which we construct windows for learning.
+We consider the supervised learning problem where the task is to learn the data generating process (DGP) functional (map) $H^\star$ that assigns $Y_0$ to the process $\rmX = (X_t : t \in \sZ_-)$: $Y_0 = H^\star(\rmX)$, where the process $\rmIO$ is distributed according to some unknown distribution $P$~\cite{Gonon_Grigoryeva_Ortega_2020, qrc_risk_bounds_2025}. This problem is rooted in real-life processes (e.g., weather data) where we only have access to data up to date (with the most recent index being $t=0$) and we'd like to make a prediction $Y_0$ from such historical data (e.g., tomorrow's temperature, after a one-step shift of the time index).
+
+As is central to machine learning, approximating the unknown DGP functional $H^\star$ follows from a risk minimization procedure. The (statistical) risk, or generalization error, associated with a functional $H$ is defined with respect to a fixed $L$-Lipschitz ($L > 0$) loss function $\ell: \sR \times \sR \longto \sR$ (e.g.\ squared error) as
+\begin{equation}\label{eq:risk-def}
+    R(H) := \E_P[\ell(H(\rmX), Y_0)].
+\end{equation}
+We are interested in learning $H^\star$ from the family $\gF$ of functionals satisfying the fading memory property (FMP)~\cite{Monzani_Prati_2025}. Intuitively, this property implies that if two time series $\rvx, \rvx' \in \gIZ$ are similar in their recent past (i.e., have similar values $x_t$ and $x'_t$ for times $t > t^\ast$ for some past time point $t^\ast \in \sZ_-$), then their outputs $H^\star(\rvx)$ and $H^\star(\rvx')$ will be close, even if $\rvx$ is very different from $\rvx'$ in the distant past ($t < t^\ast$).
+
+
+Given a hypothesis class of functionals $\gC \subset \gF$, the ultimate goal of the learning procedure consists in determining the functional $H_\gC$ that exhibits minimal risk by solving
+\begin{equation}\label{eq:in-class-optimization}
+    H_\gC = \argmin_{H \in \gC} R(H).
+\end{equation}
+It is worth mentioning that the broader the class $\gC$ is, the more accurate the learning can be, hence the need for a rich (expressive) hypothesis class. Since the risk $R(H)$ depends on an unknown distribution $P$ as well as on a semi-finite time series process $\rmX$, it is generally infeasible to solve the optimization in~\cref{eq:in-class-optimization}. To this end, one must come up with an empirical risk $\hat{R}$ that does not deviate significantly from the true risk\footnote{Having a controllable $|R(H) - \hat{R}(H)|$ is what we mean by a good generalization.}, i.e., a quantity $|R(H) - \hat{R}(H)|$ that is controllable and can be computed efficiently. The learning procedure then becomes minimization of the empirical risk, i.e.\ $\argmin_{H \in \gC} \hat{R}(H)$.
+
+
+\subsection{Quantum reservoir computers.}\label{subsec:qrc-background}
+
+Crucial to reservoir computers (RCs)~\cite{Jaeger_2001_EchoState_GMD148} is the state-space evolution described as 
+\begin{equation}\label{eq:RC-evolution}
+    \rho_t = T(\rho_{t-1}, x_t), \quad \text{for all} \; t \in \sZ_-,
+\end{equation}
+where $T: \gS \times \gI \longto \gS$ is called the evolution map, and $\gS \subset \gB$ is the state space of some normed space $(\gB, \norm{\cdot})$. Quantum reservoir computers (QRCs) are an important class of RCs that leverage the state spaces of quantum systems~\cite{Chen_Nurdin_Yamamoto_2020}. Indeed, QRCs have as state space the set of quantum states described by the convex subset
+\begin{equation}
+    \gSH = \Set{\rho \in \gBH : \Trc{\rho} = 1, \rho \succeq 0},
+\end{equation}
+where $\gBH$ is the space of bounded linear operators on the Hilbert space $\gH = \sC^{2^n}$ of an $n$-qubit quantum system. Unless otherwise stated, we mainly consider the Hilbert--Schmidt (HS) norm (i.e., the Schatten-2 norm) $\normHS{\Psi} = \sqrt{\Trc{\Psi^\dag \Psi}}, \Psi \in \gBH$ as the norm on $\gBH$. Furthermore, at each time step, the state of a QRC is represented by a quantum state, while the quantum dynamics of the reservoir are described by a time-evolution map on the same quantum system (see \cite{Hayashi_Ishizaka_Kawachi_Kimura_Ogawa_2015} for details). Time-evolution maps on a quantum system are linear maps that are completely positive and trace-preserving (CPTP). For each fixed input $x_t \in \sR^{d}$, the induced map $T(\cdot, x_t): \gSH \longto \gSH$ is CPTP, and the state evolution is given by $\rho_t = T(\rho_{t-1}, x_t)$.
+
+
+A QRC induces an inner filter, an inner-reservoir functional, and an outer-reservoir functional, defined respectively as
+\begin{equation} \begin{aligned} 
+    &U^T: \gIZ \longto {(\gSH)}^{Z_-}, \quad \;\; \rvx \longmapsto \big(T(s_{t-1}, x_{t}): t \in \sZ_- \big)\\ 
+    &H^T: \gIZ \longto (\gSH), \qquad \;\; \rvx \longmapsto U^T(\rvx)_0\\ &H_h^T: \gIZ \longto \sR, \qquad\quad\quad\quad \; \rvx \longmapsto h \circ H^T(\rvx), 
+\end{aligned} 
+\end{equation}
+where $h: \gSH \to \sR$ is some readout function that combines a measurement scheme conducted on the quantum system with some classical post-processing.
+
+There are two properties that are crucial in reservoir computing: the echo state property (ESP) and the fading memory property (FMP). The first, ESP, is satisfied when for every sequence $\rvx \in \gIZ$ there exists a sequence of states $(\rho_t: t \in \sZ_-)$ that satisfies the relation in~\cref{eq:RC-evolution} for each $t \in \sZ_-$, and such a solution is unique. The ESP has attracted a lot of attention in the literature on reservoir computing~\cite{Jaeger_2001_EchoState_GMD148} because it gives the system a function-like definition where, for each input sequence, there is a single output sequence. The second property, on the other hand, states that a reservoir computer satisfies the FMP when its functional $H^T_h$ satisfies it in the sense described in the second paragraph of Section~\ref{subsec:learning-temporal-data}. Combined together, these properties imply that a state $\rho_t$ at time $t$ depends less and less on earlier states $\rho_{t-w}$ as we increase $w$. We will leverage this to show that the reservoir's initial state becomes increasingly irrelevant to the output as the reservoir processes more and more time points.
+
+
+An interesting family of reservoir computers is that of evolution maps $T$ that are strictly contractive in their first argument:
+\begin{equation}\label{eq:contraction}
+%    \norm{T(\rho, x) - T(\rho', x)} \leq \lambda \norm{s - s'}, \; \text{for all} \; \rho, \rho' \in \gS, 
+    \norm{T(\rho, x) - T(\rho', x)} \leq \lambda \norm{\rho - \rho'}, \; \text{for all} \; \rho, \rho' \in \gS,
+\end{equation}
+where $\lambda \in (0,1)$. This is of interest because any reservoir of this form automatically satisfies both the ESP and the FMP~\cite{Monzani_Prati_2025, Grigoryeva_Ortega_2018}. Subsequently, in Section~\ref{subsec:QR-embedding}, we propose a design of quantum reservoirs satisfying this condition, which leads to a principled hypothesis class $\gC_R$ of functionals that we leverage to approximate an unknown DGP functional $H^\star \in \gF$.

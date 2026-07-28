@@ -1,0 +1,194 @@
+\newcommand{\TBDcomment}[1]{\textcolor{blue}{\textit{#1}}}
+\newcommand{\AAcomment}[1]{\textcolor{red}{\textit{#1}}}
+\newcommand{\PBcomment}[1]{\textcolor{brown}{\textit{#1}}}
+
+\newcommand\pth[1]{\left(#1\right)}
+\newcommand\cro[1]{\left[#1\right]}
+\newcommand\acc[1]{\left\{#1\right\}}
+
+
+
+\newcommand\norm[1]{\left\lVert#1\right\rVert}
+\newcommand\abs[1]{\left| #1 \right|}
+\newcommand\normeuc[1]{\norm{#1}_{2}}
+\newcommand\normsupp[1]{\norm{#1}_{\scriptscriptstyle \infty}}
+\newcommand\normHkp[1]{\norm{#1}_{\scriptscriptstyle \gHkp}}
+\newcommand\normkp[1]{\norm{#1}_{\scriptscriptstyle \kappa}}
+\newcommand\normHukp[1]{\norm{#1}_{\scriptscriptstyle \gHukp}}
+
+
+\DeclareFontFamily{U}{matha}{\hyphenchar\font45}
+\DeclareFontShape{U}{matha}{m}{n}{
+<-6> matha5 <6-7> matha6 <7-8> matha7
+<8-9> matha8 <9-10> matha9
+<10-12> matha10 <12-> matha12
+}{}
+\DeclareSymbolFont{matha}{U}{matha}{m}{n}
+
+\DeclareFontFamily{U}{mathx}{\hyphenchar\font45}
+\DeclareFontShape{U}{mathx}{m}{n}{
+<-6> mathx5 <6-7> mathx6 <7-8> mathx7
+<8-9> mathx8 <9-10> mathx9
+<10-12> mathx10 <12-> mathx12
+}{}
+\DeclareSymbolFont{mathx}{U}{mathx}{m}{n}
+
+\DeclareMathDelimiter{\vvvert} {0}{matha}{"7E}{mathx}{"17}%
+
+\newcommand\normop[1]{\left \vvvert #1 \right \vvvert_{\infty}}
+
+\newcommand\Trc[1]{\Tr\cro{#1}}
+
+\newcommand{\gSH}{\gS(\gH)}
+\newcommand{\gBH}{\gB(\gH)}
+
+\newcommand{\ukappa}{\underline{\kappa}}
+\newcommand{\gHkp}{\gH_{\kappa}}
+\newcommand{\gHukp}{\gH_{\ukappa}}
+
+\newcommand{\dH}{d_{\gH}}
+
+\newcommand{\hrho}{\hat{\rho}}
+\newcommand{\sfS}{\mathsf{S}}
+
+\newcommand\ketbra[1]{\ket{#1}\!\bra{#1}}
+\newcommand{\pstate}{\ket{+}^{\otimes n}}
+\newcommand{\pdensity}{\ketbra{+}^{\otimes n}}
+
+\newcommand{\Umux}{U_{\rm mux}}
+\newcommand{\Vmux}{V_{\rm mux}}
+\newcommand{\tUmux}{\widetilde{U}^\ast_{\rm mux}}
+
+\newcommand{\Vscr}{V_{\rm scr}}
+\newcommand{\Ad}{\textrm{Ad}}
+\newcommand{\hH}{\widehat{H}}
+\newcommand{\barE}{\bar{E}}
+\newcommand{\barH}{\bar{H}}
+\newcommand{\barU}{\bar{U}}
+\newcommand{\barT}{\bar{T}}
+\newcommand{\barkappa}{\bar{\kappa}}
+\newcommand{\hatkappa}{\widehat{\kappa}}
+\newcommand{\gSHE}{\gS(\gH_{\scriptscriptstyle \barE})}
+\newcommand{\gSHpr}{\gS(\gH')}
+
+\newcommand{\DQC}{\textrm{DQC}}
+\newcommand{\vrho}{\boldsymbol{\rho}}
+\newcommand{\vomega}{\boldsymbol{\omega}}
+\newcommand{\vsigma}{\boldsymbol{\sigma}}
+\newcommand{\vlambda}{{\boldsymbol{\lambda}}}
+\newcommand{\qfrac}{\operatorname{qfrac}}
+\newcommand{\usigma}{\underline{\sigma}}
+\newcommand{\ubeta}{\underline{\beta}}
+\newcommand{\Depth}{\operatorname{Depth}}
+\newcommand{\CZ}{\operatorname{CZ}}
+
+
+
+\newcommand\normN[1]{\norm{#1}_{\scriptscriptstyle \gN}}
+\newcommand\normS[1]{\norm{#1}_{\scriptscriptstyle \gS}}
+\newcommand\normB[1]{\norm{#1}_{\scriptscriptstyle \gB}}
+\newcommand\normO[1]{\norm{#1}_{\scriptscriptstyle \gO}}
+\newcommand\normHS[1]{\norm{#1}_{\scriptscriptstyle \rm HS}}
+\newcommand\normTr[1]{\norm{#1}_{1}}
+\newcommand\normomega[1]{\norm{#1}_{\omega}}
+
+\newcommand{\din}{d_{\scriptscriptstyle \rm in}}
+\newcommand{\dout}{d_{\scriptscriptstyle \rm out}}
+\newcommand{\dgO}{d_{\scriptscriptstyle \gO}}
+
+\newcommand{\Zminus}{\sZ_-}
+\newcommand{\gIZ}{(\gI)^{\Zminus}}
+\newcommand{\gZZ}{(\gZ)^{\Zminus}}
+\newcommand{\gXZ}{(\gX)^{\Zminus}}
+
+\newcommand{\gIZB}{(\gI)^{\Zminus}_{B}}
+\newcommand{\gIell}{(\gI)^{\ell}}
+\newcommand{\gSZ}{(\gS)^{\Zminus}}
+\newcommand{\gNZ}{(\gN)^{\Zminus}}
+\newcommand{\gOZ}{(\gO)^{\Zminus}}
+\newcommand{\gBZ}{(\gB)^{\Zminus}}
+\newcommand{\gSHAFZ}{(\gSHAF)^{\Zminus}}
+
+\newcommand{\longto}{\longrightarrow}
+\newcommand{\nE}{n_{\scriptscriptstyle E}}
+\newcommand{\nF}{n_{\scriptscriptstyle F}}
+\newcommand{\nA}{n_{\scriptscriptstyle A}}
+\newcommand{\nAF}{n_{\scriptscriptstyle AF}}
+\newcommand{\Conds}{\textrm{Conds}}
+\newcommand{\gFFMP}{\gF_{\scriptscriptstyle \textrm{FMP}}}
+\newcommand\BraketHkp[1]{\Braket{#1}_{\scriptscriptstyle \gHkp}}
+
+\newcommand{\gCCQC}{\gC_{\scriptscriptstyle \textrm{CQC}}}
+\newcommand{\gCSMC}{\gC_{\scriptscriptstyle \textrm{SMC}}}
+
+\newcommand{\gJr}{\gJ^r}
+\newcommand{\rhor}{\rho^r}
+\newcommand{\PiA}{\Pi^{\scriptscriptstyle \textrm{A}}}
+\newcommand{\PiAQ}{\Pi^{\scriptscriptstyle A_{Q}}}
+
+\newcommand{\scA}{\scriptscriptstyle A}
+\newcommand{\scFr}{\scriptscriptstyle F^r}
+\newcommand{\scAF}{\scriptscriptstyle A\!F}
+\newcommand{\scF}{\scriptscriptstyle F}
+\newcommand{\scZ}{\scriptscriptstyle Z}
+\newcommand{\scX}{\scriptscriptstyle X}
+\newcommand{\scY}{\scriptscriptstyle Y}
+\newcommand{\scQ}{\scriptscriptstyle Q}
+
+\newcommand{\AX}{A_{\scX}}
+\newcommand{\AQ}{A_{\scQ}}
+
+\newcommand{\psiF}{\psi^{\scF}}
+\newcommand{\hF}{h^{\scF}}
+\newcommand{\mscF}{m^{\scF}}
+\newcommand{\sigmaF}{\sigma^{\scF}}
+\newcommand{\scrF}{\mathscr{F}}
+
+\newcommand{\HT}{H^T}
+\newcommand{\HTh}{\HT_h}
+\newcommand{\gTFMP}{\gT_{\scriptscriptstyle \rm FMP}}
+
+\newcommand{\sfV}{\mathsf{V}}
+
+\newcommand{\OastZ}{O^{\ast}_{\scZ}}
+\newcommand{\OastX}{O^{\ast}_{\scX}}
+
+
+\newcommand\gJarr[1]{\overleftarrow{\gJ}^{\scriptscriptstyle( #1 )}}
+
+
+
+\newcommand\rhos[1]{\rho_{\scriptscriptstyle #1}}
+\newcommand\rhoe[1]{\rho^{\scriptscriptstyle (#1)}}
+\newcommand{\rhoes}[2]{\rho^{\scriptscriptstyle (#1)}_{\scriptscriptstyle #2}}
+\newcommand\varthetae[1]{\vartheta^{\scriptscriptstyle (#1)}}
+\newcommand{\varthetaes}[2]{\vartheta^{\scriptscriptstyle (#1)}_{\scriptscriptstyle #2}}
+
+\newcommand{\lambdaes}[2]{\lambda^{\scriptscriptstyle (#1)}_{\scriptscriptstyle #2}}
+\newcommand\lambdae[1]{\lambda^{\scriptscriptstyle #1}}
+\newcommand\lambdas[1]{\lambda_{\scriptscriptstyle #1}}
+\newcommand{\gEvlda}{\gE_{\vlambda}}
+\newcommand{\dprime}{^{\prime\prime}}
+
+\newcommand{\kapparbf}{\kappa_{\scriptscriptstyle \rm rbf}}
+\newcommand{\kappaQ}{\kappa_{\scriptscriptstyle Q}}
+
+\newcommand{\Nshots}{N_{\rm shots}}
+\newcommand{\Sshots}{S_{\rm shots}}
+\newcommand{\varepsbeta}{\varepsilon_{\scriptscriptstyle \beta}}
+
+\newcommand{\vepsilon}{\boldsymbol{\epsilon}}
+\newcommand{\barvx}{\bar{\vx}}
+\newcommand{\barvz}{\bar{\vz}}
+\newcommand{\Law}{\operatorname{Law}}
+\newcommand{\Unif}{\operatorname{Unif}}
+\newcommand{\Vol}{\operatorname{Vol}}
+\newcommand{\VARMA}{\operatorname{VARMA}}
+
+\newcommand{\thetal}{\theta_\lambda}
+\newcommand{\valpha}{\bm{\alpha}}
+\newcommand{\pr}{\scriptscriptstyle \operatorname{pr}}
+\newcommand{\gen}{\scriptscriptstyle \operatorname{gen}}
+\newcommand{\rmIO}{\mathbf{IO}}
+\newcommand{\Reb}{\widehat{\mathfrak{R}}}
+% with \thetal := 2\arcsin\sqrt{1-\lambda}

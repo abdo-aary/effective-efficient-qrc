@@ -1,0 +1,170 @@
+\section{Additional details for numerical validation}
+In this appendix, we provide further details on the data generation process and target functionals used in the numerical experiments.
+\subsection{Data generation.}
+\subsubsection{Input VARMA process}
+\label{subsec:VARMA}
+\paragraph{Definition.}
+Let $\rmX := (X_t : t \in \Zminus)$ be a (strictly) stationary $\mathrm{VARMA}(p,q)$ process (sometimes called VARMA for vector VARMA), i.e.,
+\begin{equation}\label{eq:arma-def}
+    X_t \;=\; \sum_{i=1}^p \Phi_i X_{t-i} \;+\; \Theta_0 \, \epsilon_t \;+\; \sum_{j=1}^q \Theta_j \epsilon_{t-j},
+\end{equation}
+where $(\epsilon_t)_{t\in\Zminus}$ are i.i.d.\ centred innovations with $\E[\normeuc{\epsilon_t}^2]<\infty$, and $\Phi_i, \Theta_j$ are $d \times d$ matrices, with $\Theta_0$ non singular. Define the lag operator $L X_t := X_{t-1}$, and set the matrix polynomials
+\[
+\Phi(L) := I_d - \sum_{i=1}^p \Phi_i L^i, \qquad \Theta(L) := \Theta_0 + \sum_{j=1}^q \Theta_j L^j,
+\]
+then the model in~\cref{eq:arma-def} is $\Phi(L) X_t = \Theta(L) \epsilon_t$. It is shown in~\cite{mokkadem1988mixing} that if the innovations $(\epsilon_t)_{t\in\Zminus}$ are i.i.d.\ with a distribution
+absolutely continuous with respect to the Lebesgue measure on $\R^d$ (i.e.\ admitting a density), and if the AR polynomial is stable
+(i.e.\ the VARMA is causal), namely
+\begin{equation}\label{eq:arma-stability}
+\det\!\Big(I_d-\sum_{i=1}^p \Phi_i z^i\Big)\neq 0,\qquad \forall z\in\sC,\ |z|\le 1,
+\end{equation}
+together with the non-degeneracy condition of $\det(\Theta_0)\neq 0$,
+then the strictly stationary unique solution of~\cref{eq:arma-def} is (in fact geometrically) $\beta$-mixing.
+
+\paragraph{Experimental setting (stable VARMA$(p,q)$ family).}
+Fix $(d,p,q)\in\sN^\ast\times\sN^\ast\times\sN$ and choose a stability budget $\gamma\in(0,1)$
+(which controls the dependence strength: larger $\gamma$ yields slower mixing).
+We generate a random stable VAR part as follows.
+Draw i.i.d.\ matrices $(\widetilde\Phi_i)_{i=1}^p$ with entries $\sim \gN(0,1)$ and define the normalized directions
+$U_i := \widetilde\Phi_i/\|\widetilde\Phi_i\|_2$.
+Draw i.i.d.\ positive weights $w_i\sim\Unif(0,1)$ and set
+$a_i := \gamma\, w_i/\sum_{k=1}^p w_k$, so that $\sum_{i=1}^p a_i=\gamma$.
+Finally set
+\[
+\Phi_i := a_i\, U_i,\qquad i=1,\dots,p,
+\]
+which ensures $\sum_{i=1}^p\|\Phi_i\|_2=\gamma<1$ and therefore the AR-stability (causality) condition
+$$\det(I_d-\sum_{i=1}^p \Phi_i z^i)\neq 0, \quad \text{for all} \; |z|\le 1.$$
+
+For the MA part, we take $\Theta_0 := I_d$ (hence nonsingular) and generate
+$\Theta_j := b_j V_j$ for $j=1,\dots,q$, where $V_j:=\widetilde\Theta_j/\|\widetilde\Theta_j\|_2$ with
+$\widetilde\Theta_j$ i.i.d.\ Gaussian matrices and where $(b_j)_{j=1}^q$ are decaying amplitudes,
+e.g.\ $b_j := \eta\,\rho^{\,j-1}$ with $\eta>0$ and $\rho\in(0,1)$.
+The innovations $(\epsilon_t)_{t\in\Zminus}$ are i.i.d.\ with a Lebesgue density on $\R^d$,
+for instance $\epsilon_t\sim\gN(0,\sigma^2 I_d)$.
+
+We simulate the (unbounded) VARMA recursion
+\[
+Z_t=\sum_{i=1}^p\Phi_i Z_{t-i}+\Theta_0\epsilon_t+\sum_{j=1}^q \Theta_j \epsilon_{t-j}
+\]
+with a burn-in $B\gg 1$ and retain the last $T$ samples.
+To match the bounded input set $\gI=(-1,1)^d$ used in the main experiments, we finally set
+\[
+X_t := \tanh(Z_t)\in(-1,1)^d \quad \text{(componentwise)}.
+\]
+Since $X_t$ is a measurable transformation of $Z_t$, it inherits the (geometric) $\beta$-mixing property of the VARMA process.
+
+
+\subsection{Output processes (functionals)}
+To obtain scalar labels $Y_t\in\R$ from vector inputs $X_t\in(-1,1)^d$, we consider three real-valued
+fading-memory functionals $H^\star:(\gI)^{\sZ_-}\to\R$ evaluated on the past orbit
+$\boldsymbol{X}_t := (X_{t-k})_{k\ge 0}$.
+Throughout, we fix a window size $w\in\sN^\ast$ and use the window-truncated evaluation
+$H^\star_w(\boldsymbol{X}_t)$, obtained by restricting $k\in\{0,\dots,w-1\}$.
+
+
+\noindent\textbf{Random projection vectors.}
+We generate a random unit vector $u\in\R^d$ by drawing $g\sim\gN(0,I_d)$ and setting
+\begin{equation}\label{eq:rand-unit-u}
+    u := \frac{g}{\|g\|_2}.
+\end{equation}
+When needed, we generate $v\in\R^d$ independently the same way and (optionally) orthogonalize it via
+\begin{equation}\label{eq:rand-unit-v}
+    \tilde v := v - \langle v,u\rangle u,\qquad v := \frac{\tilde v}{\|\tilde v\|_2}.
+\end{equation}
+This choice ensures $u$ (and $v$) are uniformly distributed on the unit sphere $\mathbb{S}^{d-1}$.
+
+
+\noindent\textbf{(F1) Scalar one-step forecasting.}
+Fix $u$ as in~\cref{eq:rand-unit-u} and define the forecasting functional
+\begin{equation}\label{eq:F1}
+    H^\star_{\rm fore}(\boldsymbol{X}_t) := u^\top X_{t+1},
+    \qquad Y_t := H^\star_{\rm fore}(\boldsymbol{X}_t).
+\end{equation}
+
+\noindent\textbf{(F2) Exponentially fading linear functional.}
+Fix $u$ as in~\cref{eq:rand-unit-u} and a decay $\alpha\in(0,1)$. Define
+\begin{equation}\label{eq:F2}
+    H^\star_{\rm exp}(\boldsymbol{X}_t)
+    := \sum_{k=0}^{\infty}\alpha^k\, u^\top X_{t-k},
+    \qquad
+    Y_t := H^\star_{{\rm exp},w}(\boldsymbol{X}_t)
+    := \sum_{k=0}^{w-1}\alpha^k\, u^\top X_{t-k}.
+\end{equation}
+
+
+\noindent\textbf{(F3) Truncated Volterra fading-memory functional (order 2).}
+Fix $u,v$ as in~\cref{eq:rand-unit-u}--\cref{eq:rand-unit-v} and a decay $\alpha\in(0,1)$.
+We define a (causal) Volterra functional of order $2$ with exponentially decaying kernels,
+\begin{align}
+    H^\star_{\rm vol}(\boldsymbol{X}_t)
+    &:= \sum_{k=0}^{\infty} h_1(k)^\top X_{t-k}
+      \;+\; \sum_{k=0}^{\infty}\sum_{\ell=0}^{\infty} X_{t-k}^\top H_2(k,\ell)\, X_{t-\ell},
+      \label{eq:volterra-general}
+\end{align}
+where we take the rank-one fading kernels
+\begin{equation}\label{eq:volterra-kernels}
+    h_1(k) := \alpha^k u,
+    \qquad
+    H_2(k,\ell) := \frac{1}{2}\alpha^{k+\ell}\, v v^\top,
+\end{equation}
+so that
+\begin{equation}\label{eq:volterra-expanded}
+    H^\star_{\rm vol}(\boldsymbol{X}_t)
+    = \sum_{k=0}^{\infty}\alpha^k\, u^\top X_{t-k}
+    \;+\; \frac{1}{2}\sum_{k=0}^{\infty}\sum_{\ell=0}^{\infty}\alpha^{k+\ell}\,
+    (v^\top X_{t-k})(v^\top X_{t-\ell}).
+\end{equation}
+In experiments, we use the window-truncated version
+\begin{equation}\label{eq:F3}
+\begin{aligned}
+    Y_t := H^\star_{{\rm vol},w}(\boldsymbol{X}_t)
+    := &\sum_{k=0}^{w-1}\alpha^k\, u^\top X_{t-k}\\
+    &+ \frac{1}{2}\sum_{k=0}^{w-1}\sum_{\ell=0}^{w-1}\alpha^{k+\ell}\,
+    (v^\top X_{t-k})(v^\top X_{t-\ell}).
+\end{aligned}
+\end{equation}
+Since $X_t\in(-1,1)^d$ and $\alpha\in(0,1)$, all targets are bounded.
+
+
+\subsection{Kernel hyper-parameters tuning}\label{app:kernel-tuning}
+
+For each task, we select the Matérn kernel hyper-parameters once using a lightweight
+train/validation procedure, and then keep them fixed across all reported runs for that task. The tuner is intentionally simple (single split and basic optimizers) to keep the overhead minimal compared to the cost of quantum feature.
+
+\paragraph{Setup}
+Given a dataset of quantum features and targets $\{(z_i,y_i)\}_{i=1}^N$ with
+$Z \in \mathbb{R}^{N\times D}$ and $y\in\mathbb{R}^N$, we create a validation split by shuffling indices
+with a fixed seed and allocating a fraction $\texttt{val\_ratio}=0.2$ to validation.
+During hyper-parameter tuning, we fix a small ridge term $\lambda_{\rm reg}=10^{-6}$ to stabilize
+the Gram-matrix inversion while focusing the search on the kernel shape.
+
+\paragraph{Objective (validation MSE)}
+For candidate Matérn hyper-parameters $(\xi,\nu)$ (length-scale and smoothness), we evaluate
+the validation mean-squared error of kernel ridge regression (KRR). Concretely, we compute
+\[
+\widehat{y}_{\rm val}
+\;=\;
+K_{\rm val, tr}\,\alpha,
+\qquad
+\alpha \;=\; (K_{\rm tr,tr} + \lambda_{\rm reg} I)^{-1}y_{\rm tr},
+\]
+where $K_{\rm tr,tr} = [\kappa_{\xi,\nu}(z_i,z_j)]_{i,j\in \text{tr}}$ and
+$K_{\rm val,tr} = [\kappa_{\xi,\nu}(z_i,z_j)]_{i\in\text{val},\,j\in\text{tr}}$.
+The objective is $\mathrm{MSE}(y_{\rm val},\widehat{y}_{\rm val})$.
+
+\paragraph{Grid over $\nu$ and bounded search over $\xi$}
+We adopt the \texttt{grid} tuning strategy: we scan a small candidate set of smoothness values
+\[
+\nu \in \{0.5,\;1.5,\;2.5,\;5.0\},
+\]
+and, for each fixed $\nu$, we solve the one-dimensional problem
+\[
+\xi^\star(\nu)\; \in\; \arg\min_{\xi\in[10^{-3},\,10^{3}]}\; \mathrm{MSE}_{\rm val}(\xi,\nu),
+\]
+using bounded optimization in $\log(\xi)$ (maximum \texttt{xi\_maxiter}=80 iterations).
+We then select the final pair as
+\[
+(\xi^\star,\nu^\star)\;\in\;\arg\min_{(\xi^\star(\nu),\,\nu)}\;\mathrm{MSE}_{\rm val}(\xi^\star(\nu),\nu),
+\]
+and store $(\xi^\star,\nu^\star)$ as the task-level Matérn kernel configuration.
