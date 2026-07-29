@@ -1,0 +1,142 @@
+\section{Compact IBM Hardware Validation}
+\label{app:hardware-validation}
+
+E9 asks a narrow question: can a readout fitted from exact features retain useful
+predictions when the same eight inputs are represented by finite-shot,
+stochastic-trajectory features from an IBM QPU?  The study is not designed to
+establish hardware-noise robustness across devices, quantum advantage, or
+scalable deployment.
+
+\subsection{Program, data, and frozen readout}
+\label{app:hardware-program}
+
+The hardware-compatible program uses a medium-persistence \(d=2\) VARMA process,
+window length \(w=4\), stride \(s=100\), one two-qubit reservoir, ring/chain
+edge \((0,1)\), \(\lambda=0.8\), the \(\tanh\) angle map, and
+\[
+ \cO_{\mathrm{HW}}
+ =\{X_0,Y_0,Z_0,X_1,Y_1,Z_1,Z_0Z_1\}.
+\]
+The stored observable labels are
+\texttt{IX,IY,IZ,XI,YI,ZI,ZZ} in the package's qubit-order convention.  The two
+tasks are delayed recall at \(\tau=1\) and \(\tau=3\).  One exact NVIDIA feature
+artifact is generated for 2000 inner-training, 500 validation, and 500 test
+windows.  Two Mat\'ern readouts are selected with
+\cref{eq:empirical-krr-grid}, refitted on the 2500 non-test windows, and then
+frozen.  The hardware subset consists of eight equally spaced indices from the
+500-window test block; those indices are stored before any hardware job is
+submitted.
+
+The CSMoM estimator uses \(S=192\) local-Pauli snapshots and six deterministic
+MoM blocks.  The shadow-basis and reset-trajectory arrays are created from
+independent named streams and reused by the local circuit and hardware layers.
+Measurement outcomes are independent across executions.  The feature scaler
+and readout are always those fitted from exact features.
+
+\subsection{Comparison ladder}
+\label{app:hardware-ladder}
+
+For the same eight windows and program, E9 computes:
+\begin{enumerate}
+  \item \textbf{Aer exact}: analytic expectations from the independent
+        \(2n+1\)-qubit density-matrix dilation; this is the mathematical
+        feature reference for the subset;
+  \item \textbf{Aer shadow-only}: CSMoM samples drawn from the exact Aer channel,
+        isolating local-Pauli finite-shadow error;
+  \item \textbf{IBM-local trajectories}: the IBM circuit compiler and
+        pre-sampled last-reset trajectories executed on an ideal local Aer
+        sampler, combining trajectory and shadow sampling without device noise;
+        and
+  \item \textbf{IBM hardware}: the identical structural plan transpiled and
+        executed through IBM Runtime.
+\end{enumerate}
+The distinction is semantic: Aer exact is exact mixed-channel evolution; Aer
+shadow-only estimates that exact state; IBM-local and hardware use one
+pre-sampled reset trajectory per shadow snapshot.  No simulator-only noise
+instruction is described as a hardware run.
+
+\subsection{Backend and physical-layout policy}
+\label{app:hardware-selection}
+
+At the first hardware period, the driver lists operational non-simulator IBM
+backends with at least two qubits.  For every connected physical pair
+\((q_0,q_1)\), it computes
+\[
+ s(q_0,q_1)
+ =e_{2\mathrm q}(q_0,q_1)
+  +\frac{0.25}{2}\bigl(e_{\mathrm{ro}}(q_0)+e_{\mathrm{ro}}(q_1)\bigr),
+\]
+where unavailable calibration values make the pair ineligible.  The pair with
+smallest score is selected; scores within 5\% are broken by backend pending-job
+count and then lexicographically by backend and qubit IDs.  Backend-properties
+payload, selection candidates, score, and selection time are persisted.
+
+Transpilation uses optimization level one, the named transpiler seed, and the
+selected pair as a fixed initial layout.  No post-result remapping is allowed.
+The same backend and physical pair are reused in a second period at least 24
+hours later when operational.  If they are unavailable, the replacement is
+selected by the same rule and is reported as a separate operating point rather
+than pooled with the first.
+
+\subsection{Circuit grouping, Runtime jobs, and cost bound}
+\label{app:hardware-jobs}
+
+Each snapshot is represented by its window, reservoir, sampled last-reset
+suffix, and local measurement basis.  Snapshots with identical tuples share one
+circuit and are executed as repeated shots.  With \(N_{\mathrm{HW}}=8\),
+\(w=4\), and \(n=2\), at most
+\[
+ N_{\mathrm{HW}}(w+1)3^n=360
+\]
+unique groups are possible, while the total primary shots remain
+\(N_{\mathrm{HW}}S=1536\) per period.  Ordered groups are split into chunks of
+at most 100 Runtime PUBs, giving at most four jobs per period.  Each job handle,
+ordered group range, and expected snapshot count is written before waiting for
+results, so decoding is resumable.
+
+A failed chunk is retried once with the same circuits and structural plan.
+There is no imputation.  A period contributes feature and prediction aggregates
+only if all 1536 expected snapshots decode successfully.  Partial periods remain
+in the job-success table with their completed counts.  The primary design uses
+at most 3072 QPU shots over two periods; the single-retry contingency raises the
+hard bound to 4608 shots.  This bound excludes local simulator and transpilation
+work.
+
+\subsection{Mitigation and calibration provenance}
+\label{app:hardware-mitigation}
+
+The primary E9 protocol uses no measurement mitigation because the current
+hardware adapter does not expose a predeclared mitigation implementation.
+Mitigation may be added only as a versioned secondary experiment implemented
+and tested before any mitigated hardware result is inspected.  It cannot
+replace the raw-hardware result.
+
+For every transpiled circuit and job, the artifact records backend name,
+backend-properties update time, submission and completion times, physical
+layout, depth, two-qubit gate count, total operation counts, Runtime job ID,
+shots, expected and decoded snapshots, and terminal status.  Calibration
+payloads are stored as raw JSON-compatible snapshots where provider policy
+permits, with a checksum otherwise.
+
+\subsection{Metrics, uncertainty, and displays}
+\label{app:hardware-metrics}
+
+For every non-exact ladder layer, we report coordinate feature RMSE and the
+per-window \(e_{2,i}\) relative to Aer exact.  Hardware is additionally compared
+with the matched IBM-local CSMoM realization, which shares bases and
+trajectories but not outcomes.  The frozen-readout report includes mean absolute
+prediction perturbation, MSE, NRMSE, and relative degradation for both delays.
+Uncertainty is summarized by a snapshot bootstrap that resamples complete
+snapshot indices within each window and reconstructs CSMoM with six blocks;
+the two calibration periods are displayed separately rather than treated as
+i.i.d. replicates.  Per-window paired differences are shown alongside the
+bootstrap interval.
+
+The main paper receives one compact two-panel figure: feature error across the
+four ladder layers and exact-versus-hardware frozen-readout predictions for the
+eight windows.  A small adjacent table reports backend, period, layout, median
+and maximum depth, total two-qubit gates, circuit groups, shots, and completion
+status.  The appendix retains the full per-observable bias, per-window errors,
+transpilation rows, calibration metadata, and job ledger.  A null or degraded
+result is scientifically valid: it identifies the hardware operating point at
+which exact-feature transfer fails.

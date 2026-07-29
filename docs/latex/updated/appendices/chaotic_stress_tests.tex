@@ -1,122 +1,86 @@
 \section{Out-of-Scope Chaotic Stress Tests}
 \label{app:chaotic-stress}
 
-The main analysis concerns stationary beta-mixing input--output processes.  The
-experiments in this appendix deliberately leave that scope and ask whether the
-architecture remains useful on deterministic systems with sensitive dependence
-on initial conditions.  The systems are therefore empirical stress tests, not
-examples covered by \cref{thm:generalization}.  We use the Lorenz--63 flow
-\citep{Lorenz1963} and the Mackey--Glass delay equation
-\citep{MackeyGlass1977}, both of which are standard nonlinear temporal
-benchmarks.
+The chaotic experiments are deliberately outside the stationary beta-mixing
+analysis.  Their purpose is to test forecasting behavior when nearby states can
+separate rapidly, not to extend \cref{thm:generalization}.  All numerical
+integration choices, splits, horizons, and failure rules are fixed before
+model results are inspected.
 
-\subsection{Lorenz--63 system}
+\subsection{Lorenz--63}
 \label{app:lorenz63}
 
-The Lorenz--63 state \(U(t)=(u_1(t),u_2(t),u_3(t))\) satisfies
+We integrate the classical Lorenz system \citep{Lorenz1963}
 \begin{equation}
-\begin{aligned}
-  \dot u_1 &= \sigma(u_2-u_1),\\
-  \dot u_2 &= u_1(\rho-u_3)-u_2,\\
-  \dot u_3 &= u_1u_2-\beta u_3,
-\end{aligned}
-\qquad
-(\sigma,\rho,\beta)=\left(10,28,\frac83\right).
-\label{eq:lorenz63}
+ \dot x=\sigma(y-x),\qquad
+ \dot y=x(\rho-z)-y,\qquad
+ \dot z=xy-\beta z,
+ \label{eq:lorenz63}
 \end{equation}
-Trajectories are generated with a fourth-order Runge--Kutta integrator using
-step size \(h_{\mathrm{int}}=0.01\), followed by a burn-in of \(5000\)
-integration steps.  To vary the effective prediction difficulty, the retained
-trajectory is sampled at
-\[
-  \Delta t\in\{0.02,0.05,0.10\}.
-\]
-The observed input is the bounded state
-\[
-  X_j=\tanh\!\left(D^{-1}U(j\Delta t)\right),
-\]
-where the diagonal scale \(D\) is fixed from a separate calibration trajectory
-and is not estimated from the test segment.
+with \((\sigma,\rho,\beta)=(10,28,8/3)\), fourth-order Runge--Kutta step
+\(10^{-3}\), and stored sampling interval \(\Delta t=0.05\).  A burn-in of
+1000 stored samples is discarded.  Each of three initial-condition roots is a
+small predeclared perturbation of \((1,1,1)\); the perturbation vector and the
+complete integrated checksum are stored.
 
-For a unit vector \(u\in\R^3\), the scalar \(q\)-step target is
-\begin{equation}
-  Y_{j,q}^{\mathrm{L63}}
-  :=u^\top X_{j+q},
-  \qquad q\in\{1,5,10,20\}.
-  \label{eq:lorenz-target}
-\end{equation}
-A second partial-observation task gives the learner only
-\((X_j^{(1)},X_j^{(2)})\) and asks it to predict the bounded third coordinate at
-horizon \(q\).  This separates ordinary full-state forecasting from recovery
-of an unobserved component.
+The learner receives all three standardized coordinates, mapped through a
+fixed coordinatewise \(\tanh\).  We use window length \(w=25\), stride one,
+observation-noise standard deviation \(\sigma_{\mathrm{obs}}\in\{0,0.02\}\),
+and horizons \(h\in\{1,5,20\}\).  The primary target is the normalized future
+\(x\)-coordinate.  A second partial-observation task gives the learner only
+\((x,y)\) and predicts future \(z\).  Noise is added before training-only
+standardization and uses a named stream shared across methods.
 
-\subsection{Mackey--Glass delay system}
+\subsection{Mackey--Glass}
 \label{app:mackey-glass}
 
-The scalar Mackey--Glass process is defined by the delay differential equation
+We integrate the delay differential equation \citep{MackeyGlass1977}
 \begin{equation}
-  \dot x(t)
-  =\frac{\beta_{\mathrm{MG}}x(t-\tau)}
-          {1+x(t-\tau)^{n_{\mathrm{MG}}}}
-   -\gamma_{\mathrm{MG}}x(t),
-  \label{eq:mackey-glass}
+ \dot x(t)=\frac{\beta x(t-\tau)}{1+x(t-\tau)^n}-\gamma x(t),
+ \qquad (\beta,\gamma,n)=(0.2,0.1,10),
+ \label{eq:mackey-glass}
 \end{equation}
-with
-\[
-  \beta_{\mathrm{MG}}=0.2,\qquad
-  \gamma_{\mathrm{MG}}=0.1,\qquad
-  n_{\mathrm{MG}}=10,
-  \qquad \tau\in\{17,30\}.
-\]
-The delay equation is integrated with step size \(0.1\), using a constant
-positive history on \([-\tau,0]\), discarding the first \(5000\) integration
-steps and sampling every ten integration steps.  The bounded observation is
-\(X_j=\tanh(c_x(x_j-m_x))\), where \(m_x\) and \(c_x\) are fixed from a
-separate calibration trajectory.  The forecast targets are
-\begin{equation}
-  Y_{j,q}^{\mathrm{MG}}:=X_{j+q},
-  \qquad q\in\{1,5,10,20\}.
-  \label{eq:mackey-glass-target}
-\end{equation}
-The two delay values provide different temporal-complexity regimes without
-changing the readout task.
+with delay \(\tau\in\{17,30\}\), integration step \(0.1\), unit stored sampling
+interval, and a constant history perturbed by the trajectory seed.  We discard
+5000 stored samples as burn-in.  Inputs are training-standardized and bounded
+through the same \(\tanh\) transformation as Lorenz.  Window length is 25,
+observation noise is \(\{0,0.02\}\), and forecast horizons are
+\(h\in\{1,10,20\}\).
 
-\subsection{Stress-test protocol}
+\subsection{Chronological protocol and metrics}
 \label{app:chaotic-protocol}
 
-For both systems, five predeclared initial-condition seeds are used.  Each
-trajectory is split chronologically into training, validation, and test
-segments with a guard interval of at least the largest prediction horizon
-between adjacent segments.  Windows never cross a split boundary.  Observation
-noise is added after trajectory generation at levels
-\[
-  \sigma_{\mathrm{obs}}\in\{0,0.01,0.05\}
-\]
-and is generated independently across methods from shared seeds.
+Each trajectory provides 3000 inner-training, 1000 validation, and 1000 test
+windows.  A guard interval of 20 raw observations separates validation and test
+origins so no future target crosses the boundary.  Three trajectory roots are
+used.  The reference exact QuaRK program, ESN--Mat\'ern, and matched random
+features--Mat\'ern share the readout grid in
+\cref{eq:empirical-krr-grid}.  Horizon-specific labels reuse the same feature
+artifact.
 
-The principal methods are \textsc{QuaRK}, ESN plus Mat\'ern KRR, and
-matched-dimensional random nonlinear features plus Mat\'ern KRR.  Candidate
-families and readout grids are predeclared exactly as in
-\cref{sec:empirical-protocol}.  We report NRMSE by horizon, the relative skill
-against a persistence predictor, and the horizon at which that skill falls
-below a predeclared threshold.  No mixing coefficient, effective-block count,
-or theorem-based confidence statement is attached to these results.
+The report gives training-normalized NRMSE and persistence skill
+\[
+ \mathrm{Skill}_{\mathrm{pers}}
+ =1-\frac{\mathrm{MSE}_{\mathrm{model}}}
+          {\mathrm{MSE}_{\mathrm{persistence}}},
+\]
+where the persistence prediction repeats the latest available target
+coordinate.  The failure horizon is the first evaluated horizon with
+nonpositive mean skill; if none occurs it is reported as ``beyond evaluated
+range.''  Integration failure, nonfinite values, or failure to reproduce the
+stored trajectory checksum is an integrity failure rather than a model result.
 
 \begin{table}[H]
 \centering
 \small
-\caption{Chaotic stress-test matrix.}
+\caption{Reduced chaotic stress-test matrix.}
 \label{tab:chaotic-suite}
-\begin{tabularx}{\linewidth}{@{}lXX@{}}
+\begin{tabularx}{\linewidth}{@{}lXXX@{}}
 \toprule
-System & Controlled variations & Tasks \\
+System & Structural settings & Targets & Compared representations \\
 \midrule
-Lorenz--63
-  & \(\Delta t\in\{0.02,0.05,0.10\}\), three noise levels
-  & full-state scalar forecasting and partial-observation third-coordinate prediction, \(q\in\{1,5,10,20\}\) \\
-Mackey--Glass
-  & \(\tau\in\{17,30\}\), three noise levels
-  & scalar forecasting at \(q\in\{1,5,10,20\}\) \\
+Lorenz--63 & \(\Delta t=0.05\), noise \(\{0,0.02\}\), horizons \(\{1,5,20\}\) & future \(x\); future \(z\) from \((x,y)\) & QuaRK, ESN, matched random map \\
+Mackey--Glass & \(\tau\in\{17,30\}\), noise \(\{0,0.02\}\), horizons \(\{1,10,20\}\) & future scalar state & QuaRK, ESN, matched random map \\
 \bottomrule
 \end{tabularx}
 \end{table}

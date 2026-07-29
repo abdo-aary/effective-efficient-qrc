@@ -1,169 +1,178 @@
 \section{Empirical Evaluation}
 \label{sec:experiments}
 
-The empirical study is designed as a behavioral characterization of
-\textsc{QuaRK}, rather than as a search for a single favorable benchmark.  Its
-main component uses controlled synthetic processes for which the temporal
-mechanism, task functional, dependence strength, ambient dimension, and
-measurement budget can be varied independently.  Two smaller components then
-probe transfer beyond that controlled setting: deterministic chaotic systems,
-which are deliberately outside the stochastic assumptions of the theory, and
-three real-world time-series regression datasets used only as external sanity
-checks.  The theory-aligned generators are defined in
-\cref{app:dependent-families}, the controlled task functionals in
-\cref{app:functionals}, the chaotic stress tests in
-\cref{app:chaotic-stress}, and the real-world sanity checks in
-\cref{app:real-world-sanity}.
+The empirical study is a predeclared behavioral characterization of
+\textsc{QuaRK}.  It is not designed to find one favorable benchmark or to
+support a quantum-advantage claim.  Instead, it asks when the method succeeds,
+when it fails, and how its behavior changes with the target functional, the
+dependence mechanism, the ambient dimension, the reservoir resources, and the
+measurement implementation.  Experiments E1--E6 use controlled stochastic
+processes; E7 deliberately moves outside the assumptions of the learning
+theory; E8 is a limited external sanity check; and E9 is a compact IBM
+hardware-feasibility study.  The exact run matrices, seed policy, readout grid,
+metrics, artifact identifiers, and failure rules are fixed in
+\cref{app:implementation-ready-protocol}.  The data generators and targets are
+defined in \cref{app:dependent-families,app:functionals}, with the out-of-scope
+and external protocols in
+\cref{app:chaotic-stress,app:real-world-sanity,app:hardware-validation}.
 
 \subsection{Empirical questions}
 \label{sec:empirical-questions}
 
-\paragraph{Q1: Which temporal computations can the final reservoir features
-support?}
-We move from one-step prediction to distributed linear memory, smooth
+\paragraph{Q1: Which temporal computations are recoverable from the final
+reservoir features?}
+E1 moves from genuine one-step prediction to distributed linear memory,
 second-order memory, delayed recall, and a sparse cross-lag interaction.  The
-resulting hierarchy separates current or near-future information from long
-memory and nonlinear temporal composition.
+regularization path and nested-sample curves diagnose interpolation,
+conditioning, and finite-sample behavior without fitting a prespecified
+asymptotic rate.
 
-\paragraph{Q2: How do task memory and process persistence interact with the
-reservoir contraction?}
-The delay, memory-decay, and process-persistence parameters are varied
-independently.  This tests whether the preferred contraction setting changes
-when the data or target requires longer retained history, and whether excessive
-memory can become detrimental.
+\paragraph{Q2: How do process persistence, task memory, and reservoir
+contraction interact?}
+E2 varies the process persistence and the target delay separately from the
+reset rate.  It tests whether a longer-memory operating point is useful when
+history is informative and whether excessive persistence can become harmful.
+It then checks whether the resulting strengths and failures transfer from
+VARMA to latent-regime and volatility-clustering processes.
 
-\paragraph{Q3: Are the observed strengths and failures stable across distinct
-dependence mechanisms?}
-Stable vector VARMA, finite-state hidden Markov observations, and Gaussian
-GARCH(1,1) provide linear recurrence, latent regime persistence, and
-conditional heteroskedasticity.  Shared tasks permit direct comparison across
-families, while family-specific targets test filtering and volatility-state
-recovery.
+\paragraph{Q3: What remains when the ambient dimension grows but encoded width
+is fixed?}
+E3 distinguishes sparse signal plus nuisance coordinates from signal spread
+across all coordinates.  It reports prediction, empirical JL distortion,
+projection cost, and width sensitivity.  This can support a fixed-encoded-width
+claim for the evaluated construction, but not end-to-end cost independence
+from the original dimension.
 
-\paragraph{Q4: What happens when the ambient input dimension grows while the
-quantum input width remains fixed?}
-A dedicated study increases the ambient dimension under both sparse-signal and
-distributed-signal constructions.  It reports prediction, projection
-distortion, classical projection cost, and width sensitivity.  This tests the
-width-control interpretation of \cref{prop:jl}; it does not claim end-to-end
-runtime independence from the original dimension.
+\paragraph{Q4: How does \textsc{QuaRK} compare with classical representations
+under transparent matching rules?}
+E4 consolidates, rather than reruns, selected scenarios from E1--E3.  The
+principal controls are an echo-state representation, a matched-dimensional
+random nonlinear map, and a classical JL representation, all followed by the
+same finite Mat\'ern readout grid.  Raw-window ridge is retained as a low-cost
+reference; raw-window Mat\'ern KRR is shown only when a predeclared resource
+guardrail is satisfied.
 
-\paragraph{Q5: When does \textsc{QuaRK} improve on, match, or underperform
-classical representations?}
-The principal controls are an echo-state representation, a matched-dimensional
-random nonlinear map, and a classical JL representation, each followed by the
-same Mat\'ern readout and comparable validation budget.  Raw-window ridge or
-Mat\'ern regression is retained as a low-cost reference when computationally
-tractable.
+\paragraph{Q5: Which resource choices yield useful operating points?}
+E5 performs one-factor sweeps over encoded width, reservoir count, observable
+locality, and contraction.  Error is reported jointly with feature dimension,
+logical width, runtime, and memory so that non-monotonic behavior and Pareto
+frontiers remain visible.
 
-\paragraph{Q6: Which resource choices produce useful operating points?}
-Encoded width, reservoir count, observable locality, and contraction are varied
-separately.  Predictive error is reported together with feature dimension,
-logical width, reservoir executions, state preparations, and temporal channel
-applications, so that accuracy gains can be interpreted against their cost.
+\paragraph{Q6: How do finite shadows and stochastic channel trajectories affect
+prediction?}
+E6 separates exact expectations, local-Pauli shadow sampling, reset-trajectory
+sampling, frozen-readout transfer, and noisy-feature training.  Only the
+frozen-readout comparison is interpreted through
+\cref{cor:measurement-stability}.
 
-\paragraph{Q7: How sensitive is the method to finite measurement budgets?}
-Exact features are compared with local-Pauli classical-shadow estimates under
-both a frozen-readout protocol and a noisy-feature training protocol.  The
-former connects directly to \cref{cor:measurement-stability}; the latter is a
-practical stress test outside that fixed-readout result.
+\paragraph{Q7: Does the architecture remain empirically useful outside the
+theorem's stochastic assumptions?}
+E7 uses Lorenz--63 and Mackey--Glass as chronological forecasting stress tests.
+No stationarity or beta-mixing conclusion is inferred from them.
 
-\paragraph{Q8: Does the architecture remain useful outside the theorem's data
-assumptions, and do the controlled findings survive a limited external check?}
-Lorenz--63 and Mackey--Glass trajectories test forecasting under sensitive,
-nonlinear dynamics without asserting beta mixing.  Three heterogeneous
-real-world TSER datasets provide a small sanity check rather than a claim of
-broad real-world validation.
+\paragraph{Q8: Do the controlled findings survive a limited external check?}
+E8 evaluates three retained time-series regression datasets with different
+window lengths and channel counts.  The study is a transfer sanity check, not a
+broad real-world benchmark.
 
-\subsection{Common protocol and reporting principles}
+\paragraph{Q9: Can a frozen exact-feature readout retain useful predictions
+when its inputs are replaced by IBM-QPU CSMoM features?}
+E9 decomposes the hardware gap through an explicit comparison ladder: Aer exact
+expectations, Aer shadow sampling from the exact channel, local stochastic-
+trajectory CSMoM, and IBM Runtime CSMoM.  It can establish compact operating-
+point feasibility and quantify perturbation, but not general hardware-noise
+robustness, scalability, or quantum advantage.
+
+\subsection{Common protocol}
 \label{sec:empirical-protocol}
 
-\paragraph{Three empirical tiers.}
-The primary tier consists of stationary beta-mixing synthetic families and
-bounded targets covered by the analytical assumptions.  The second tier uses
-chaotic dynamical systems whose empirical behavior is explicitly separated
-from the theorem.  The third tier contains three real-world datasets for which
-stationarity and mixing are not assumed or estimated.  Conclusions are labeled
-according to the tier from which they arise.
+\paragraph{Outer and inner splits.}
+Unless stated otherwise, theory-aligned synthetic experiments use five
+predeclared structural replicates, window length \(w=25\), stride \(s=100\),
+\(5000\) chronological outer-training windows, and \(1000\) chronological test
+windows.  The final \(1000\) outer-training windows form the validation block;
+the first \(4000\) form the inner-training block.  After selection, the chosen
+readout is refitted on all \(5000\) outer-training windows and the test set is
+evaluated once.  Preprocessing is fitted on the relevant inner-training or
+outer-training features only.  Forecasting targets may use future observations,
+but the model input ends at the declared prediction origin.
 
-\paragraph{Controlled data and task suites.}
-Unless an experiment states otherwise, the synthetic protocol uses five
-predeclared data-generating seeds, window length \(w=25\), stride \(s=100\),
-\(N_{\mathrm{tr}}=5000\) chronological training windows, and
-\(N_{\mathrm{te}}=1000\) chronological test windows.  The exact family
-parameters and burn-in rules are listed in
-\cref{app:dependent-family-protocol}; task directions, normalizations, delays,
-and family-specific targets are fixed in
-\cref{app:functional-allocation}.  Every theory-aligned synthetic label lies in
-\([-1,1]\).
-
-\paragraph{Splits and leakage control.}
-Hyperparameters are selected only within the training portion using a fixed
-inner chronological training--validation split.  The selected candidate is
-refitted on the complete training portion before the test set is evaluated.
-True forecasting labels may use future observations, but the corresponding
-model input always ends at the stated prediction origin.  Latent HMM states and
-GARCH variances are used only to construct synthetic teacher targets.  The
-chaotic and real-world protocols use the chronological or official splits
-specified in \cref{app:chaotic-protocol,app:real-world-protocol}.
-
-\paragraph{Predeclared finite candidate families.}
-For each main comparison, the full candidate set is enumerated before
-validation scores are inspected.  A candidate may specify projection and
-reservoir seeds, \(n\), \(R\), \(k\), \(\lambda_r\), the observable family,
-and Mat\'ern parameters \((\xi,\nu,\eta)\).  Candidates covered by
-\cref{cor:finite-family-selection} share the same window length and stride and
-use a finite grid with \(\nu>1\).  The final report records the grid, its
-cardinality \(L\), and the selected candidate.  Continuous or adaptively
-expanded searches are labeled as outside the finite-family corollary.
-
-\paragraph{Classical controls.}
-The three principal controls are: (i) an echo-state network with representation
-dimension matched to \(p=R|\cO|\); (ii) a matched-dimensional random nonlinear
-feature map; and (iii) a classical \(d\to n\) JL map.  All three use the same
-Mat\'ern KRR readout and readout-selection grid as \textsc{QuaRK}.  Raw-window
-ridge and raw-window Mat\'ern KRR are reported where feasible, but are not
-described as dimension- or computation-matched controls.
-
-\paragraph{Readout fitting and metrics.}
-An implementation solving
-\((K+\lambda_{\mathrm K}I)\bm\alpha=\bm y\) uses
-\(\lambda_{\mathrm K}=N_{\mathrm{tr}}\eta\) under
-\cref{eq:krr-objective}.  Controlled tasks report MSE and
+\paragraph{Reference QuaRK configuration.}
+The reference simulation uses exact NVIDIA features with
 \[
-  \mathrm{NRMSE}_{\mathrm{tr}}
-  :=\frac{\sqrt{\mathrm{MSE}}}{\widehat\sigma_{Y,\mathrm{tr}}}.
+ n=5,\qquad R=3,\qquad k=2,\qquad \lambda_r=0.5\ \text{for all }r,
 \]
-Per-seed values, means, standard deviations, and paired differences to each
-principal control are retained.  Aggregate ranks or win--tie--loss summaries
-are never shown without the underlying per-task uncertainty.
+a ring topology, the \(\tanh\) angle map, complex128 arithmetic, and all
+nonidentity Pauli strings of weight at most two.  Its feature dimension is
+\(p=315\).  The reference values are fixed protocol choices rather than
+claimed optima; E2 and E5 vary the relevant factors explicitly.
 
-\paragraph{Result provenance.}
-Every table and figure is generated from stored artifacts containing the
-resolved generator, functional, split, model, candidate grid, predictions, and
-metrics.  Failed or incomplete runs remain visible in the audit ledger, and
-the supplementary material maps each reported number to its script and
-artifact path.
+\paragraph{Readout selection.}
+Features are standardized using the inner-training portion.  For every
+representation and task, the finite Mat\'ern KRR candidate set is
+\[
+ \nu\in\{1.5,2.5,5.0\},\quad
+ \xi\in\{0.25,0.5,1,2,4,8\},\quad
+ \lambda_{\mathrm K}\in\{10^{-6},10^{-4},10^{-2},1,10^2\},
+\]
+for \(L=90\) candidates.  Validation MSE selects one candidate; ties within
+\(10^{-12}\) are resolved lexicographically by
+\((\nu,\xi,\lambda_{\mathrm K})\).  The corresponding objective parameter is
+\(\eta=\lambda_{\mathrm K}/N_{\mathrm{tr}}\).  Continuous optimization is not
+used in the main comparisons.
+
+\paragraph{Randomness and pairing.}
+Each structural replicate is generated from one root seed.  Named child streams
+separately control data generation, split construction, JL projection,
+reservoir parameters, observable selection, reset trajectories, shadow bases,
+measurement outcomes, classical baselines, model selection, and repetitions.
+The same data, split, and task realizations are paired across methods.  The
+complete seed bundle is stored with every artifact.
+
+\paragraph{Primary metrics and uncertainty.}
+For predictions \(\widehat y_i\) and targets \(y_i\), we report
+\[
+ \mathrm{MSE}=\frac1m\sum_{i=1}^m(\widehat y_i-y_i)^2,
+ \qquad
+ \mathrm{NRMSE}_{\mathrm{tr}}
+ =\frac{\sqrt{\mathrm{MSE}}}{\widehat\sigma_{Y,\mathrm{outer\mbox{-}train}}}.
+\]
+Seed-level values are primary.  Tables report mean and standard deviation;
+figures show paired structural replicates and a 95\% percentile bootstrap
+interval over those replicates.  With only five structural replicates, these
+intervals are descriptive and are not used as dichotomous significance tests.
+No test observation is used for selection.
+
+\paragraph{Provenance and failures.}
+Each run writes a versioned immutable artifact containing the resolved
+configuration, complete seed hierarchy, data and split checksums, program
+fingerprint, structured \((N,R,K)\) features, selected candidate, predictions,
+metrics, timings, memory measurements, and execution status.  Failed and
+incomplete runs are retained in the audit ledger.  A run is excluded from an
+aggregate only for a predeclared integrity failure, unsupported capability,
+missing target, or unrecoverable backend failure; numerical underperformance is
+never an exclusion reason.
 
 \begin{table}[t]
 \centering
 \small
-\caption{Staged empirical design.  The full Cartesian product of generators,
-tasks, resources, and shot counts is intentionally avoided; each stage isolates
-a distinct scientific question.}
+\caption{Staged empirical design.  Each stage isolates a distinct question;
+the full Cartesian product of generators, tasks, resources, and estimators is
+not run.}
 \label{tab:empirical-stages}
 \begin{tabularx}{\linewidth}{@{}lXX@{}}
 \toprule
-Stage & Main setting & Primary purpose \\
+Stage & Retained setting & Primary evidence \\
 \midrule
-E1 & Reference VARMA and functional hierarchy & Capacity, learning curves, and diagnostic task difficulty \\
-E2 & VARMA, HMM, and GARCH across persistence levels & Memory--dependence interaction and cross-family robustness \\
-E3 & High-dimensional sparse and distributed signals & JL distortion, fixed-width behavior, and dimensional failure modes \\
-E4 & Principal classical controls & Representation-level comparative calibration \\
-E5 & One-factor architecture sweeps & Accuracy--resource Pareto structure \\
-E6 & Exact and finite-shot features & Measurement sensitivity and noisy-feature training \\
-E7 & Lorenz--63 and Mackey--Glass & Out-of-scope chaotic stress testing \\
-E8 & Three TSER datasets & Limited real-world transfer sanity check \\
+E1 & Reference VARMA; functional hierarchy & Capacity, conditioning, learning curves, memory diagnostics \\
+E2 & VARMA memory grid; VARMA/HMM/GARCH transfer & Persistence--contraction interaction and cross-family robustness \\
+E3 & Latent VARMA embedded to \(d\leq500\) & Fixed encoded width, JL distortion, sparse/distributed failure modes \\
+E4 & Seven scenarios reused from E1--E3 & Classical representation calibration under explicit matching rules \\
+E5 & Eleven one-factor QuaRK configurations & Error--resource Pareto structure \\
+E6 & Exact, shadow, and trajectory estimators & Feature and prediction degradation under finite sampling \\
+E7 & Lorenz--63 and Mackey--Glass & Out-of-scope chaotic forecasting stress tests \\
+E8 & Beijing PM2.5, live fuel moisture, hydraulic systems & Limited external transfer sanity check \\
+E9 & Two-qubit IBM CSMoM experiment & Compact hardware transfer and perturbation decomposition \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -171,164 +180,142 @@ E8 & Three TSER datasets & Limited real-world transfer sanity check \\
 \subsection{Experiment E1: Functional hierarchy and learning behavior}
 \label{sec:exp-functional-hierarchy}
 
-E1 uses the medium-persistence \(d=3\) VARMA realization.  With one fixed exact
-featurizer, a regularization path records training MSE, validation MSE, test
-MSE, RKHS norm, and Gram-matrix condition number for the future-projection,
-exponential-memory, and Volterra tasks.  A nested-sample study uses
-\[
-  N_{\mathrm{tr}}\in\{100,500,1000,2000,3000,5000\}
-\]
-with the candidate grid fixed in advance.  Its purpose is to characterize
-learning behavior, not to fit a prescribed \(N^{-1/2}\) law.  Delayed recall at
-\(\tau\in\{1,5,10,20\}\) and the sparse cross-lag target
-\((\tau_1,\tau_2)=(0,15)\) then isolate long-memory and nonlinear interaction
-requirements.  The full target definitions are in
-\cref{app:shared-functionals}.
+E1 uses the medium-persistence \(d=3\) VARMA family and the reference exact
+featurizer.  A fixed \((\nu,\xi)=(2.5,1)\) regularization path over
+\(\lambda_{\mathrm K}\in\{10^{-8},10^{-7},\ldots,10^2\}\) records training,
+validation, and test MSE, RKHS norm, and the condition numbers of \(K\) and
+\(K+\lambda_{\mathrm K}I\) for future projection, exponential memory, and
+Volterra memory.  A nested-prefix study uses
+\(N_{\mathrm{tr}}\in\{250,500,1000,2000,5000\}\), with the last 20\% of each
+prefix used for selection and the same fixed test block.  Delayed recall at
+\(\tau\in\{1,5,10,20\}\) and the cross-lag target at
+\((\tau_1,\tau_2)=(0,15)\) complete the functional profile.
 
-\subsection{Experiment E2: Memory, persistence, and dependent-family
-robustness}
+\subsection{Experiment E2: Memory, persistence, and cross-family robustness}
 \label{sec:exp-memory-dependence}
 
-E2 varies the memory requirement of both the data and the target.  For VARMA,
-HMM, and GARCH, the low-, medium-, and high-persistence realizations in
-\cref{tab:dependent-family-suite} are paired with delayed recall and with
-exponential-memory targets using a predeclared decay grid.  Around the selected
-architecture, the contraction parameter is varied over
-\[
-  \lambda\in\{0.05,0.1,0.3,0.5,0.8,0.95\}.
-\]
-The main diagnostic is whether the contraction value minimizing validation
-error changes systematically with process persistence or target delay, and
-whether the relationship is non-monotonic.
-
-A complementary cross-family comparison fixes the selected exact-feature
-configuration and evaluates the exponential-memory and Volterra targets on all
-three generators.  It additionally uses one-step future projection for VARMA,
-the filtered-regime score for HMM, and the next conditional-volatility state
-for GARCH.  This stage reports both absolute error and paired differences to the
-principal classical controls; it is not a repeated architecture search for
-each family.
+E2a uses low- and high-persistence VARMA realizations, delayed recall at
+\(\tau\in\{1,10,20\}\), and
+\(\lambda\in\{0.1,0.3,0.5,0.8,0.95\}\), while all other reference factors are
+fixed.  Its primary outcome is the validation-selected contraction and the
+paired test NRMSE surface.  E2b fixes the reference QuaRK configuration and
+uses low-, medium-, and high-persistence VARMA, HMM, and GARCH processes.  The
+shared targets are exponential and Volterra memory; family-specific targets
+are true future projection, filtered-regime score, and next conditional
+volatility.  QuaRK, ESN--Mat\'ern, and matched-random-feature--Mat\'ern runs from
+this stage are reused by E4 rather than recomputed.
 
 \subsection{Experiment E3: Ambient dimension and JL width control}
 \label{sec:exp-high-dimensional}
 
-E3 uses the stable VARMA construction with
-\(d\in\{3,10,30,100,300,500\}\) under the sparse and distributed target
-directions in \cref{app:high-dimensional-functionals}.  The main curve fixes
-\(n=5\), \(R=3\), \(k=2\), and the selected contraction while \(d\) grows.  A
-width-sensitivity study uses \(n\in\{3,5,8\}\) at \(d\in\{100,500\}\).
-
-For every run, we report prediction error, encoded width, feature dimension,
-projection time, and the empirical distortion statistic
+E3 embeds one medium-persistence three-dimensional VARMA process into
+\(d\in\{3,30,100,300,500\}\).  In the sparse construction the first three
+coordinates contain the predictive process and the rest are bounded nuisance;
+in the distributed construction the same latent signal is spread through a
+fixed dense embedding before nuisance is added.  The main curve fixes \(n=5\);
+additional width checks use \(n\in\{3,8\}\) at \(d\in\{100,500\}\).  The
+exponential and Volterra teachers remain functions of the latent signal.
+Prediction is accompanied by projection time, feature time, peak memory, and
 \begin{equation}
-    \widehat\Delta_{0.95}
-    :=
-    \operatorname{quantile}_{0.95}
-    \left(
-      \left\{
-      \left|
-      \frac{\norm{\Pi x-\Pi x'}_2^2}{\norm{x-x'}_2^2}-1
-      \right|:
-      (x,x')\in\mathcal Q
-      \right\}
-    \right),
-    \label{eq:empirical-jl-distortion}
+ \widehat\Delta_{0.95}
+ =\operatorname{quantile}_{0.95}
+ \left\{
+ \left|\frac{\norm{\Pi x-\Pi x'}_2^2}{\norm{x-x'}_2^2}-1\right|:
+ (x,x')\in\mathcal Q
+ \right\},
+ \label{eq:empirical-jl-distortion}
 \end{equation}
-where \(\mathcal Q\) is a predeclared sample of training-point pairs.  The
-comparison includes fixed-width \textsc{QuaRK}, classical JL plus Mat\'ern KRR,
-matched random features, and raw-window readouts when tractable.  Sparse targets
-test resistance to nuisance coordinates; distributed targets test whether
-useful geometry survives compression when signal spans all coordinates.
+where \(\mathcal Q\) contains 10,000 predeclared nonidentical training-point
+pairs.  The comparison includes QuaRK, classical JL--Mat\'ern, matched random
+features, and raw ridge; raw Mat\'ern is restricted to \(d\leq30\).
 
-\subsection{Experiment E4: Matched classical calibration}
+\subsection{Experiment E4: Consolidated classical calibration}
 \label{sec:exp-matched-controls}
 
-E4 consolidates the principal comparisons from E1--E3 under common splits,
-feature-dimension reporting, readout grids, and stochastic seeds.  For each
-scenario it reports \textsc{QuaRK}, ESN plus Mat\'ern KRR, matched random
-features plus Mat\'ern KRR, and classical JL plus Mat\'ern KRR.  Raw-window
-models are included as uncompressed references.  Feature-dimension matching,
-identical-readout matching, candidate-count matching, runtime, and memory are
-reported as separate quantities rather than compressed into a single
-``matched budget.''  The goal is to identify scenario-dependent strengths and
-failures, not to establish universal dominance.
+E4 introduces no new feature extraction.  It aggregates seven predeclared
+scenarios: the three E1 reference tasks, medium-HMM regime filtering,
+medium-GARCH volatility prediction, and the \(d=500\) sparse and distributed
+Volterra settings.  It reports QuaRK, ESN--Mat\'ern, matched random
+features--Mat\'ern, classical JL--Mat\'ern where applicable, and raw ridge.
+Feature dimension, readout family, candidate count, runtime, and memory are
+reported separately; no single ``matched budget'' label is used.
 
 \subsection{Experiment E5: Resource and memory trade-offs}
 \label{sec:exp-resource-tradeoffs}
 
-E5 returns to medium-persistence VARMA and performs one-factor sweeps around the
-selected configuration:
+E5 uses medium-persistence VARMA with the Volterra and \(\tau=20\) recall
+targets.  One-factor exact-feature sweeps around the reference configuration use
 \[
-  n\in\{3,5,6,8,10\},\qquad
-  R\in\{1,3,5,8\},\qquad
-  k\in\{1,2,3\},
+ n\in\{3,5,8\},\qquad R\in\{1,3,5\},\qquad k\in\{1,2,3\},\qquad
+ \lambda\in\{0.1,0.3,0.5,0.8,0.95\}.
 \]
-together with the contraction grid from E2.  The Volterra task and delayed
-recall at \(\tau\in\{10,20\}\) are used because they require nonlinear
-processing and retained history.  Each panel reports predictive error with
-peak logical width, feature dimension, reservoir executions, exact-feature
-runtime, and the implied state-preparation and channel-application counts.  A
-Pareto summary identifies non-dominated accuracy--resource operating points.
+After deduplicating the shared reference point, this gives eleven
+configurations per task and replicate.  The report includes NRMSE, feature
+dimension, encoded width, exact-feature runtime, peak GPU memory, and the
+analytical channel-update count \(NRw\).  Pareto membership is computed with
+respect to test NRMSE and measured feature-extraction runtime; it is reported
+descriptively, not used to select a test result.
 
-\subsection{Experiment E6: Finite-shot degradation}
+\subsection{Experiment E6: Finite-shadow and trajectory degradation}
 \label{sec:exp-finite-shot}
 
-E6 fixes the selected reservoir and evaluates snapshot counts
-\[
-    S\in\{100,500,1000,5000,10000\}
-\]
-on the exponential-memory, Volterra, and \(\tau=10\) delayed-recall tasks.
-Each setting is repeated with independent shadow randomness.  Two protocols are
-reported: a readout trained on exact features and evaluated on estimated
-features, and a readout trained and evaluated on independently estimated
-features.  The exact feature vector is the reference.  In addition to task
-error, we report coordinate-wise feature RMSE, Euclidean feature error,
-prediction error, \(NRS\) state preparations, and \(NRSw\) temporal channel
-applications.  Only the frozen-readout protocol is interpreted through
-\cref{cor:measurement-stability}.
+The principal E6 protocol trains one readout on exact reference features and
+evaluates it on CSMoM features for 256 predeclared test windows.  It uses the
+exponential, Volterra, and \(\tau=10\) recall targets,
+\(S\in\{100,300,1000,3000,10000\}\), ten MoM blocks, three structural
+replicates, and five independent shadow replicates.  A 16-window Aer diagnostic
+at the same snapshot counts isolates shadow sampling from reset-trajectory
+sampling.  A secondary noisy-feature-training study uses 512/128/256
+train/validation/test windows, \(S\in\{300,1000,3000\}\), three structural
+replicates, and three measurement replicates.  Metrics include coordinate RMSE,
+per-example Euclidean feature error divided by \(\sqrt p\), frozen-readout
+prediction perturbation, NRMSE, relative degradation from exact features,
+\(NRS\) state preparations, and \(NRSw\) temporal channel applications.
 
 \subsection{Experiment E7: Out-of-scope chaotic stress tests}
 \label{sec:exp-chaotic}
 
-E7 evaluates Lorenz--63 and Mackey--Glass trajectories under the generators and
-sampling rules in \cref{app:chaotic-stress}.  Forecast horizons, sampling
-intervals, and observation-noise levels are varied while keeping chronological
-splits and predeclared candidate grids.  \textsc{QuaRK} is compared with the
-ESN and matched-random-feature controls using the same readout.  Forecast error
-is reported as a function of horizon, together with the horizon at which each
-method loses a predeclared fraction of the persistence-baseline skill.  These
-experiments are empirical stress tests only: deterministic chaos is not
-presented as satisfying the stationary beta-mixing assumptions of
-\cref{thm:generalization}.
+E7 follows the reduced matrix in \cref{app:chaotic-protocol}.  Lorenz--63 uses
+forecast horizons \(\{1,5,20\}\); Mackey--Glass uses delay parameters
+\(\{17,30\}\) and horizons \(\{1,10,20\}\).  Both use observation-noise levels
+\(\{0,0.02\}\), three trajectory replicates, chronological
+3000/1000/1000 train/validation/test blocks, and a guard interval equal to the
+largest horizon.  QuaRK is compared only with ESN--Mat\'ern and matched random
+features--Mat\'ern.  We report NRMSE, persistence skill
+\(1-\mathrm{MSE}_{\mathrm{model}}/\mathrm{MSE}_{\mathrm{persistence}}\), and
+the first evaluated horizon at which skill is nonpositive.
 
 \subsection{Experiment E8: Limited real-world sanity checks}
 \label{sec:exp-real-world-sanity}
 
-E8 uses three heterogeneous datasets from the Monash--UEA--UCR time-series
-extrinsic-regression archive \citep{TanEtAl2021TSER}: Gas Sensor Array Ethanol,
-Live Fuel Moisture Content, and Hydraulic Systems.  They respectively provide
-a very long univariate sensor trace, a year-long seven-band remote-sensing
-series, and a short but very high-dimensional multivariate hydraulic record.
-The audited archive splits, dimensions, preprocessing, and dataset roles are
-specified in \cref{app:real-world-sanity}.
+E8 uses the retained official splits for Beijing PM2.5, live fuel moisture, and
+hydraulic systems, specified in \cref{app:real-world-protocol}.  The final 20\%
+of each official training split is used for inner validation.  Five paired
+representation seeds are used for QuaRK, ESN, matched random features, and raw
+ridge.  Raw Mat\'ern is attempted only when its estimated Gram storage is below
+2 GiB and a predeclared pilot completes within 30 minutes.  Dataset-level MSE,
+training-normalized NRMSE, feature dimension, feature time, readout time, and
+peak memory are reported without average-rank or general-superiority claims.
 
-The comparison is deliberately small: \textsc{QuaRK}, ESN plus Mat\'ern KRR,
-matched random nonlinear features plus Mat\'ern KRR, and raw-window Mat\'ern KRR
-when feasible.  No stationarity or mixing claim is made for these datasets, and
-three datasets are not treated as evidence of broad benchmark superiority.
-Their purpose is to check whether failure modes and relative trends observed in
-the controlled study persist in naturally collected data.  Full dataset-level
-results belong in the appendix; the main text contains only a compact summary
-with uncertainty and no aggregate claim beyond this limited transfer check.
+\subsection{Experiment E9: Compact IBM hardware validation}
+\label{sec:exp-hardware}
 
-\begin{center}
-\fcolorbox{black}{gray!10}{
-\begin{minipage}{0.90\linewidth}
-\textbf{Draft status.}
-The empirical objects and protocols above are fixed before the numerical tables
-are inserted.  The final revision will populate E1--E8 from audited artifacts
-and will update the abstract, discussion, and conclusion only with conclusions
-supported by those artifacts.
-\end{minipage}
-}
-\end{center}
+E9 uses a medium-persistence \(d=2\) VARMA process with \(w=4\), one two-qubit
+reservoir, \(\lambda=0.8\), and seven local observables.  Exact NVIDIA features
+train two frozen readouts for \(\tau=1\) and \(\tau=3\) recall.  The hardware
+subset contains eight predeclared test windows.  CSMoM uses \(S=192\) snapshots
+and six MoM blocks.  The same shadow bases and reset trajectories are reused in
+Aer and IBM-local comparisons and across two hardware executions separated by
+calibration time.  The backend-selection, layout, job-chunking, failure, and
+provenance rules are fixed in \cref{app:hardware-validation}.  The principal
+outcomes are feature RMSE relative to Aer exact, feature RMSE relative to the
+matched IBM-local realization, frozen-readout prediction perturbation and
+NRMSE, transpiled depth, two-qubit gate count, circuit and shot counts, and job
+completion.  Measurement mitigation is not part of the primary protocol unless
+it is implemented and predeclared before the first hardware result is viewed.
+
+\paragraph{Numerical-result status.}
+This manuscript version fixes the protocol but does not state numerical
+conclusions for runs that have not yet produced checksum-validated artifacts.
+Every later result sentence, table entry, and figure will be generated from the
+versioned artifacts identified in \cref{app:implementation-ready-protocol}.

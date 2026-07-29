@@ -1,0 +1,331 @@
+\section{Implementation-Ready Experimental Protocol}
+\label{app:implementation-ready-protocol}
+
+This appendix is the execution contract for E1--E9.  Values declared here are
+fixed before numerical results are inspected.  A later implementation may
+change a value only through a versioned protocol revision that is recorded in
+the artifact manifest and applied to all affected methods.
+
+\subsection{Identifiers, roots, and artifact layout}
+\label{app:protocol-identifiers}
+
+The protocol version is
+\texttt{quark-empirical-v1}.  Its structural replicate roots are
+\[
+ \mathcal S_{\mathrm{struct}}
+ =\{1101,1102,1103,1104,1105\}.
+\]
+Every root deterministically spawns the named streams
+\texttt{dataset\_generation}, \texttt{dataset\_split},
+\texttt{jl\_projection}, \texttt{reservoir\_parameters},
+\texttt{observable\_selection}, \texttt{reset\_trajectories},
+\texttt{shadow\_bases}, \texttt{measurement\_outcomes},
+\texttt{classical\_baseline}, \texttt{model\_selection}, and
+\texttt{replicate}.  Measurement repetitions are child seed bundles of the
+structural root rather than integer offsets.
+
+The canonical run identifier is
+\[
+ \texttt{<protocol>/<experiment>/<scenario>/<method>/<root>/<configuration-hash>}.
+\]
+The corresponding directory is
+\begin{verbatim}
+artifacts/experiments/quark-empirical-v1/
+  <E1--E9>/<scenario>/<method>/root=<root>/<configuration-hash>/
+\end{verbatim}
+A complete run contains the versioned feature artifact, data and split
+manifests, selected readout candidate, predictions, long-form metrics, timings,
+resource counters, environment, and status.  Hardware runs additionally retain
+all Runtime job handles and raw shadow provenance.  Aggregate files are written
+under \texttt{artifacts/experiments/quark-empirical-v1/aggregate/}; they never
+replace the immutable run directories.
+
+\subsection{Common data, model, and readout objects}
+\label{app:protocol-common-objects}
+
+\paragraph{Synthetic outer split.}
+For E1--E6, each process produces one ordered sequence of 6000 supervised
+windows after initialization or burn-in.  Indices \(0{:}3999\),
+\(4000{:}4999\), and \(5000{:}5999\) are inner train, validation, and test,
+respectively.  E1 learning curves use nested prefixes of the first 5000
+windows and reserve the final 20\% of each prefix for validation.  No random
+shuffling is performed.
+
+\paragraph{Reference program.}
+The common reference program is
+\[
+ (n,R,k,\lambda,w,s)=(5,3,2,0.5,25,100),
+\]
+with all three reservoirs assigned the same reset rate, independent reservoir
+unitary draws, ring topology, Gaussian JL projection, \(\tanh\) angle map,
+and every nonidentity Pauli word of weight at most two.  The observable order is
+lexicographic within weight and qubit support and is stored explicitly.  The
+resulting \((N,R,K)\) tensor has \(K=105\) and flattens to \(p=315\) in
+reservoir-major, observable-minor order.
+
+\paragraph{Finite readout grid.}
+For standardized features, the common grid is
+\begin{equation}
+ \mathcal G_{\mathrm{KRR}}
+ =\{1.5,2.5,5.0\}
+  \times\{0.25,0.5,1,2,4,8\}
+  \times\{10^{-6},10^{-4},10^{-2},1,10^2\},
+ \label{eq:empirical-krr-grid}
+\end{equation}
+where the entries are \((\nu,\xi,\lambda_{\mathrm K})\).  The feature scaler
+and validation score are fitted on inner train and validation only.  The
+lexicographically first minimizer is selected and refitted on outer train.  A
+method whose representation is stochastic regenerates only the representation
+stream declared by the protocol; it does not receive a larger readout search.
+
+\paragraph{Principal controls.}
+The controlled comparison uses:
+\begin{enumerate}
+  \item \texttt{quark-exact}: the exact NVIDIA QuaRK representation;
+  \item \texttt{esn-matern}: a tanh ESN whose state dimension equals the
+        reported QuaRK feature dimension, with spectral radius
+        \(\{0.5,0.9\}\), input scale \(\{0.2,1.0\}\), and leak rate
+        \(\{0.5,1.0\}\), followed by \cref{eq:empirical-krr-grid};
+  \item \texttt{random-map-matern}: a fixed Gaussian random affine map of the
+        flattened standardized window to \(p\) coordinates followed by
+        coordinatewise \(\tanh\) and the same readout grid;
+  \item \texttt{jl-matern}: the same \(d\to n\) projection applied at every
+        time point, flattened over the window, followed by the same readout;
+  \item \texttt{raw-ridge}: standardized flattened windows with ridge
+        \(\alpha\in\{10^{-8},10^{-6},10^{-4},10^{-2},1,10^2,10^4\}\); and
+  \item \texttt{raw-matern}: standardized flattened windows and the common
+        Mat\'ern grid, only under the stated resource guardrail.
+\end{enumerate}
+The ESN candidate count is reported separately from the readout count.  No
+method is described as compute matched unless time, memory, and candidate count
+are all shown.
+
+\subsection{Metric definitions}
+\label{app:protocol-metrics}
+
+Let \(m\) be the number of examples in the evaluated split and let
+\(p=R K\).  In addition to MSE and training-normalized NRMSE from
+\cref{sec:empirical-protocol}, the following quantities are retained.
+
+\paragraph{Paired error difference.}
+For method \(A\), control \(B\), and structural root \(s\),
+\[
+ \Delta_{A-B}^{(s)}
+ =\mathrm{NRMSE}^{(s)}_A-\mathrm{NRMSE}^{(s)}_B.
+\]
+Negative values favor \(A\).  Pairing is valid only when data, split, and task
+streams match.
+
+\paragraph{Feature errors.}
+For estimated and exact flattened features
+\(\widehat\phi_i,\phi_i\in\R^p\),
+\[
+ \mathrm{FRMSE}_{\mathrm{coord}}
+ =\sqrt{\frac1{mp}\sum_{i=1}^m\norm{\widehat\phi_i-\phi_i}_2^2},
+ \qquad
+ e_{2,i}=\frac{\norm{\widehat\phi_i-\phi_i}_2}{\sqrt p}.
+\]
+The report gives the mean, median, and 95th percentile of \(e_{2,i}\).
+For a frozen readout \(h\), prediction perturbation is
+\[
+ \Delta_h=\frac1m\sum_{i=1}^m
+ \abs{h(\widehat\phi_i)-h(\phi_i)}.
+\]
+Relative degradation is
+\[
+ D_{\mathrm{rel}}
+ =\frac{\mathrm{NRMSE}_{\mathrm{estimated}}
+              -\mathrm{NRMSE}_{\mathrm{exact}}}
+             {\max(\mathrm{NRMSE}_{\mathrm{exact}},10^{-12})}.
+\]
+
+\paragraph{Readout diagnostics.}
+For dual coefficients \(\bm\alpha\), the fitted RKHS norm is
+\(\sqrt{\bm\alpha^\top K\bm\alpha}\).  Condition numbers are computed in
+float64 as \(\kappa_2(K)\) and
+\(\kappa_2(K+\lambda_{\mathrm K}I)\); a singular value below
+\(10^{-14}\sigma_{\max}\) is reported as numerical singularity rather than
+silently clipped.
+
+\paragraph{JL diagnostic.}
+The pair set \(\mathcal Q\) contains 10,000 unordered nonidentical training
+point pairs generated once from the \texttt{model\_selection} stream.  In
+addition to \(\widehat\Delta_{0.95}\), E3 reports the fraction whose relative
+squared-distance distortion exceeds \(0.5\).  Pairs with raw squared distance
+below \(10^{-12}\) are excluded and replaced deterministically.
+
+\paragraph{Compute and resource metrics.}
+Wall-clock stages are projection, feature compilation, feature execution,
+feature transfer, readout selection, and final fit/prediction.  GPU timings are
+synchronized.  Peak device memory is obtained from the GPU memory pool before
+cleanup; host peak memory uses process resident-set high-water mark.  We also
+store \(n\), physical qubits when applicable, \(p\), \(NR\) reservoir outputs,
+\(NRw\) exact temporal channel updates, \(NRS\) shadow snapshots/state
+preparations, and \(NRSw\) sampled temporal updates.  Hardware runs additionally
+store circuit groups, submitted PUBs, total shots, completed and missing
+results, transpiled depths, two-qubit gate counts, layouts, queue time, and
+execution timestamps.
+
+\subsection{Experimental master matrix}
+\label{app:master-matrix}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\caption{Implementation master matrix.  Feature runs may serve several tasks
+because the same structured feature tensor is reused by multiple readouts.}
+\label{tab:master-matrix}
+\begin{tabularx}{\linewidth}{@{}p{0.055\linewidth}p{0.22\linewidth}p{0.25\linewidth}p{0.22\linewidth}X@{}}
+\toprule
+ID & Data and task combinations & Varied factors & Replication and estimator & Principal outputs \\
+\midrule
+E1 & Medium VARMA; future, exponential, Volterra, delays \(1,5,10,20\), cross-lag \((0,15)\) & KRR path; train prefixes \(250,500,1000,2000,5000\) & 5 roots; exact NVIDIA; one cached feature tensor/root & loss path, RKHS norm, conditioning, learning and delay curves \\
+E2a & Low/high VARMA; delays \(1,10,20\) & \(\lambda=0.1,0.3,0.5,0.8,0.95\) & 5 roots; 50 exact feature runs & contraction--persistence NRMSE surface \\
+E2b & VARMA/HMM/GARCH at low/medium/high persistence; shared and family-specific targets & family and persistence only & 5 roots; 45 QuaRK feature runs plus ESN/random controls & cross-family absolute and paired errors \\
+E3 & Latent VARMA in sparse/distributed embeddings; exponential and Volterra & \(d=3,30,100,300,500\); \(n=3,5,8\) only at stated points & 5 roots; 90 QuaRK feature runs plus controls & error, JL distortion, time, memory \\
+E4 & Seven selected E1--E3 scenarios & method only & artifact aggregation; no new features & calibrated comparison table \\
+E5 & Medium VARMA; Volterra and delay 20 & one-factor \(n,R,k,\lambda\) sweeps & 5 roots; 55 exact feature runs & Pareto error, time, memory, width, dimension \\
+E6 & Medium VARMA; exponential, Volterra, delay 10 & snapshots and estimator protocol & 3 structural roots; independent measurement replicates & feature and prediction degradation \\
+E7 & Lorenz--63 and Mackey--Glass forecasting & horizon, observation noise, MG delay & 3 trajectory roots; exact NVIDIA and two controls & NRMSE and persistence skill \\
+E8 & Beijing PM2.5, live fuel moisture, hydraulic systems & method only & 5 representation roots; exact NVIDIA and controls & dataset-level transfer table \\
+E9 & \(d=n=2,w=4,R=1\) VARMA; delays 1 and 3 & execution layer only & 8 windows; \(S=192,G=6\); 2 hardware periods & feature/prediction ladder and hardware provenance \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Experiment-specific execution contracts}
+\label{app:experiment-contracts}
+
+\subsubsection{E1: \texttt{quark-e1-functional-v1}}
+The feature artifact is generated once per structural root with
+\texttt{ExactFeatureEstimator(complex128)} and the reference NVIDIA program.
+Targets are stored independently from the feature artifact.  The regularization
+path uses fixed \((\nu,\xi)=(2.5,1)\) and the eleven powers
+\(10^{-8},\ldots,10^2\).  Prefix results are valid only if nested-index checks
+pass.  A task with zero outer-training standard deviation is marked invalid
+before fitting.  The main display is a three-panel figure: regularization path,
+learning curve, and delayed-recall profile.  Full path tables and conditioning
+values remain in the appendix.
+
+\subsubsection{E2: \texttt{quark-e2-memory-v1} and
+\texttt{quark-e2-family-v1}}
+E2a generates separate feature tensors for every
+\((\text{persistence},\lambda,\text{root})\) triple and reuses each tensor for
+three delays.  E2b creates one tensor for every
+\((\text{family},\text{persistence},\text{root})\) combination.  HMM states and
+GARCH conditional variances are written only to teacher-target artifacts; they
+never enter model inputs.  Generator stationarity checks and persistence
+parameters are mandatory manifest fields.  The main display combines a
+contraction--delay heat map with a cross-family paired-error panel.
+
+\subsubsection{E3: \texttt{quark-e3-dimension-v1}}
+A three-dimensional latent VARMA path is generated first.  Sparse and
+distributed embeddings are then deterministic functions of the latent path and
+the named nuisance/embedding streams.  Thus all dimensions for one root share
+the same latent realization.  Main fixed-width runs use \(n=5\) for all five
+dimensions.  Width sensitivity adds \(n=3,8\) only for \(d=100,500\); the
+\(n=5\) values are reused.  Raw Mat\'ern is skipped, with status
+\texttt{guardrail-not-run}, for \(d>30\).  The main display has prediction and
+JL-distortion panels; detailed timing and memory tables are supplementary.
+
+\subsubsection{E4: \texttt{quark-e4-calibration-v1}}
+The aggregator fails if any expected scenario lacks at least four paired
+structural roots.  Its seven rows are: E1 future, E1 exponential, E1 Volterra,
+medium-HMM regime, medium-GARCH volatility, \(d=500\) sparse Volterra, and
+\(d=500\) distributed Volterra.  Columns are method NRMSE mean/std, paired
+difference to QuaRK, feature dimension, candidate count, feature time, and
+peak memory.  Missing raw-Mat\'ern guardrail runs appear as em dashes with a
+status footnote, not as failures or wins.
+
+\subsubsection{E5: \texttt{quark-e5-resources-v1}}
+The unique program list is generated by changing one field of the reference
+program and deduplicating by program fingerprint.  All programs use the same
+data and readout grid.  Runtime is measured after one unreported warm-up and
+three timed executions of the same compiled feature plan; the median is stored.
+A run that exhausts device memory is retained with its requested dimensions,
+last measured allocation, and \texttt{resource-exhausted} status.  Pareto
+membership uses median feature time and mean test NRMSE and is recomputed from
+stored rows.
+
+\subsubsection{E6: \texttt{quark-e6-shadows-v1}}
+For the frozen-readout study, 256 test windows are selected before measurement
+by equally spaced indices from the full test block.  Snapshot counts are
+\(100,300,1000,3000,10000\), with ten MoM blocks, three structural roots, and
+five measurement replicates.  The exact scaler and readout remain frozen.
+A 16-window Aer subset, using the same bases and outcome seeds wherever
+semantically possible, estimates shadow-only error from an exact channel.  The
+secondary noisy-training study uses 512/128/256 train/validation/test windows,
+\(S=300,1000,3000\), three structural roots, and three measurement replicates;
+training and evaluation use independent measurement-outcome child streams.
+Raw snapshots are retained for the Aer subset and one audit replicate per
+snapshot count, not for every large GPU run.
+
+\subsubsection{E7: \texttt{quark-e7-chaos-v1}}
+After burn-in, each chaotic trajectory is standardized using the inner-training
+block and bounded by a fixed \(\tanh\) map before projection.  Input windows use
+stride one.  A guard interval of 20 observations separates validation from
+test so that no future target crosses a split boundary.  Horizon-specific
+readouts reuse the same features.  Numerical integration failure, nonfinite
+state, or invariant-range escape is an integrity failure and is retained in the
+ledger.  The complete matrix is in \cref{app:chaotic-protocol}.
+
+\subsubsection{E8: \texttt{quark-e8-real-v1}}
+Official train/test indices are immutable.  The final 20\% of official train is
+validation.  Dataset inputs use the archive's retained window representation;
+training-only standardization is applied channelwise before JL projection.
+Raw Mat\'ern is attempted only if estimated float64 Gram storage is below
+2 GiB and a single readout-grid pilot completes within 30 minutes.  The
+aggregate requires all five paired representation roots for each stochastic
+method, but no dataset is dropped because one method underperforms.  Dataset
+specifications are in \cref{tab:real-world-sanity}.
+
+\subsubsection{E9: \texttt{quark-e9-ibm-v1}}
+The exact execution ladder, backend-selection score, fixed-layout rule,
+Runtime-job chunking, and missing-result policy are given in
+\cref{app:hardware-validation}.  The protocol submits no more than 360 unique
+circuit groups and 1536 total shadow shots per hardware period.  Any provider
+limit lower than the full group count triggers deterministic chunking by the
+ordered group key; it does not change the structural plan.  Hardware results
+are reported for every completed period, including an unsuccessful or partial
+period, and are never pooled without the calibration timestamps.
+
+\subsection{Main-paper and appendix display contract}
+\label{app:display-contract}
+
+The main paper is limited to six empirical displays after results are available:
+\begin{enumerate}
+  \item \textbf{Figure 3: Functional and sample-complexity profile} (E1):
+        regularization, nested-sample, and delay panels;
+  \item \textbf{Figure 4: Memory and dependence map} (E2): contraction--delay
+        heat map and cross-family paired errors;
+  \item \textbf{Figure 5: Fixed-width ambient-dimension study} (E3): NRMSE and
+        JL distortion against \(d\);
+  \item \textbf{Table 2: Classical calibration} (E4): the seven retained
+        scenarios and transparent matching fields;
+  \item \textbf{Figure 6: Resource and measurement operating points} (E5--E6):
+        error--runtime Pareto panel and frozen-readout shot curve; and
+  \item \textbf{Figure 7: Compact IBM transfer ladder} (E9): feature error and
+        frozen-readout degradation, accompanied by one small hardware-resource
+        table.
+\end{enumerate}
+E7 and E8 are summarized in text and shown in the appendix unless their results
+change a central conclusion.
+
+The supplementary displays include all seed-level metric tables, full KRR
+paths, all E2 persistence levels, all E3 width and timing rows, complete E5
+sweeps including failures, E6 shadow-only and noisy-training diagnostics,
+chaos horizon/noise panels, dataset-level E8 predictions, and the complete E9
+job, calibration, layout, depth, count, and missing-result ledger.  Negative
+and failed runs are retained rather than hidden.
+
+\subsection{Run completion and audit rules}
+\label{app:completion-rules}
+
+A scenario is complete only when all expected manifests pass checksum and
+ordering validation, all selected readouts can be reproduced from stored
+features, and every displayed aggregate maps to immutable run identifiers.
+Resumable hardware jobs are incomplete until decoded results or a terminal
+provider status are stored.  When fewer than the required replicates finish,
+the result is shown as incomplete and no mean-only replacement is reported.
+All plotting and table scripts consume long-form aggregate files and are
+forbidden from reading ad hoc notebook variables.

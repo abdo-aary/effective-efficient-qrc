@@ -156,34 +156,44 @@ asks the learner to recover the next conditional-volatility state from the
 bounded return-derived input window.  The latent variance is used only to
 construct the synthetic label.
 
-\subsection{Sparse and distributed high-dimensional targets}
+\subsection{High-dimensional observation constructions}
 \label{app:high-dimensional-functionals}
 
-The ambient-dimension study distinguishes two ways in which the task may scale
-with \(d\).  For \(d\geq3\), define sparse directions by embedding the
-three-dimensional task,
-\begin{equation}
-    u_d^{\mathrm{sp}}=(u_3^\top,0,\ldots,0)^\top,
-    \qquad
-    v_d^{\mathrm{sp}}=(v_3^\top,0,\ldots,0)^\top.
-    \label{eq:functional-sparse-directions}
-\end{equation}
-Here the added coordinates are nuisance dimensions.  To distribute signal over
-all coordinates, let \(s^{(u)},s^{(v)}\in\{-1,+1\}^{\N}\) be two fixed
-Rademacher sign sequences generated once from predeclared task seeds 1729 and
-2718, and set
-\begin{equation}
-    u_d^{\mathrm{de}}
-    :=\frac1d(s^{(u)}_1,\ldots,s^{(u)}_d)^\top,
-    \qquad
-    v_d^{\mathrm{de}}
-    :=\frac1d(s^{(v)}_1,\ldots,s^{(v)}_d)^\top.
-    \label{eq:functional-dense-directions}
-\end{equation}
-Both constructions retain unit \(\ell_1\) norm and hence a dimension-independent
-label range.  The high-dimensional experiment evaluates
-\(F_{\mathrm{exp}}\) under both sparse and distributed directions and
-\(F_{\mathrm{vol}}\) under the distributed directions.
+The high-dimensional experiment changes the observation map while keeping the
+three-dimensional teacher fixed.  Let \(L_t\in[-1,1]^3\) be the bounded latent
+VARMA process.  For every ambient dimension, the exponential and Volterra
+targets are computed from \(L_{t-w+1:t}\) using \(u_3\) and \(v_3\).  The
+learner instead receives either the sparse or distributed observation
+\(X_t^{(d)}\) defined in \cref{app:varma-family}.  In the sparse construction,
+the informative coordinates are the first three and all remaining coordinates
+are nuisance.  In the distributed construction, the informative subspace is
+spread through \(A_d\), which is generated from the named JL-independent
+embedding stream and stored with the dataset artifact.  Thus label range and
+intrinsic task difficulty do not increase merely because \(d\) increases.
+
+This design distinguishes two possible compression failures.  Sparse signal
+may be diluted by indiscriminate projection when only a few coordinates matter;
+distributed signal asks whether a global low-dimensional geometry survives the
+same fixed encoded width.  No target direction is selected after inspecting
+prediction results.
+
+\subsection{Implementation contract for target generation}
+\label{app:functional-implementation}
+
+A target generator receives a window ending at time \(t\) and an immutable
+context object.  Window-only functionals use only the window.  The genuine
+forecast functional reads \(X_{t+1}\) from the context, the HMM score reads the
+precomputed finite-window filtering probabilities, and the GARCH target reads
+\(\sigma_{t+1}^2\).  These fields are teacher-only and are excluded from the
+model input and preprocessing.  The context, target parameters, and teacher
+arrays are checksum-validated and stored separately from feature artifacts.
+
+The implementation must not label \(u^\top X_t\) as one-step forecasting.
+Current-point projection may be retained as an optional smoke test under the
+identifier \texttt{current-point-decoding}, but it is not an E1 forecasting
+result.  Delayed-recall and cross-lag targets are deterministic window-only
+objects, while all direction vectors are created once per dataset artifact and
+reused for every example and method.
 
 \subsection{Assumption compatibility}
 \label{app:functional-assumptions}
@@ -240,17 +250,17 @@ Functional hierarchy and learning curves
   & VARMA, medium persistence
   & future projection, exponential memory, Volterra, delay curve, cross-lag \\
 Memory and persistence study
-  & VARMA, HMM, GARCH at three persistence levels
-  & exponential memory with several decays and delayed recall under a contraction sweep \\
+  & VARMA at low/high persistence
+  & delayed recall at \(\tau\in\{1,10,20\}\) under a contraction sweep \\
 Cross-family robustness
-  & VARMA, HMM, GARCH, medium persistence
+  & VARMA, HMM, GARCH at low/medium/high persistence
   & shared exponential and Volterra tasks; VARMA future projection; HMM filtered score; GARCH volatility state \\
 Ambient-dimension study
-  & VARMA with \(d\in\{3,10,30,100,300,500\}\)
-  & sparse and distributed exponential memory; distributed Volterra \\
+  & latent VARMA observed at \(d\in\{3,30,100,300,500\}\)
+  & latent exponential and Volterra teachers under sparse/distributed observations \\
 Resource and memory ablations
   & VARMA, medium persistence
-  & Volterra and delayed recall at \(\tau\in\{10,20\}\) \\
+  & Volterra and delayed recall at \(\tau=20\) \\
 Finite-shot study
   & VARMA, medium persistence
   & exponential memory, Volterra, and delayed recall at \(\tau=10\) \\
@@ -258,8 +268,11 @@ Chaotic stress tests
   & Lorenz--63 and Mackey--Glass
   & multi-horizon forecasting and partial-observation prediction; see \cref{app:chaotic-stress} \\
 Real-world sanity checks
-  & three TSER datasets
+  & Beijing PM2.5, live fuel moisture, hydraulic systems
   & archive-provided scalar regression targets; see \cref{app:real-world-sanity} \\
+IBM hardware feasibility
+  & compact \(d=2\) VARMA subset
+  & delayed recall at \(\tau\in\{1,3\}\); see \cref{app:hardware-validation} \\
 \bottomrule
 \end{tabularx}
 \end{table}

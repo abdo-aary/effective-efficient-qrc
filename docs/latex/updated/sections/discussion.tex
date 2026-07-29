@@ -35,8 +35,11 @@ Pauli measurements, and \cref{cor:measurement-stability} propagates this error
 through a fixed readout. Training with a noisy Gram matrix, coherent gate
 errors, reset imperfections, decoherence, calibration drift, and correlated
 measurements require separate treatment. Likewise, the circuit in
-\cref{fig:reset-dilation} is an ideal dilation of the replacement channel, not
-a real-device validation.
+\cref{fig:reset-dilation} is an ideal dilation of the replacement channel.
+The compact experiment in \cref{sec:exp-hardware} instead uses pre-sampled
+reset trajectories and finite local-Pauli measurements.  It can quantify
+transfer at one operating point, but it does not establish general robustness
+to hardware noise.
 
 Resource accounting is therefore component-wise. The JL projection can reduce
 the logical encoded width on a finite point set, but applying a dense
@@ -65,12 +68,13 @@ splits, and model-selection effort. We do not claim quantum advantage,
 asymptotic speedup, state-of-the-art accuracy, or general superiority over
 classical temporal models.
 
-The chaotic and real-world experiments have a different evidential role from the
-theory-aligned synthetic study.  Lorenz--63 and Mackey--Glass are explicit
+The chaotic, real-world, and hardware experiments have evidential roles that
+differ from the theory-aligned synthetic study.  Lorenz--63 and Mackey--Glass are explicit
 out-of-scope stress tests, while the three TSER datasets are limited external
-sanitary checks for which stationarity and beta mixing are not asserted.  They
-may reveal transfer or failure, but they do not expand the formal scope of the
-risk theorem.
+sanity checks for which stationarity and beta mixing are not asserted.  The IBM
+experiment is a compact finite-shot feasibility check using a frozen readout.
+These studies may reveal transfer or failure, but they do not expand the formal
+scope of the risk theorem.
 
 The method is general-purpose and is not tied to a sensitive deployment in its
 present form. Its foreseeable risks are the ordinary risks of temporal
