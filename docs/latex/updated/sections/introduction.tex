@@ -1,90 +1,113 @@
 \section{Introduction}
 \label{sec:introduction}
 
-Temporal prediction differs from ordinary supervised learning because a useful
-representation must retain information from a potentially unbounded past.
-Reservoir computing addresses this problem by evolving a fixed dynamical
-system and training only a comparatively simple readout
-\citep{Jaeger2001,MaassNatschlagerMarkram2002}. Contractive reservoirs are
-particularly attractive: contraction makes the effect of initialization
-vanish, produces a well-defined causal filter, and gives a direct handle on
-fading memory. Quantum reservoir computing instantiates the dynamical system
-with a quantum channel and extracts classical features from the resulting
-states \citep{FujiiNakajima2017,ChenNurdinYamamoto2020}. This construction can
-provide structured nonlinear temporal features, but it also introduces
-resource questions that are absent from an abstract reservoir model: how many
-qubits encode an input, how many reservoir instances are used, which
-observables are read out, and how many state preparations are required to
-estimate them.
+Temporal learning is difficult for two related reasons. First, a prediction at
+one time may depend on events far in the past, so the learner needs a state that
+summarizes history without growing with the sequence length. Second, training
+examples extracted from a single trajectory are generally dependent, so their
+statistical behavior cannot be read directly from an i.i.d. analysis. Reservoir
+computing addresses the first difficulty by driving a fixed dynamical system
+with the input sequence and training only a comparatively simple readout
+\citep{Jaeger2001,MaassNatschlagerMarkram2002}. When the state dynamics are
+contractive, the effect of an arbitrary initialization vanishes, yielding a
+well-defined causal representation of the input history.
 
-We study these questions through \textsc{QuaRK}, a quantum-reservoir kernel for
-temporal learning. A finite-set Johnson--Lindenstrauss (JL) map compresses each
-input vector to the width of a quantum register. A collection of independently
-parameterized reset-contractive channels processes a window sequentially.
-Expectations of local observables from the resulting states are concatenated
-into a classical feature vector, and a Mat\'ern kernel ridge-regression
-readout is fitted to these features. The resulting learner is modular: the
-projection controls encoded width, contraction controls memory, multiplexing
-and the observable family control feature dimension, and RKHS regularization
-controls the readout class.
+Quantum reservoir computing replaces the classical recurrent state by a
+quantum system and constructs classical features from measurements of the
+evolved state \citep{FujiiNakajima2017,ChenNurdinYamamoto2020}. This offers a
+structured way to generate nonlinear temporal features while keeping the
+trainable component classical. It also makes the resource picture more
+layered than in an abstract reservoir model. Input dimension determines how
+many coordinates must be encoded, reservoir width and circuit depth determine
+the cost of one state evolution, the observable family determines the feature
+dimension, and finite-shot estimation determines how often the same temporal
+window must be replayed. These quantities should be analyzed separately rather
+than summarized by a single claim of scalability.
 
-The purpose of the present analysis is not to infer a quantum advantage from
-this modular construction. Instead, it identifies what follows from each
-module and what does not. In particular, finite-set distance preservation by
-JL is not feature injectivity; the ability of a strictly positive-definite
-kernel to interpolate distinct features is not a guarantee that the reservoir
-produces distinct features; and finite-shot estimation of local observables is
-not a device-noise analysis. Keeping these statements separate is necessary
-for a falsifiable account of the method.
+A second source of ambiguity is that several distinct questions are often
+compressed into one performance claim. A contractive state update can guarantee
+loss of initialization dependence without guaranteeing that different input
+histories produce different features. A positive-definite kernel can
+interpolate distinct feature vectors without establishing that the featurizer
+is injective. Likewise, an efficient estimator for many local observables does
+not by itself provide a learning guarantee under temporal dependence or a
+model of device noise. A useful theory for quantum reservoir learning should
+therefore connect these layers while preserving their individual assumptions.
+
+We develop this perspective through \textsc{QuaRK}, a quantum-reservoir kernel
+for temporal learning. Each input vector is first mapped to the width of an
+\(n\)-qubit register by a finite-set Johnson--Lindenstrauss (JL) projection and
+a bounded angle encoding. A collection of independently parameterized
+reset-contractive quantum channels then processes a temporal window. Local
+observable expectations from the resulting reservoir states are concatenated
+into a classical feature vector, on which a regularized Mat\'ern kernel readout
+is trained. The components have complementary roles: the projection controls
+encoded width, contraction controls the influence of the remote past,
+reservoir multiplexing and observable choice control feature dimension, and
+RKHS regularization controls the readout class.
+
+The analysis follows the same order as the learning pipeline. We first account
+for the finite-set projection dimension, then use exact trace-norm contraction
+to construct a unique causal state and quantify the error introduced by a
+finite window. The geometry of the Mat\'ern RKHS transfers this state-space
+error to predictions and squared loss. We next characterize the finite-sample
+capacity of the readout conditional on distinct exact features. Finally, an
+independent-block argument gives a one-sided risk bound for stationary
+beta-mixing input--output data. We extend this result from one fixed design to
+a predeclared finite family, so validation-based selection among finitely many
+reservoir and readout configurations incurs an explicit logarithmic penalty.
+A separate classical-shadow result quantifies the measurements needed to
+estimate local Pauli features. Keeping model selection and measurement
+separate from the exact-feature risk bound makes the scope of each result
+explicit.
+
+Throughout the paper, \emph{resource-aware} means that logical width, temporal
+channel applications, state preparations, observable locality, classical
+projection work, feature dimension, and kernel-training costs are reported as
+separate resources. It is not used as a synonym for computational advantage or
+practical efficiency.
 
 \paragraph{Contributions.}
-Our contributions are as follows.
-
+The main contributions are:
 \begin{enumerate}
-    \item We formulate a resource-explicit temporal learner built from
-    reset-contractive quantum reservoirs and a classical kernel readout.
-    Spatial multiplexing is represented as a tuple of independently evolved
-    states and a concatenated observable vector, so the model definition does
-    not rely on a fictitious tensor-product contraction.
+    \item We formulate an end-to-end temporal learner built from
+    reset-contractive quantum reservoirs and a classical Mat\'ern kernel
+    readout. Spatial multiplexing is represented by a tuple of independently
+    evolved reservoir states followed by concatenated observable features,
+    which keeps peak width and repeated execution costs distinct.
 
-    \item We prove exact trace-norm contraction of every reset channel and
-    derive uniqueness of the causal state, loss of initialization dependence,
-    and a finite-window feature error that decays as
-    \(\sqrt{\sum_r\lambda_r^{2w}}\). A Mat\'ern RKHS stability lemma propagates
-    this error to predictions and squared loss.
+    \item We prove exact trace-norm contraction of the reset dynamics, derive a
+    unique causal state and a geometrically decaying finite-window feature
+    error, and propagate this approximation through the Mat\'ern RKHS to
+    prediction and squared loss.
 
-    \item We characterize finite-sample readout capacity. Conditional on
-    pairwise-distinct exact features, strict positive definiteness of the
-    Mat\'ern kernel gives a finite-norm interpolant and an explicit upper bound
-    on the best training error below the interpolation norm. This result makes
-    no claim that the JL projection or quantum reservoir is injective.
+    \item We separate readout capacity from statistical generalization.
+    Conditional on pairwise-distinct exact features, strict positive
+    definiteness of the Mat\'ern kernel yields a finite-norm interpolant. For a
+    fixed exact featurizer and stationary beta-mixing data, a corrected
+    independent-block analysis yields a one-sided risk bound with an explicit
+    effective block count and finite-window approximation term. A finite-family
+    corollary makes the bound simultaneous over a predeclared collection of
+    configurations and quantifies the additional model-selection cost.
 
-    \item We give a one-sided risk bound for a fixed exact featurizer under a
-    stationary beta-mixing input--output process. The proof retains the block
-    length in the independent-block argument of
-    \citet{MohriRostamizadeh2008}, exposes the effective number of blocks, and
-    adds the finite-window approximation term. We also state the conditions
-    under which geometric mixing yields a
-    \(\sqrt{\log N/N}\)-type estimation rate.
-
-    \item We state the local-Pauli classical-shadow requirement separately
-    from the learning bound and give a deterministic perturbation guarantee
-    for evaluating a fixed RKHS readout on estimated rather than exact
-    features.
+    \item We state the local-Pauli classical-shadow requirement independently
+    of the learning bound and derive how coordinate-wise measurement error
+    affects evaluation of a fixed RKHS readout.
 \end{enumerate}
 
-Together, these results position \textsc{QuaRK} as a resource-aware
-quantum-reservoir-based feature map with an analyzable classical readout. They
-do not establish computational speedup, statistical superiority over
-classical reservoirs, robustness to device noise, or practical deployability
-on current hardware.
+The resulting contribution is an assumption-explicit foundation for studying
+quantum-reservoir-based temporal features. The theory does not establish
+quantum advantage or superiority over classical reservoirs; those are
+comparative empirical questions that require matched protocols.
 
 \paragraph{Organization.}
-\Cref{sec:related-work} relates the construction to reservoir computing,
-quantum temporal models, and dependent-data learning.
-\Cref{sec:problem-setting} fixes the stochastic and learning notation.
-\Cref{sec:method} defines the complete pipeline and its resources.
-\Cref{sec:theory} presents the theoretical results, with proofs in
-\cref{app:proofs}. \Cref{sec:experiments} is deliberately reserved for the
-empirical revision. \Cref{sec:discussion,sec:conclusion} discuss scope,
-limitations, and conclusions.
+After positioning the work in \cref{sec:related-work}, we formalize temporal
+windows, reservoir features, risks, and dependence in
+\cref{sec:problem-setting}. \Cref{sec:method} then builds the complete learner
+and accounts for its resources. The theoretical analysis is developed in
+\cref{sec:theory}, with proofs in \cref{app:proofs}.  The empirical section
+then specifies the controlled functional hierarchy, dependent-family
+robustness study, high-dimensional width-control experiment, matched controls,
+and measurement ablations.  The exact synthetic generators and task maps are
+collected in \cref{app:dependent-families,app:functionals}, followed by the
+discussion and conclusion.

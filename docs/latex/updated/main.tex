@@ -21,7 +21,27 @@
 \maketitle
 
 \begin{abstract}
-Learning from temporal data requires a representation that retains useful history while controlling statistical and computational complexity. We introduce \textsc{QuaRK}, a quantum-reservoir-based temporal learning framework that combines a finite-set Johnson--Lindenstrauss projection, independently parameterized reset-contractive quantum reservoirs, local-observable features, and a regularized Mat\'ern kernel readout. The analysis separates four properties that are sometimes conflated in quantum reservoir learning. First, the reset channel yields exact trace-norm contraction and a geometrically fading dependence on initialization. Second, distinct exact feature vectors can be interpolated by a finite-norm Mat\'ern RKHS readout, a conditional capacity statement that does not assert injectivity of the quantum feature map. Third, local Pauli observables admit a classical-shadow measurement guarantee whose finite-shot error can be propagated to a fixed readout. Fourth, for a fixed exact featurizer and stationary beta-mixing input--output data, an independent-block argument gives a one-sided risk bound with an explicit effective block count and a finite-window truncation term. These results provide a resource-aware and assumption-explicit foundation for evaluating quantum reservoir kernels without asserting quantum advantage, hardware-noise robustness, or superiority to classical temporal models.
+Temporal learning requires representations that retain useful history while
+keeping statistical dependence and implementation cost explicit. We introduce
+\textsc{QuaRK}, a quantum-reservoir-based framework in which a finite-set
+Johnson--Lindenstrauss projection maps inputs to a quantum register, a bank of
+reset-contractive reservoirs processes each temporal window, local-observable
+expectations form a classical feature vector, and a regularized Mat\'ern kernel
+provides the readout. The analysis follows this pipeline. Exact trace-norm
+contraction yields a unique causal state and a geometrically decaying
+finite-window approximation; Mat\'ern RKHS geometry transfers this error to
+predictions and squared loss. Conditional on distinct exact features, the
+readout admits a finite-norm interpolant. For a fixed exact featurizer and
+stationary beta-mixing input--output data, an independent-block argument gives
+a one-sided risk bound governed by an explicit effective block count and the
+finite-window error. A finite-family extension makes this guarantee
+simultaneous over a predeclared collection of featurizer--readout
+configurations, adding only a logarithmic model-selection term. A separate
+classical-shadow result quantifies the measurements needed for local Pauli
+features and propagates finite-shot error uniformly over a bounded RKHS readout class. Together, these results provide a resource-aware,
+assumption-explicit basis for evaluating quantum reservoir kernels without
+claiming quantum advantage, hardware-noise robustness, or superiority over
+classical temporal models.
 \end{abstract}
 
 \input{sections/introduction.tex}
@@ -39,5 +59,9 @@ Learning from temporal data requires a representation that retains useful histor
 \appendix
 \input{appendices/technical_background.tex}
 \input{appendices/proofs.tex}
+\input{appendices/dependent_families.tex}
+\input{appendices/functionals.tex}
+\input{appendices/chaotic_stress_tests.tex}
+\input{appendices/real_world_sanity.tex}
 
 \end{document}

@@ -1,8 +1,6 @@
 # QuaRK TMLR manuscript
 
-This directory contains the correctness-first TMLR rewrite of QuaRK. The
-empirical section is intentionally a visible placeholder in this revision; the
-document is therefore not yet submission-ready.
+This directory contains the theory-and-methodology TMLR rewrite of QuaRK, including the readability revision, the finite-family model-selection corollary, and an explicit empirical-question and protocol section. Numerical empirical results remain intentionally deferred; the document is therefore not yet submission-ready.
 
 ## TMLR template provenance
 
@@ -39,8 +37,9 @@ corresponding release artifact.
 
 ## Manuscript status
 
-- Methodology and theory: rewritten.
-- Empirical evaluation: deliberately deferred and visibly marked in
+- Methodology and theory: rewritten, including the finite-family selection result.
+- Empirical evaluation: questions and protocol are explicit, while numerical
+  results remain deliberately deferred and visibly marked in
   `sections/experiments.tex`.
 - Legacy ACM manuscript: retained separately in `../legacy/` and not used as a
   build dependency.

@@ -1,0 +1,79 @@
+\section{Limited Real-World Sanity Checks}
+\label{app:real-world-sanity}
+
+The main empirical contribution is the controlled synthetic characterization.
+This appendix adds a deliberately small external check using three datasets
+from the Monash--UEA--UCR Time Series Extrinsic Regression archive
+\citep{TanEtAl2021TSER}.  The datasets were chosen before inspecting the final
+comparison table to span markedly different temporal lengths and channel
+counts.  They are not used to claim broad real-world validation, and the
+stationarity and beta-mixing assumptions of the theory are not asserted for
+them.
+
+\subsection{Datasets and roles}
+\label{app:real-world-datasets}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Real-world sanity-check datasets.  The dimensions and audited splits
+match the repository manifests used by the empirical pipeline.}
+\label{tab:real-world-sanity}
+\begin{tabularx}{\linewidth}{@{}lrrrrX@{}}
+\toprule
+Dataset & Train & Test & \(w\) & \(d\) & Role in the sanity check \\
+\midrule
+Gas Sensor Array Ethanol
+  & 324 & 140 & 7500 & 1
+  & Very long univariate sensor trace; tests compression of long temporal context. \\
+Live Fuel Moisture Content
+  & 3000 & 1000 & 365 & 7
+  & Year-long multivariate remote-sensing series; tests moderate channel count and seasonal context. \\
+Hydraulic Systems
+  & 1159 & 290 & 60 & 728
+  & Short but very high-dimensional multivariate record; tests the fixed-width projection pipeline under large raw dimension. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The archive defines a time-series extrinsic-regression target for each dataset:
+a scalar response associated with the entire observed series rather than
+necessarily a future value \citep{TanEtAl2021TSER}.  No synthetic labels or
+latent variables are introduced.  The original archive split is retained, and
+all preprocessing parameters are fitted on the training portion only.
+
+\subsection{Comparison protocol}
+\label{app:real-world-protocol}
+
+The sanity check compares:
+\begin{enumerate}
+  \item \textsc{QuaRK} with the selected resource-aware configuration;
+  \item an ESN representation of the same reported feature dimension followed
+        by the identical Mat\'ern KRR readout;
+  \item matched-dimensional random nonlinear features followed by the same
+        readout; and
+  \item raw-window Mat\'ern KRR when the kernel computation satisfies the
+        predeclared memory and runtime guardrails.
+\end{enumerate}
+For stochastic representations, five method seeds are paired across methods.
+The Mat\'ern candidate grid, validation fraction, selection metric, and target
+normalization are shared.  The test set is evaluated only after the readout and
+all representation hyperparameters have been selected from the training
+portion.
+
+The primary metric is training-standard-deviation-normalized RMSE.  We also
+report unnormalized MSE, feature dimension, projection time, feature-extraction
+time, readout time, and peak memory.  Dataset-level values and paired seed
+differences are shown in this appendix.  The main text may summarize the three
+outcomes, but it does not report an average rank or general superiority claim
+from such a small sample.
+
+\subsection{Interpretation boundary}
+\label{app:real-world-interpretation}
+
+These datasets answer only a limited transfer question: do the qualitative
+comparisons and failure modes observed in the controlled study remain visible
+on three naturally collected problems with very different shapes?  A favorable
+result does not establish practical deployability or robustness across the
+TSER archive.  An unfavorable result is equally informative because it
+identifies where the controlled synthetic conclusions fail to transfer.

@@ -1,30 +1,39 @@
 \section{Method}
 \label{sec:method}
 
-\subsection{Finite-set projection and encoding width}
+\textsc{QuaRK} turns a temporal window into a kernel input through four stages.
+The raw observations are first projected and encoded as rotations. Each
+projected sequence then drives several reset-contractive quantum reservoirs.
+Local observable expectations from their final states are concatenated, and a
+Mat\'ern kernel ridge-regression readout is trained on the resulting vectors.
+We describe the stages in this order and conclude with an end-to-end resource
+ledger.
 
-Let \(\mathcal P\subset\R^d\) be the set of all time-point vectors appearing
-in the finite collection of windows to be encoded; \(|\mathcal P|\leq wN\).
-For a chosen register width \(n\), draw
+\subsection{Finite-set projection and angle encoding}
+
+For resource accounting, let \(\mathcal P\subset\R^d\) be the set of all
+individual time-point vectors appearing in the finite collection of windows to
+be processed, so \(|\mathcal P|\leq wN\). Independently of these points, and for
+a chosen register width \(n\), draw
 \[
     \Pi\in\R^{n\times d},
     \qquad
     \Pi_{ij}\stackrel{\mathrm{i.i.d.}}{\sim}\mathcal N(0,1/n),
 \]
-and set \(z=\Pi x\). Each coordinate is converted to a bounded rotation angle,
-for example \(\theta(z_j)=\pi\tanh(z_j)\), and encoded with a single-qubit
-\(R_y(\theta(z_j))\) gate.
+and set \(z=\Pi x\). Each coordinate is converted to a bounded angle, for
+example \(\theta(z_j)=\pi\tanh(z_j)\), and encoded by a one-qubit
+\(R_y(\theta(z_j))\) rotation.
 
-The JL guarantee in \cref{prop:jl} concerns only the finite point set
-\(\mathcal P\). It permits \(n\) to be chosen from a distortion and failure
-probability target instead of setting \(n=d\). Applying the dense projection
-still costs \(O(nd)\) arithmetic operations per time point, and neither the
-bounded angle map nor the reservoir dynamics is asserted to preserve the JL
-geometry.
+The finite-set JL statement in \cref{prop:jl} allows the encoded dimension to
+be chosen from a distortion and failure-probability target rather than by
+setting \(n=d\). This width interpretation applies only to the projected finite
+set: the dense multiplication still costs \(O(nd)\) operations per time point,
+and the subsequent angle encoding and reservoir evolution are nonlinear. The
+encoded rotations now provide the input layer of each reservoir update.
 
 \subsection{Reset-contractive quantum dynamics}
 
-Sub-reservoir \(r\) uses the input-dependent unitary
+Sub-reservoir \(r\) applies the input-dependent unitary
 \begin{equation}
     V_r(x)
     =
@@ -32,13 +41,14 @@ Sub-reservoir \(r\) uses the input-dependent unitary
     \bigotimes_{j=1}^n R_y\!\left(\theta((\Pi x)_j)\right),
     \label{eq:input-unitary}
 \end{equation}
-where \(W_r\) is a fixed hardware-topology-aware unitary. One possible block
-is an Ising-style layer of edge-wise \(R_{zz}\) gates followed by local
-rotations. Its parameters are sampled once and then held fixed.
+where \(W_r\) is a fixed topology-constrained unitary. Its parameters are drawn
+once and then held fixed. A generic three-qubit instance is shown in
+\cref{fig:unitary}; the controlled links represent a chosen entangling pattern
+rather than a particular device-native gate set.
 
 \begin{figure}[t]
 \centering
-\resizebox{\linewidth}{!}{
+\resizebox{0.76\linewidth}{!}{
 \begin{quantikz}[column sep=0.30cm,row sep=0.22cm]
 \lstick{$q_1$} & \gate{R_y(\theta(z_1))} &
   \ctrl{1} & \qw &
@@ -52,32 +62,45 @@ rotations. Its parameters are sampled once and then held fixed.
   \gate{R_z(\vartheta_z^3)} & \gate{R_x(\vartheta_x^3)} & \qw
 \end{quantikz}
 }
-\caption{Example input-dependent unitary for a three-qubit sub-reservoir.
-The circuit is an architectural instance, not a claim about a specific
-device's native gate set or noise.}
+\caption{Example input-dependent unitary for a three-qubit sub-reservoir. The
+controlled links indicate a generic topology-constrained entangling pattern.}
 \label{fig:unitary}
 \end{figure}
 
-After the unitary, apply the reset channel
+After the unitary, the state is partially replaced by a fixed reset state. On
+an arbitrary operator \(A\), define
 \begin{equation}
-    T_{r,x}(\rho)
+    T_{r,x}(A)
     :=
-    \lambda_r V_r(x)\rho V_r(x)^\dagger
-    +(1-\lambda_r)\rhoreset,
+    \lambda_r V_r(x) A V_r(x)^\dagger
+    +(1-\lambda_r)\Tr[A] \,\rhoreset,
     \qquad 0\leq\lambda_r<1.
     \label{eq:reset-channel}
 \end{equation}
-The contraction parameter \(\lambda_r\) controls the loss of initialization
-dependence: larger values retain information longer, while smaller values
-forget more rapidly. The displayed channel can be dilated with an \(n\)-qubit
-reset register and one coin qubit. For the dilation in \cref{fig:reset-dilation},
-\(\rhoreset=\lvert+\rangle\!\langle+\rvert^{\otimes n}\). After the controlled
-swaps, the ancillary and coin registers are discarded; this partial trace is
-essential to obtaining the reduced mixture in \cref{eq:reset-channel}.
+The map \(A\mapsto\Tr[A]\rhoreset\) is a replacement channel. A Kraus
+representation is given in \cref{app:technical-background}, so it is completely
+positive and trace preserving; consequently, so is \(T_{r,x}\). For a density
+operator \(\rho\), this reduces to
+\[
+    T_{r,x}(\rho)
+    =
+    \lambda_r V_r(x)\rho V_r(x)^\dagger
+    +(1-\lambda_r)\rhoreset.
+\]
+The parameter \(\lambda_r\) sets the worst-case memory scale: values near one
+retain more of the previous state, whereas smaller values place more weight on
+the reset state.
+
+The replacement channel admits the ideal dilation in
+\cref{fig:reset-dilation}. For
+\(\rhoreset=\lvert+\rangle\!\langle+\rvert^{\otimes n}\), an \(n\)-qubit reset
+register is prepared in \(\lvert+\rangle^{\otimes n}\), and a coin qubit
+controls swaps between the reservoir and reset registers. Discarding the coin
+and reset registers produces the mixture in \cref{eq:reset-channel}.
 
 \begin{figure}[t]
 \centering
-\resizebox{0.92\linewidth}{!}{
+\resizebox{0.62\linewidth}{!}{
 \begin{quantikz}[column sep=0.34cm,row sep=0.18cm]
 \lstick{$q_1$} & \qw & \swap{3} & \qw & \qw & \qw \\
 \lstick{$q_2$} & \qw & \qw & \swap{3} & \qw & \qw \\
@@ -89,38 +112,39 @@ essential to obtaining the reduced mixture in \cref{eq:reset-channel}.
   \ctrl{-6} & \ctrl{-5} & \ctrl{-4} & \qw
 \end{quantikz}
 }
-\caption{A dilation of the reset channel for three reservoir qubits.
-Here \(\theta_\lambda=2\arcsin\sqrt{1-\lambda}\). The reduced reservoir
-channel is obtained after discarding the coin and ancilla registers.}
+\caption{Ideal dilation of the reset channel for three reservoir qubits, with
+\(\theta_\lambda=2\arcsin\sqrt{1-\lambda}\). The reduced channel is obtained
+by discarding the coin and reset registers.}
 \label{fig:reset-dilation}
 \end{figure}
 
-For a finite window, the recursion starts from a fixed
-\(\rho_{\mathrm{init}}^{(r)}\) and applies \cref{eq:reset-channel} once per
-time point. The infinite-history state is the limit obtained by moving this
-initialization into the remote past. Existence and uniqueness of that limit
-follow from \cref{lem:contraction}.
+For a length-\(w\) window, the recursion starts from
+\(\rho_{\mathrm{init}}^{(r)}\) and applies \cref{eq:reset-channel} once per time
+point. Moving the initialization into the remote past defines the causal state;
+\cref{lem:contraction} will show that this limit exists and is unique.
 
-\subsection{Multiplexing and exact observable features}
+\subsection{Reservoir multiplexing and observable features}
 
-The \(R\) sub-reservoirs are separate channel realizations:
+The \(R\) sub-reservoirs produce a tuple of final states,
 \[
-    \bigl(\rho^{(1)}_{w,0},\ldots,\rho^{(R)}_{w,0}\bigr).
+    \bigl(\rho^{(1)}_{w,0},\ldots,\rho^{(R)}_{w,0}\bigr),
 \]
-They can be run in parallel on separate registers or sequentially by reusing
-the same physical register. Parallel execution multiplies peak quantum width;
-sequential reuse multiplies state preparations and runtime but leaves peak
-reservoir width unchanged.
+rather than a tensor-product state. They may be run in parallel on separate
+registers or sequentially on reused hardware. Parallel execution multiplies
+peak quantum width, whereas sequential execution keeps the reservoir width at
+\(n\) qubits but multiplies runtime and state preparations.
 
-For a family \(\cO\) of local Hermitian observables, the analytic feature map
-is the concatenation in \cref{eq:window-feature}. Its dimension is
-\(p=R|\cO|\). Exact expectations are used to define the kernel and in the main
-generalization theorem. Finite-shot estimates are considered separately in
-\cref{prop:shadows,cor:measurement-stability}.
+For each reservoir, the observables in \(\cO\) are evaluated and concatenated
+as in \cref{eq:window-feature}, producing a vector of dimension
+\(p=R|\cO|\). The exact expectations define the analytic feature map used in
+the kernel and in the main learning theorem. Their finite-shot estimates are
+introduced later in \cref{prop:shadows,cor:measurement-stability}. Once the
+quantum states have been reduced to this classical vector, the remaining
+learning stage is an ordinary kernel method.
 
 \subsection{Mat\'ern kernel readout}
 
-For \(r\geq0\), smoothness \(\nu>1\), and length scale \(\xi>0\), define
+For distance \(r\geq0\), smoothness \(\nu>1\), and length scale \(\xi>0\), let
 \begin{equation}
     \varphi_{\nu,\xi}(r)
     :=
@@ -129,18 +153,17 @@ For \(r\geq0\), smoothness \(\nu>1\), and length scale \(\xi>0\), define
     K_\nu\!\left(\frac{\sqrt{2\nu}\,r}{\xi}\right),
     \label{eq:matern-profile}
 \end{equation}
-where \(K_\nu\) is the modified Bessel function of the second kind. Set
-\(\varphi_{\nu,\xi}(0)=1\), and define
+where \(K_\nu\) is the modified Bessel function of the second kind. With
+\(\varphi_{\nu,\xi}(0)=1\), define
 \begin{equation}
-    \kappa(z,z^{\prime})
+    \kappa(z,z')
     :=
-    \varphi_{\nu,\xi}\!\left(\norm{z-z^{\prime}}_2\right).
+    \varphi_{\nu,\xi}\!\left(\norm{z-z'}_2\right).
     \label{eq:matern-kernel}
 \end{equation}
-The kernel is classical and is evaluated after measurement. Mat\'ern
-smoothness is not invoked as evidence of quantum expressivity; the properties
-used below are strict positive definiteness and an RKHS section-stability
-bound.
+This is a classical kernel evaluated after feature extraction. We use its
+strict positive definiteness to study interpolation and its spectral second
+moment to control sensitivity to feature perturbations.
 
 Given exact training features \(z_i=\PhiWin(x_i)\), kernel ridge regression
 solves
@@ -150,20 +173,37 @@ solves
     +\eta\norm{h}_{\cH_\kappa}^2.
     \label{eq:krr-objective}
 \end{equation}
-By the representer theorem \citep{ScholkopfSmola2002}, the solution is
-\(h(\cdot)=\sum_i\alpha_i\kappa(z_i,\cdot)\), with
+By the representer theorem \citep{KimeldorfWahba1971,ScholkopfSmola2002},
+\(\widehat h_\eta(\cdot)=\sum_i\alpha_i\kappa(z_i,\cdot)\), where
 \[
     \bm\alpha=(K+N\eta I)^{-1}\bm y.
 \]
-Naive dense training requires \(O(N^2)\) kernel storage and \(O(N^3)\)
-linear-algebra time. These classical costs remain part of the end-to-end
-method.
+When \(\abs{y_i}\leq\Upsilon\), comparing the objective at
+\(\widehat h_\eta\) with the zero function gives
+\begin{equation}
+    \eta\norm{\widehat h_\eta}_{\cH_\kappa}^2
+    \leq \frac1N\sum_{i=1}^N y_i^2
+    \leq \Upsilon^2,
+    \qquad
+    \norm{\widehat h_\eta}_{\cH_\kappa}
+    \leq \frac{\Upsilon}{\sqrt\eta}.
+    \label{eq:krr-norm-bound}
+\end{equation}
+Thus fixed-\(\eta\) KRR belongs to the RKHS ball used in
+\cref{sec:theory} with \(\Lambda=\Upsilon/\sqrt\eta\), provided the featurizer,
+kernel parameters, and \(\eta\) are fixed independently of the analyzed
+sample. The finite-family result in \cref{cor:finite-family-selection} also
+allows these quantities to be selected from a predeclared finite grid. Dense
+KRR requires \(O(N^2)\) kernel storage and \(O(N^3)\) naive linear-algebra time,
+which remains part of the end-to-end cost.
 
 \subsection{Resource summary}
 
-\Cref{tab:resources} distinguishes peak width, feature dimension, and repeated
-executions. Big-\(O\) entries describe the stated implementation, not an
-optimality or advantage result.
+The stages above expose different bottlenecks. \Cref{tab:resources} separates
+peak quantum width from repeated temporal evolution and from classical
+post-processing. In particular, one snapshot of a final length-\(w\) reservoir
+state requires replaying all \(w\) channel updates. Projected inputs may be
+cached, but the quantum evolution must be repeated for each state preparation.
 
 \begin{table}[t]
 \caption{Principal resource parameters of \textsc{QuaRK}.}
@@ -174,12 +214,19 @@ optimality or advantage result.
 Quantity & Accounting \\
 \midrule
 Encoded reservoir width & \(n\) qubits per sub-reservoir \\
-Displayed reset dilation & Up to \(2n+1\) qubits when reset ancillas and coin are simultaneous \\
+Ideal reset dilation & Up to \(2n+1\) qubits when reset ancillas and coin are simultaneous \\
 Reservoir realizations & \(R\); sequential reuse or \(R\)-fold parallel width \\
 Exact feature dimension & \(p=R|\cO|\) \\
-Projection work & \(O(nd)\) per time point for a dense \(\Pi\) \\
-Finite-shot work & \(R\) state preparations per window per snapshot count; see \cref{prop:shadows} \\
+Projection work & \(O(nd)\) per time point for a dense \(\Pi\); values may be cached across snapshots \\
+Per-state temporal evolution & \(w\) channel applications, each containing input encoding, \(W_r\), and one reset-channel realization \\
+Finite-shot state preparations & \(NRS\) for \(N\) windows, \(R\) reservoirs, and \(S\) snapshots per state \\
+Finite-shot channel updates & \(NRS w\); gate count and depth depend on \(W_r\) and the reset implementation \\
 Kernel storage/training & \(O(N^2)\) memory and \(O(N^3)\) naive time \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+This decomposition will reappear in the theory: the projection controls encoded
+width, contraction controls the finite-history approximation, RKHS geometry
+controls the readout, dependence determines the effective sample size, and
+observable locality controls the measurement budget.

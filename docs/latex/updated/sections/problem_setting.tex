@@ -1,7 +1,13 @@
 \section{Problem Setting}
 \label{sec:problem-setting}
 
-\subsection{Temporal data and histories}
+The analysis distinguishes three objects that coincide only in idealized
+settings: the causal feature of an infinite input history, the implementable
+feature obtained from a finite window, and the empirical sample of dependent
+windows used to train the readout. This section fixes these objects before the
+quantum architecture is specified.
+
+\subsection{Temporal data and windowed observations}
 
 Let \(Z=(Z_t)_{t\in\Z}\), with \(Z_t=(X_t,Y_t)\), be a stationary stochastic
 process on \(\R^d\times\R\). We write
@@ -9,13 +15,12 @@ process on \(\R^d\times\R\). We write
 \[
     x_{-w+1:0}=(x_{-w+1},\ldots,x_0)\in(\R^d)^w
 \]
-for its last \(w\) inputs. A temporal predictor maps a history to a scalar.
-The target is not assumed to have finite memory; finite windows are instead an
-implementable approximation whose error will be controlled through reservoir
+for its most recent \(w\) inputs. A temporal predictor maps a history to a
+scalar. The target need not have finite memory; a finite window is instead an
+implementable approximation whose error will later be controlled by reservoir
 contraction.
 
-For a window length \(w\geq1\) and integer stride \(s=w+g\), where \(g\geq0\), define the stationary
-window process
+For a window length \(w\geq1\) and stride \(s=w+g\), with \(g\geq0\), define
 \begin{equation}
     W_j
     :=
@@ -23,20 +28,21 @@ window process
     \qquad j\in\Z.
     \label{eq:window-process}
 \end{equation}
-The observed sample is \(\cD_N=(W_1,\ldots,W_N)\). Windows need not be
-independent, even when they do not overlap.
+The observed sample is \(\cD_N=(W_1,\ldots,W_N)\). The gap \(g\) controls the
+raw-time separation between consecutive windows, but nonoverlap alone does not
+make them independent.
 
-\subsection{Quantum-reservoir features}
+\subsection{Causal and finite-window reservoir features}
 
 There are \(R\) independently parameterized sub-reservoirs. Sub-reservoir
 \(r\) has an \(n\)-qubit state \(\rho_t^{(r)}\) and an input-dependent channel
-\(T_{r,x}\). For a history, its causal state at time zero is denoted
-\(\rho_{\infty,0}^{(r)}(x_{-\infty:0})\). For a finite window, we initialize
-the channel at time \(-w\) in a fixed state \(\rho_{\mathrm{init}}^{(r)}\)
-and denote its state after consuming the window by
-\(\rho_{w,0}^{(r)}(x_{-w+1:0})\).
+\(T_{r,x}\). For a semi-infinite history, its causal state at time zero is
+written \(\rho_{\infty,0}^{(r)}(x_{-\infty:0})\). For a finite window, the
+recursion starts at time \(-w\) from a fixed state
+\(\rho_{\mathrm{init}}^{(r)}\), producing
+\(\rho_{w,0}^{(r)}(x_{-w+1:0})\) after the last input is consumed.
 
-Let \(\cO\) be a finite family of Hermitian observables satisfying
+Let \(\cO\) be a finite family of Hermitian observables with
 \(\opNorm{O}\leq1\). The exact infinite-history and finite-window feature maps
 are
 \begin{align}
@@ -55,12 +61,12 @@ are
     \qquad p=R|\cO|.
     \label{eq:window-feature}
 \end{align}
-These are concatenations of expectations from a tuple of states. No
-tensor-product state is needed to define the learner or analyze its memory.
-An estimated feature vector \(\widehat\Phi_w\) obtained with a finite number
-of measurements is a separate random object.
+These vectors concatenate expectations from a tuple of independently evolved
+states; no tensor-product state is introduced for multiplexing. A finite-shot
+estimate \(\widehat\Phi_w\) is a distinct random object and will be treated
+separately from the exact feature map.
 
-\subsection{Kernel readout and risks}
+\subsection{Kernel readout and the three risks}
 
 Let \(\kappa:\R^p\times\R^p\to\R\) be a normalized Mat\'ern kernel and
 \(\cH_\kappa\) its RKHS. For a radius \(\Lambda>0\), define
@@ -69,26 +75,26 @@ Let \(\kappa:\R^p\times\R^p\to\R\) be a normalized Mat\'ern kernel and
     :=
     \set{h\in\cH_\kappa:\norm{h}_{\cH_\kappa}\leq\Lambda}.
 \]
-Normalization means \(\kappa(z,z)=1\), so the reproducing property gives
+Normalization gives \(\kappa(z,z)=1\), and hence
 \begin{equation}
     \abs{h(z)}
     \leq\norm{h}_{\cH_\kappa}\sqrt{\kappa(z,z)}
-    \leq\Lambda
-    \quad\text{for every }h\in\Hball.
+    \leq\Lambda,
+    \qquad h\in\Hball.
     \label{eq:prediction-bound}
 \end{equation}
 
-For squared loss \(\ell(\widehat y,y)=(\widehat y-y)^2\), define the
-infinite-history risk
+For squared loss \(\ell(\widehat y,y)=(\widehat y-y)^2\), the causal target is
+the infinite-history risk
 \begin{equation}
     \risk_\infty(h)
     :=
     \E\!\left[
       \ell\bigl(h(\PhiInf(X_{-\infty:0})),Y_0\bigr)
-    \right],
+    \right].
     \label{eq:infinite-risk}
 \end{equation}
-the finite-window risk
+The finite-window approximation is
 \begin{equation}
     \risk_w(h)
     :=
@@ -97,7 +103,7 @@ the finite-window risk
     \right],
     \label{eq:window-risk}
 \end{equation}
-and the empirical finite-window risk
+and the quantity optimized from the observed windows is
 \begin{equation}
     \erisk_{N,w}(h)
     :=
@@ -105,16 +111,16 @@ and the empirical finite-window risk
     \ell\bigl(h(\PhiWin(X_{js-w+1:js})),Y_{js}\bigr).
     \label{eq:empirical-risk}
 \end{equation}
-The theoretical learning result compares \(\risk_\infty\) with
-\(\erisk_{N,w}\). It therefore has both a statistical component
-\(\risk_w-\erisk_{N,w}\) and a deterministic window-truncation component
-\(\risk_\infty-\risk_w\).
+The learning analysis will therefore have two parts: a statistical comparison
+between \(\risk_w\) and \(\erisk_{N,w}\), and a deterministic comparison between
+\(\risk_\infty\) and \(\risk_w\).
 
-\subsection{Dependence and fixed-design scope}
+\subsection{Dependence and analytical scope}
+\label{sec:analytical-scope}
 
-For sub-sigma-algebras \(\mathcal A,\mathcal B\), write
-\(\beta(\mathcal A,\mathcal B)\) for their absolute-regularity coefficient.
-We use the convention
+For sub-sigma-algebras \(\mathcal A\) and \(\mathcal B\), let
+\(\beta(\mathcal A,\mathcal B)\) denote their absolute-regularity coefficient.
+We use
 \begin{equation}
     \beta_Z(q)
     :=
@@ -123,13 +129,28 @@ We use the convention
       \sigma(Z_u:u\leq t),
       \sigma(Z_u:u\geq t+q)
     \right),
-    \qquad q\geq0.
+    \qquad q\geq0,
     \label{eq:beta-definition}
 \end{equation}
-The process is beta mixing if \(\beta_Z(q)\to0\).
+and call the process beta mixing when \(\beta_Z(q)\to0\).
 
-All learning guarantees below condition on the projection, reservoir
-parameters, observable family, Mat\'ern parameters, window length, stride, and
-initialization. These objects must be fixed independently of the sample to
-which the theorem is applied. Uniformity is over the RKHS ball
-\(\Hball\), not over data-dependent architecture or hyperparameter choices.
+The primary learning result is first stated for a fixed design. The
+projection, reservoir parameters, initialization states, observable family,
+window scheme, and Mat\'ern parameters are chosen independently of the sample
+on which that result is evaluated; when specialized to kernel ridge regression,
+its regularization parameter is fixed on the same basis. Random design elements,
+such as the JL matrix or reservoir seed, may be drawn independently and then
+conditioned upon. We assume that \(x\mapsto V_r(x)\), equivalently
+\(x\mapsto T_{r,x}\), is measurable, that the resulting loss classes are
+measurable (or admit the usual separable versions), that
+\(\abs{Y_t}\leq\Upsilon\) almost surely for some \(\Upsilon>0\), and that the
+Mat\'ern kernel is normalized. Results using its spectral second moment require
+\(\nu>1\). The main risk bound concerns exact observable expectations and is
+uniform over \(\Hball\). \Cref{cor:finite-family-selection} later extends this
+uniformity to sample-dependent selection from a finite family of configurations
+that is fully declared before the sample is examined, including all random
+seeds and preprocessing maps. Continuous or adaptively generated
+hyperparameter families remain outside that extension.
+
+With the data, feature maps, risks, and dependence structure in place, we next
+specify the concrete \textsc{QuaRK} pipeline that produces \(\PhiWin\).

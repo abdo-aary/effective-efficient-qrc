@@ -1,71 +1,81 @@
 \section{Discussion and Limitations}
 \label{sec:discussion}
 
-\paragraph{What is specific to the quantum reservoir.}
-The state update, its reset-channel implementation, and the observable
-measurement process are quantum. The statistical readout and the JL
-preprocessing are classical. The theory proves useful structural properties
-of this complete construction, but it does not isolate a predictive benefit
-that cannot be reproduced by a classical nonlinear reservoir or random
-feature map. The appropriate comparative question is therefore empirical and
-must use matched feature, readout, split, and model-selection protocols.
+The analysis was designed to keep the dynamical, statistical, and measurement
+layers of \textsc{QuaRK} separate. This modularity clarifies what can be
+inferred from the current theory and where empirical evidence or additional
+analysis is still needed.
 
-\paragraph{Fixed-design learning theory.}
-\Cref{thm:generalization} is uniform over an RKHS norm ball after the
-projection, reservoirs, observable family, window scheme, and kernel
-hyperparameters have been fixed independently of the analyzed sample. If
-these choices are selected on training or validation data, the theorem must
-be combined with a separate model-selection argument. Bounded labels and
-stationary beta mixing are substantive assumptions; nonstationarity,
-heavy-tailed outcomes, and online adaptation are outside the current result.
+\subsection{Statistical scope and memory trade-offs}
 
-\paragraph{Effective sample size.}
-The independent-block parameter \(a\) is not a cosmetic proof variable.
-Increasing \(a\) weakens the coupling penalty through
-\(\beta_Z(as-w)\) but decreases the effective block count
-\(\mu=N/(2a)\). Consequently, the theory does not predict a universal
-\(1/\sqrt N\) curve for a fixed gap. Under geometric mixing, the explicit
-block schedule in \cref{cor:geometric-mixing} yields a logarithmic degradation
-from the independent rate.
+The single-design risk bound is uniform over an RKHS norm ball after the
+projection, reservoirs, observable family, window scheme, kernel parameters,
+and regularization level have been fixed. \Cref{cor:finite-family-selection}
+adds a controlled model-selection layer for a predeclared finite family,
+including sample-dependent validation selection, at a logarithmic cost in the
+number of candidates. Continuous optimization, adaptively enlarged search
+spaces, and sample-estimated preprocessing not included in that family still
+require separate analysis. The assumptions of stationary beta mixing and
+bounded labels are also substantive; nonstationarity, heavy-tailed targets,
+and online adaptation lie outside the present result.
 
-\paragraph{Window approximation.}
-Contraction produces a transparent finite-window error, but it also imposes a
-memory trade-off. Stronger contraction decreases the worst-case effect of the
-remote past; it may simultaneously suppress task-relevant history. The bound
-does not select \(w\) or \(\lambda_r\), nor does it imply monotonic predictive
-improvement as either parameter changes.
+The block length \(a\) and the window length \(w\) play different roles.
+Increasing \(a\) weakens the dependence penalty through \(\beta_Z(as-w)\) but
+reduces the effective block count \(\mu=N/(2a)\). Increasing \(w\), or choosing
+larger contraction parameters, reduces the worst-case loss of remote history,
+but may increase circuit cost and retain information that is irrelevant to the
+task. The theory exposes these trade-offs; it does not select an optimal
+operating point.
 
-\paragraph{Measurement and hardware scope.}
-The generalization theorem uses exact expectations. The shadow result covers
-finite sampling under a particular randomized local-Pauli measurement model,
-and \cref{cor:measurement-stability} concerns evaluation of a fixed readout.
-Neither result covers training instability from noisy Gram matrices, gate
-noise, reset error, decoherence, calibration drift, or correlated device
-measurements. The reset circuit in \cref{fig:reset-dilation} is an
-implementable dilation, not real-device validation.
+\subsection{Measurement, hardware, and end-to-end resources}
 
-\paragraph{Resource interpretation.}
-The JL statement controls the logical encoded width for a finite point set;
-it does not remove the input-dimension dependence of classical projection.
-Sequential spatial reuse can keep peak quantum width at one reservoir plus
-reset ancillas, but it increases the number of executions. Local shadows
-reduce the dependence on the number of requested observables to a logarithm
-for fixed locality while retaining a \(3^k\) dependence on locality. Finally,
-dense kernel ridge regression has quadratic memory and cubic training time
-unless an additional approximation or solver is introduced.
+The main learning theorem uses exact observable expectations. The
+classical-shadow result addresses only finite sampling under independent local
+Pauli measurements, and \cref{cor:measurement-stability} propagates this error
+through a fixed readout. Training with a noisy Gram matrix, coherent gate
+errors, reset imperfections, decoherence, calibration drift, and correlated
+measurements require separate treatment. Likewise, the circuit in
+\cref{fig:reset-dilation} is an ideal dilation of the replacement channel, not
+a real-device validation.
 
-\paragraph{No advantage claim.}
-Nothing in the interpolation or generalization result distinguishes quantum
-features from arbitrary fixed features satisfying the same assumptions.
-Accordingly, this work does not claim quantum advantage, asymptotic runtime
-speedup, state-of-the-art accuracy, or general superiority over classical
-temporal models. Its practical case must rest on transparent operating-point
-comparisons after the empirical section is completed.
+Resource accounting is therefore component-wise. The JL projection can reduce
+the logical encoded width on a finite point set, but applying a dense
+projection remains \(d\)-dependent.  The ambient-dimension experiment in
+\cref{sec:exp-high-dimensional} is designed to test fixed-width behavior,
+empirical projection distortion, and predictive degradation as \(d\) grows; it
+cannot by itself establish end-to-end runtime independence or practical
+scalability. Sequential execution of the \(R\)
+reservoirs can avoid an \(R\)-fold increase in peak width, at the cost of more
+state preparations and runtime. With \(N\) windows and \(S\) snapshots per
+reservoir output, feature extraction requires \(NRS\) state preparations and
+\(NRS w\) temporal channel applications. The shadow bound is logarithmic in
+the number of requested observables for fixed locality, but exponential in the
+locality \(k\). Dense kernel ridge regression adds quadratic memory and cubic
+naive training time.
 
-\paragraph{Societal impact.}
-The present work develops a general-purpose learning method and does not
-introduce a domain-specific deployment. Its principal foreseeable risks are
-the ordinary risks of time-series prediction---unreliable extrapolation,
-distribution shift, and overconfidence---together with inflated resource or
-advantage claims in an early-stage quantum setting. The explicit assumptions
-and limitations are intended to reduce those risks.
+\subsection{Comparative interpretation}
+
+The state update, reset mechanism, and observable measurement process are
+quantum, whereas the projection and Mat\'ern readout are classical. None of the
+interpolation or generalization results identifies a predictive capability
+that is unavailable to a classical nonlinear reservoir or random feature map.
+Consequently, the practical value of the quantum featurizer must be assessed
+through matched comparisons that control feature dimension, readout, data
+splits, and model-selection effort. We do not claim quantum advantage,
+asymptotic speedup, state-of-the-art accuracy, or general superiority over
+classical temporal models.
+
+The chaotic and real-world experiments have a different evidential role from the
+theory-aligned synthetic study.  Lorenz--63 and Mackey--Glass are explicit
+out-of-scope stress tests, while the three TSER datasets are limited external
+sanitary checks for which stationarity and beta mixing are not asserted.  They
+may reveal transfer or failure, but they do not expand the formal scope of the
+risk theorem.
+
+The method is general-purpose and is not tied to a sensitive deployment in its
+present form. Its foreseeable risks are the ordinary risks of temporal
+prediction---distribution shift, unreliable extrapolation, and overconfidence---
+together with overstated resource or advantage claims in an early-stage
+quantum setting. Making the analytical assumptions and resource ledger visible
+is intended to reduce these risks rather than to replace application-specific
+validation.

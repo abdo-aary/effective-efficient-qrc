@@ -1,22 +1,33 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented \textsc{QuaRK}, a resource-aware temporal-learning framework
-that combines reset-contractive quantum reservoirs, concatenated
-local-observable features, and a regularized Mat\'ern kernel readout. The
-analysis establishes exact trace-norm contraction, geometrically decaying
-finite-window feature error, stability of RKHS predictions to feature
-perturbations, and conditional interpolation of distinct finite feature
-sets. For a fixed exact featurizer and stationary beta-mixing observations,
-the corrected independent-block analysis gives a one-sided true-risk bound
-whose stochastic terms depend on an effective block count and whose
-approximation term exposes the reservoir memory scale. A separate
-classical-shadow result accounts for finite-shot estimation of local Pauli
-features.
+We introduced \textsc{QuaRK}, a temporal learning framework that combines a
+finite-set input projection, reset-contractive quantum reservoirs,
+concatenated local-observable features, and a regularized Mat\'ern kernel
+readout. The architecture separates encoded width, reservoir memory, feature
+dimension, measurement cost, and classical kernel training, allowing each
+resource to be interpreted on its own terms.
 
-These statements provide a rigorous foundation for evaluating the method,
-not evidence of quantum advantage or classical superiority. The remaining
-submission work is empirical: the completed experiment artifacts must be
-integrated under matched protocols, with uncertainty and resource accounting,
-before claims about competitiveness, operating regimes, or practical
-plausibility can be assessed.
+The theoretical analysis mirrors this construction. Exact trace-norm
+contraction yields a unique causal state and a geometrically decaying
+finite-window feature error. Mat\'ern RKHS stability transfers that error to
+predictions and squared risk, while strict positive definiteness characterizes
+the norm needed to interpolate distinct finite feature sets. For a fixed exact
+featurizer and stationary beta-mixing data, the independent-block analysis
+provides a one-sided risk bound governed by an effective block count and the
+finite-window approximation. A finite-family extension makes the guarantee
+simultaneous over a predeclared collection of reservoir and readout
+configurations, thereby covering validation-based selection with an explicit
+logarithmic penalty. A separate classical-shadow result connects observable
+locality and measurement accuracy to the evaluation of a fixed readout.
+
+These results establish a coherent analytical basis for studying quantum
+reservoir kernels, while leaving comparative predictive value to empirical
+evaluation. The empirical protocol is organized around a predeclared hierarchy of
+forecasting, fading-memory, delayed-recall, cross-lag, regime-filtering, and
+volatility tasks; robustness across three beta-mixing data families; an
+ambient-dimension study of JL width control; matched classical and component
+controls; resource ablations; finite-shot behavior; out-of-scope chaotic
+stress tests; three limited real-world sanity checks; and uncertainty across
+repeated runs.  Numerical conclusions will be added only after the
+corresponding artifacts have been audited.

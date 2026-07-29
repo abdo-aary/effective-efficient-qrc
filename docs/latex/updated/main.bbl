@@ -1,0 +1,325 @@
+\begin{thebibliography}{42}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Aronszajn(1950)]{Aronszajn1950}
+Nachman Aronszajn.
+\newblock Theory of reproducing kernels.
+\newblock \emph{Transactions of the American Mathematical Society}, 68\penalty0
+  (3):\penalty0 337--404, 1950.
+\newblock \doi{10.1090/S0002-9947-1950-0051437-7}.
+
+\bibitem[Bartlett \& Mendelson(2002)Bartlett and
+  Mendelson]{BartlettMendelson2002}
+Peter~L. Bartlett and Shahar Mendelson.
+\newblock Rademacher and gaussian complexities: Risk bounds and structural
+  results.
+\newblock \emph{Journal of Machine Learning Research}, 3:\penalty0 463--482,
+  2002.
+\newblock URL \url{https://jmlr.org/papers/v3/bartlett02a.html}.
+
+\bibitem[Baum \& Petrie(1966)Baum and Petrie]{BaumPetrie1966}
+Leonard~E. Baum and Ted Petrie.
+\newblock Statistical inference for probabilistic functions of finite state
+  markov chains.
+\newblock \emph{The Annals of Mathematical Statistics}, 37\penalty0
+  (6):\penalty0 1554--1563, 1966.
+\newblock \doi{10.1214/aoms/1177699147}.
+
+\bibitem[Bochner(1933)]{Bochner1933}
+Salomon Bochner.
+\newblock Remark on the integration of almost periodic functions.
+\newblock \emph{Journal of the London Mathematical Society}, s1-8\penalty0
+  (4):\penalty0 250--254, 1933.
+\newblock \doi{10.1112/jlms/s1-8.4.250}.
+
+\bibitem[Bollerslev(1986)]{Bollerslev1986}
+Tim Bollerslev.
+\newblock Generalized autoregressive conditional heteroskedasticity.
+\newblock \emph{Journal of Econometrics}, 31\penalty0 (3):\penalty0 307--327,
+  1986.
+\newblock \doi{10.1016/0304-4076(86)90063-1}.
+
+\bibitem[Bougerol \& Picard(1992)Bougerol and Picard]{BougerolPicard1992}
+Philippe Bougerol and Nico Picard.
+\newblock Stationarity of {GARCH} processes and of some nonnegative time
+  series.
+\newblock \emph{Journal of Econometrics}, 52\penalty0 (1--2):\penalty0
+  115--127, 1992.
+\newblock \doi{10.1016/0304-4076(92)90067-2}.
+
+\bibitem[Boyd \& Chua(1985)Boyd and Chua]{BoydChua1985}
+Stephen Boyd and Leon~O. Chua.
+\newblock Fading memory and the problem of approximating nonlinear operators
+  with volterra series.
+\newblock \emph{IEEE Transactions on Circuits and Systems}, 32\penalty0
+  (11):\penalty0 1150--1161, 1985.
+\newblock \doi{10.1109/TCS.1985.1085649}.
+
+\bibitem[Bradley(2005)]{Bradley2005}
+Richard~C. Bradley.
+\newblock Basic properties of strong mixing conditions. a survey and some open
+  questions.
+\newblock \emph{Probability Surveys}, 2:\penalty0 107--144, 2005.
+\newblock \doi{10.1214/154957805100000104}.
+
+\bibitem[Carrasco \& Chen(2002)Carrasco and Chen]{CarrascoChen2002}
+Marine Carrasco and Xiaohong Chen.
+\newblock Mixing and moment properties of various {GARCH} and stochastic
+  volatility models.
+\newblock \emph{Econometric Theory}, 18\penalty0 (1):\penalty0 17--39, 2002.
+\newblock \doi{10.1017/S0266466602181023}.
+
+\bibitem[Chen \& Nurdin(2019)Chen and Nurdin]{ChenNurdin2019}
+Jiayin Chen and Hendra~I. Nurdin.
+\newblock Learning nonlinear input--output maps with dissipative quantum
+  systems.
+\newblock \emph{Quantum Information Processing}, 18\penalty0 (7), 2019.
+\newblock \doi{10.1007/s11128-019-2311-9}.
+
+\bibitem[Chen et~al.(2020)Chen, Nurdin, and Yamamoto]{ChenNurdinYamamoto2020}
+Jiayin Chen, Hendra~I. Nurdin, and Naoki Yamamoto.
+\newblock Temporal information processing on noisy quantum computers.
+\newblock \emph{Physical Review Applied}, 14\penalty0 (2):\penalty0 024065,
+  2020.
+\newblock \doi{10.1103/PhysRevApplied.14.024065}.
+
+\bibitem[Dambre et~al.(2012)Dambre, Verstraeten, Schrauwen, and
+  Massar]{DambreEtAl2012}
+Joni Dambre, David Verstraeten, Benjamin Schrauwen, and Serge Massar.
+\newblock Information processing capacity of dynamical systems.
+\newblock \emph{Scientific Reports}, 2:\penalty0 514, 2012.
+\newblock \doi{10.1038/srep00514}.
+
+\bibitem[Dasgupta \& Gupta(2003)Dasgupta and Gupta]{DasguptaGupta2003}
+Sanjoy Dasgupta and Anupam Gupta.
+\newblock An elementary proof of a theorem of johnson and lindenstrauss.
+\newblock \emph{Random Structures \& Algorithms}, 22\penalty0 (1):\penalty0
+  60--65, 2003.
+\newblock \doi{10.1002/rsa.10073}.
+
+\bibitem[Dedecker et~al.(2007)Dedecker, Doukhan, Lang, Le{\'o}n, Louhichi, and
+  Prieur]{DedeckerEtAl2007}
+J{\'e}r{\^o}me Dedecker, Paul Doukhan, Gabriel Lang, Jos{\'e}~Rafael Le{\'o}n,
+  Sana Louhichi, and Cl{\'e}mentine Prieur.
+\newblock \emph{Weak Dependence: With Examples and Applications}.
+\newblock Lecture Notes in Statistics. Springer, 2007.
+\newblock \doi{10.1007/978-0-387-69952-3}.
+
+\bibitem[Dobrushin(1956)]{Dobrushin1956}
+R.~L. Dobrushin.
+\newblock Central limit theorem for nonstationary markov chains. i.
+\newblock \emph{Theory of Probability and Its Applications}, 1\penalty0
+  (1):\penalty0 65--80, 1956.
+\newblock \doi{10.1137/1101006}.
+
+\bibitem[Fujii \& Nakajima(2017)Fujii and Nakajima]{FujiiNakajima2017}
+Keisuke Fujii and Kohei Nakajima.
+\newblock Harnessing disordered-ensemble quantum dynamics for machine learning.
+\newblock \emph{Physical Review Applied}, 8\penalty0 (2):\penalty0 024030,
+  2017.
+\newblock \doi{10.1103/PhysRevApplied.8.024030}.
+
+\bibitem[Genton(2001)]{Genton2001}
+Marc~G. Genton.
+\newblock Classes of kernels for machine learning: A statistics perspective.
+\newblock \emph{Journal of Machine Learning Research}, 2:\penalty0 299--312,
+  2001.
+\newblock URL \url{https://jmlr.org/papers/v2/genton01a.html}.
+
+\bibitem[Gonon et~al.(2020)Gonon, Grigoryeva, and
+  Ortega]{GononGrigoryevaOrtega2020}
+Lukas Gonon, Lyudmila Grigoryeva, and Juan-Pablo Ortega.
+\newblock Risk bounds for reservoir computing.
+\newblock \emph{Journal of Machine Learning Research}, 21\penalty0
+  (240):\penalty0 1--61, 2020.
+\newblock URL \url{https://jmlr.org/papers/v21/19-902.html}.
+
+\bibitem[Grigoryeva \& Ortega(2018)Grigoryeva and Ortega]{GrigoryevaOrtega2018}
+Lyudmila Grigoryeva and Juan-Pablo Ortega.
+\newblock Echo state networks are universal.
+\newblock \emph{Neural Networks}, 108:\penalty0 495--508, 2018.
+\newblock \doi{10.1016/j.neunet.2018.08.025}.
+
+\bibitem[Hofmann et~al.(2008)Hofmann, Sch{\"o}lkopf, and
+  Smola]{HofmannScholkopfSmola2008}
+Thomas Hofmann, Bernhard Sch{\"o}lkopf, and Alexander~J. Smola.
+\newblock Kernel methods in machine learning.
+\newblock \emph{The Annals of Statistics}, 36\penalty0 (3):\penalty0
+  1171--1220, 2008.
+\newblock \doi{10.1214/009053607000000677}.
+
+\bibitem[Hu et~al.(2024)Hu, Khan, Bronn, Angelatos, Rowlands, Ribeill, and
+  T{\"u}reci]{HuEtAl2024}
+Fangjun Hu, Saeed~A. Khan, Nicholas~T. Bronn, Gerasimos Angelatos, Graham~E.
+  Rowlands, Guilhem~J. Ribeill, and Hakan~E. T{\"u}reci.
+\newblock Overcoming the coherence time barrier in quantum machine learning on
+  temporal data.
+\newblock \emph{Nature Communications}, 15\penalty0 (1), 2024.
+\newblock \doi{10.1038/s41467-024-51162-7}.
+
+\bibitem[Huang et~al.(2020)Huang, Kueng, and Preskill]{HuangKuengPreskill2020}
+Hsin-Yuan Huang, Richard Kueng, and John Preskill.
+\newblock Predicting many properties of a quantum system from very few
+  measurements.
+\newblock \emph{Nature Physics}, 16\penalty0 (10):\penalty0 1050--1057, 2020.
+\newblock \doi{10.1038/s41567-020-0932-7}.
+
+\bibitem[Huang et~al.(2021)Huang, Broughton, Mohseni, Babbush, Boixo, Neven,
+  and McClean]{HuangBroughtonEtAl2021}
+Hsin-Yuan Huang, Michael Broughton, Masoud Mohseni, Ryan Babbush, Sergio Boixo,
+  Hartmut Neven, and Jarrod~R. McClean.
+\newblock Power of data in quantum machine learning.
+\newblock \emph{Nature Communications}, 12\penalty0 (1), 2021.
+\newblock \doi{10.1038/s41467-021-22539-9}.
+
+\bibitem[Jaeger(2001)]{Jaeger2001}
+Herbert Jaeger.
+\newblock The ``echo state'' approach to analysing and training recurrent
+  neural networks.
+\newblock Technical Report GMD Report 148, GMD---German National Research
+  Center for Information Technology, 2001.
+
+\bibitem[Kimeldorf \& Wahba(1971)Kimeldorf and Wahba]{KimeldorfWahba1971}
+George Kimeldorf and Grace Wahba.
+\newblock Some results on {Tchebycheffian} spline functions.
+\newblock \emph{Journal of Mathematical Analysis and Applications}, 33\penalty0
+  (1):\penalty0 82--95, 1971.
+\newblock \doi{10.1016/0022-247X(71)90184-3}.
+
+\bibitem[Kraus(1971)]{Kraus1971}
+Karl Kraus.
+\newblock General state changes in quantum theory.
+\newblock \emph{Annals of Physics}, 64\penalty0 (2):\penalty0 311--335, 1971.
+\newblock \doi{10.1016/0003-4916(71)90108-4}.
+
+\bibitem[Lorenz(1963)]{Lorenz1963}
+Edward~N. Lorenz.
+\newblock Deterministic nonperiodic flow.
+\newblock \emph{Journal of the Atmospheric Sciences}, 20\penalty0 (2):\penalty0
+  130--141, 1963.
+\newblock \doi{10.1175/1520-0469(1963)020<0130:DNF>2.0.CO;2}.
+
+\bibitem[Maass et~al.(2002)Maass, Natschl{\"a}ger, and
+  Markram]{MaassNatschlagerMarkram2002}
+Wolfgang Maass, Thomas Natschl{\"a}ger, and Henry Markram.
+\newblock Real-time computing without stable states: A new framework for neural
+  computation based on perturbations.
+\newblock \emph{Neural Computation}, 14\penalty0 (11):\penalty0 2531--2560,
+  2002.
+\newblock \doi{10.1162/089976602760407955}.
+
+\bibitem[Mackey \& Glass(1977)Mackey and Glass]{MackeyGlass1977}
+Michael~C. Mackey and Leon Glass.
+\newblock Oscillation and chaos in physiological control systems.
+\newblock \emph{Science}, 197\penalty0 (4300):\penalty0 287--289, 1977.
+\newblock \doi{10.1126/science.267326}.
+
+\bibitem[Mart{\'i}nez-Pe{\~n}a \& Ortega(2023)Mart{\'i}nez-Pe{\~n}a and
+  Ortega]{MartinezPenaOrtega2023}
+Rodrigo Mart{\'i}nez-Pe{\~n}a and Juan-Pablo Ortega.
+\newblock Quantum reservoir computing in finite dimensions.
+\newblock \emph{Physical Review E}, 107\penalty0 (3):\penalty0 035306, 2023.
+\newblock \doi{10.1103/PhysRevE.107.035306}.
+
+\bibitem[McDiarmid(1989)]{McDiarmid1989}
+Colin McDiarmid.
+\newblock On the method of bounded differences.
+\newblock In \emph{Surveys in Combinatorics, 1989}, volume 141 of \emph{London
+  Mathematical Society Lecture Note Series}, pp.\  148--188. Cambridge
+  University Press, 1989.
+\newblock \doi{10.1017/CBO9781107359949.008}.
+
+\bibitem[Mohri \& Rostamizadeh(2008)Mohri and
+  Rostamizadeh]{MohriRostamizadeh2008}
+Mehryar Mohri and Afshin Rostamizadeh.
+\newblock Rademacher complexity bounds for non-i.i.d. processes.
+\newblock \emph{Advances in Neural Information Processing Systems}, 21, 2008.
+\newblock URL
+  \url{https://proceedings.neurips.cc/paper_files/paper/2008/hash/7eacb532570ff6858afd2723755ff790-Abstract.html}.
+
+\bibitem[Mokkadem(1988)]{Mokkadem1988}
+Abdelkader Mokkadem.
+\newblock Mixing properties of {ARMA} processes.
+\newblock \emph{Stochastic Processes and their Applications}, 29\penalty0
+  (2):\penalty0 309--315, 1988.
+\newblock \doi{10.1016/0304-4149(88)90045-2}.
+
+\bibitem[Molteni et~al.(2023)Molteni, Destri, and
+  Prati]{MolteniDestriPrati2023}
+Riccardo Molteni, Claudio Destri, and Enrico Prati.
+\newblock Optimization of the memory reset rate of a quantum echo-state network
+  for time sequential tasks.
+\newblock \emph{Physics Letters A}, 465:\penalty0 128713, 2023.
+\newblock \doi{10.1016/j.physleta.2023.128713}.
+
+\bibitem[Mujal et~al.(2023)Mujal, Mart{\'i}nez-Pe{\~n}a, Giorgi, Soriano, and
+  Zambrini]{MujalEtAl2023}
+Pere Mujal, Rodrigo Mart{\'i}nez-Pe{\~n}a, Gian~Luca Giorgi, Miguel~C. Soriano,
+  and Roberta Zambrini.
+\newblock Time-series quantum reservoir computing with weak and projective
+  measurements.
+\newblock \emph{npj Quantum Information}, 9\penalty0 (1), 2023.
+\newblock \doi{10.1038/s41534-023-00682-z}.
+
+\bibitem[Nakajima et~al.(2019)Nakajima, Fujii, Negoro, Mitarai, and
+  Kitagawa]{NakajimaEtAl2019}
+Kohei Nakajima, Keisuke Fujii, Makoto Negoro, Kosuke Mitarai, and Masahiro
+  Kitagawa.
+\newblock Boosting computational power through spatial multiplexing in quantum
+  reservoir computing.
+\newblock \emph{Physical Review Applied}, 11\penalty0 (3):\penalty0 034021,
+  2019.
+\newblock \doi{10.1103/PhysRevApplied.11.034021}.
+
+\bibitem[Porcu et~al.(2024)Porcu, Bevilacqua, Schaback, and
+  Oates]{PorcuEtAl2024}
+Emilio Porcu, Moreno Bevilacqua, Robert Schaback, and Chris~J. Oates.
+\newblock The mat{\'e}rn model: A journey through statistics, numerical
+  analysis and machine learning.
+\newblock \emph{Statistical Science}, 39\penalty0 (3):\penalty0 469--492, 2024.
+\newblock \doi{10.1214/24-STS923}.
+
+\bibitem[Sch{\"o}lkopf \& Smola(2002)Sch{\"o}lkopf and
+  Smola]{ScholkopfSmola2002}
+Bernhard Sch{\"o}lkopf and Alexander~J. Smola.
+\newblock \emph{Learning with Kernels: Support Vector Machines, Regularization,
+  Optimization, and Beyond}.
+\newblock MIT Press, 2002.
+\newblock \doi{10.7551/mitpress/4175.001.0001}.
+
+\bibitem[Schuld \& Killoran(2019)Schuld and Killoran]{SchuldKilloran2019}
+Maria Schuld and Nathan Killoran.
+\newblock Quantum machine learning in feature hilbert spaces.
+\newblock \emph{Physical Review Letters}, 122\penalty0 (4):\penalty0 040504,
+  2019.
+\newblock \doi{10.1103/PhysRevLett.122.040504}.
+
+\bibitem[Tan et~al.(2021)Tan, Bergmeir, Petitjean, and Webb]{TanEtAl2021TSER}
+Chang~Wei Tan, Christoph Bergmeir, Fran\c{c}ois Petitjean, and Geoffrey~I.
+  Webb.
+\newblock Time series extrinsic regression: Predicting numeric values from time
+  series data.
+\newblock \emph{Data Mining and Knowledge Discovery}, 35\penalty0 (3):\penalty0
+  1032--1060, 2021.
+\newblock \doi{10.1007/s10618-021-00745-9}.
+
+\bibitem[Woodruff(2014)]{Woodruff2014}
+David~P. Woodruff.
+\newblock Sketching as a tool for numerical linear algebra.
+\newblock \emph{Foundations and Trends in Theoretical Computer Science},
+  10\penalty0 (1--2):\penalty0 1--157, 2014.
+\newblock \doi{10.1561/0400000060}.
+
+\bibitem[Yu(1994)]{Yu1994}
+Bin Yu.
+\newblock Rates of convergence for empirical processes of stationary mixing
+  sequences.
+\newblock \emph{The Annals of Probability}, 22\penalty0 (1):\penalty0 94--116,
+  1994.
+\newblock \doi{10.1214/aop/1176988849}.
+
+\end{thebibliography}

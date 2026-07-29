@@ -1,7 +1,7 @@
 \section{Technical Background}
 \label{app:technical-background}
 
-\subsection{Quantum states and trace norm}
+\subsection{Quantum states, replacement channels, and trace norm}
 
 An \(n\)-qubit density operator is a positive semidefinite matrix of trace one
 on \((\mathbb C^2)^{\otimes n}\). The trace norm is
@@ -14,7 +14,22 @@ on \((\mathbb C^2)^{\otimes n}\). The trace norm is
 unitary invariance of the trace norm, and the fact that two density operators
 have trace-norm distance at most two.
 
-\subsection{Absolute regularity and independent blocks}
+For completeness, the replacement map \(\mathcal R_\sigma(A)=\Tr[A]\sigma\)
+is completely positive and trace preserving; this is a finite-dimensional
+instance of the operator-sum representation of quantum operations
+\citep{Kraus1971}. Indeed, if
+\(\sigma=\sum_a r_a\lvert a\rangle\!\langle a\rvert\) and
+\(\{\lvert b\rangle\}_b\) is an orthonormal basis, the Kraus operators
+\(K_{ab}=\sqrt{r_a}\lvert a\rangle\!\langle b\rvert\) satisfy
+\[
+    \sum_{a,b}K_{ab}A K_{ab}^\dagger=\Tr[A]\sigma,
+    \qquad
+    \sum_{a,b}K_{ab}^\dagger K_{ab}=I.
+\]
+Thus the reset update in \cref{eq:reset-channel} is a convex combination of
+two quantum channels.
+
+\subsection{Absolute regularity and the independent-block theorem}
 
 For sigma-algebras \(\mathcal A\) and \(\mathcal B\), their absolute-regularity
 coefficient can be written as
@@ -28,15 +43,27 @@ coefficient can be written as
 \]
 where the supremum ranges over finite measurable partitions from the two
 sigma-algebras. The coefficient is monotone under inclusion of either
-sigma-algebra.
+sigma-algebra, and measurable transformations cannot increase it
+\citep{Bradley2005}.
 
-We use the following direct specialization of the empirical Rademacher result
-of \citet[Theorem~2]{MohriRostamizadeh2008}. Let
-\((Q_j)_{j\in\Z}\) be stationary and beta mixing, let
-\(\mathcal F\) be a fixed class of measurable functions into \([0,B]\), and
-let \(m=2\mu a\). Divide \(Q_1,\ldots,Q_m\) into \(2\mu\) consecutive blocks
-of length \(a\), and form \(\cS_\mu\) by selecting the same fixed coordinate
-from every odd block. If
+We use the following direct specialization of
+\citet[Theorem~2]{MohriRostamizadeh2008}. Let \((Q_j)_{j\in\Z}\) be stationary
+and beta mixing, let \(\mathcal F\) be a fixed measurable class of functions
+into \([0,B]\), and let \(m=2\mu a\). Divide \(Q_1,\ldots,Q_m\) into
+\(2\mu\) consecutive blocks of length \(a\), and form \(\cS_\mu\) by
+selecting the same fixed coordinate from every odd block. With the source
+paper's empirical Rademacher convention
+\begin{equation}
+    \hRad_{\cS_\mu}(\mathcal F)
+    :=
+    \E_{\bm\sigma}\!\left[
+      \sup_{f\in\mathcal F}
+      \abs{\frac2\mu\sum_{j=1}^{\mu}
+      \sigma_j f(\widetilde Q_j)}
+    \right],
+    \label{eq:source-rademacher-definition}
+\end{equation}
+if
 \[
     \delta_Q'
     :=
@@ -52,45 +79,74 @@ then, with probability at least \(1-\delta\), simultaneously for every
     +3B\sqrt{\frac{\log(4/\delta_Q')}{2\mu}}.
     \label{eq:mr-background}
 \end{equation}
-This result is one-sided. A two-sided statement would require a separate
-application to the reverse deviation and a corresponding confidence
-allocation.
+The theorem is one-sided. A two-sided statement would require an additional
+reverse-deviation argument and a corresponding confidence allocation. We use
+\cref{eq:source-rademacher-definition} throughout so that the imported theorem
+and all constants in our specialization share exactly the same convention.
 
 \subsection{Spectral representation of the Mat\'ern kernel}
 \label{app:matern-spectral}
 
-By Bochner's theorem, the normalized stationary Mat\'ern kernel has a
-probability spectral measure:
+By Bochner's theorem \citep{Bochner1933}, the normalized stationary
+Mat\'ern kernel has a probability spectral measure:
 \begin{equation}
     \kappa(z,z')
     =
-    \E_\Omega\!\left[
-      e^{\ii\Omega^\top(z-z')}
-    \right]
+    \E_\Omega\!\left[e^{\ii\Omega^\top(z-z')}\right]
     =
-    \E_\Omega\!\left[
-      \cos(\Omega^\top(z-z'))
-    \right].
+    \E_\Omega\!\left[\cos(\Omega^\top(z-z'))\right].
     \label{eq:matern-bochner}
 \end{equation}
-Under the parameterization in \cref{eq:matern-profile}, \(\Omega\) follows a
-centered multivariate Student distribution with \(2\nu\) degrees of freedom
-and scale matrix \(\xi^{-2}I\). For \(\nu>1\), its covariance exists and is
+For the parameterization in \cref{eq:matern-profile}, its density on
+\(\R^p\) is
+\begin{equation}
+    p_{\nu,\xi}(\omega)
+    =
+    \frac{\Gamma(\nu+p/2)\,\xi^p}
+         {\Gamma(\nu)(2\nu\pi)^{p/2}}
+    \left(1+\frac{\xi^2\norm{\omega}_2^2}{2\nu}\right)^{-(\nu+p/2)},
+    \label{eq:matern-spectral-density}
+\end{equation}
+which is a centered multivariate Student density with \(2\nu\) degrees of
+freedom and scale matrix \(\xi^{-2}I\); see
+\citet{Genton2001,PorcuEtAl2024}. It is strictly positive everywhere. For
+\(\nu>1\), its covariance exists and is
 \begin{equation}
     \E[\Omega\Omega^\top]
     =
     \frac{\nu}{(\nu-1)\xi^2}I.
     \label{eq:matern-spectral-covariance}
 \end{equation}
-The spectral density is strictly positive on \(\R^p\). These standard
-properties also give strict positive definiteness on distinct Euclidean
-points \citep{Genton2001,PorcuEtAl2024}.
+These identities yield the section-stability constant used in
+\cref{lem:matern-stability}. Positivity of the density also yields strict
+positive definiteness on distinct Euclidean points, as made explicit in the
+proof of \cref{thm:interpolation}; the general RKHS interpolation facts used
+there are standard \citep{Aronszajn1950,KimeldorfWahba1971}.
 
 \subsection{Local Pauli classical shadows}
 
-For local random Pauli measurements, inversion of the one-qubit measurement
-channel multiplies a nonidentity Pauli factor by three. Therefore the squared
-shadow norm of a Pauli string with weight \(q\) is \(3^q\). The
-median-of-means guarantee of \citet{HuangKuengPreskill2020} then yields
-simultaneous estimation of \(M\) weight-at-most-\(k\) Pauli expectations with
-\(O(3^k\varepsilon^{-2}\log(M/\delta))\) independent snapshots.
+In one snapshot of the local-Pauli shadow protocol, each qubit is measured in
+an independently and uniformly chosen \(X\), \(Y\), or \(Z\) basis. Inversion
+of the one-qubit measurement channel multiplies a nonidentity Pauli factor by
+three. Hence a Pauli string of weight \(q\) has squared shadow norm \(3^q\).
+The median-of-means guarantee of \citet{HuangKuengPreskill2020} therefore gives
+simultaneous estimation of \(M\) nonidentity, weight-at-most-\(k\) Pauli
+expectations with
+\(O(3^k\varepsilon^{-2}\log(M/\delta))\) independent snapshots. Identity
+observables, if included in a feature ledger, are known exactly and require no
+measurement.
+
+\subsection{Provenance of imported ingredients}
+
+The replacement-channel representation follows the standard operator-sum
+framework \citep{Kraus1971}, and the spectral representation of the stationary
+Mat\'ern kernel invokes Bochner's theorem \citep{Bochner1933}. The finite-set
+projection result is the standard JL argument
+\citep{DasguptaGupta2003,Woodruff2014}; the dependent-data inequality is
+imported from \citet{MohriRostamizadeh2008}; the RKHS and representer facts are
+standard consequences of \citet{Aronszajn1950,KimeldorfWahba1971}; and the
+finite-union step uses the bounded-difference method of \citet{McDiarmid1989}
+and standard Rademacher-complexity tools \citep{BartlettMendelson2002}. The
+results specific to \textsc{QuaRK} are the way these ingredients are composed
+with its reset-contractive dynamics, finite-window approximation, observable
+map, and fixed-design temporal learning problem.
