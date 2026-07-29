@@ -35,3 +35,6 @@ exclude = ["tests*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "gpu: requires a real CUDA-capable NVIDIA device",
+]

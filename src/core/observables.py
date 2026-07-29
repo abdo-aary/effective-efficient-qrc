@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import combinations, product
 
 _PAULI_CHARS = frozenset("IXYZ")
 
@@ -45,6 +46,26 @@ class ObservableSet:
     @property
     def localities(self) -> tuple[int, ...]:
         return tuple(sum(char != "I" for char in label) for label in self.labels)
+
+    @classmethod
+    def local_paulis(cls, *, num_qubits: int, locality: int) -> "ObservableSet":
+        """Return all nonidentity Pauli words of weight at most ``locality``."""
+
+        n = int(num_qubits)
+        k = min(int(locality), n)
+        if n < 1:
+            raise ValueError("num_qubits must be positive.")
+        if k < 1:
+            raise ValueError("locality must be positive.")
+        labels: list[str] = []
+        for weight in range(1, k + 1):
+            for support in combinations(range(n), weight):
+                for letters in product(("X", "Y", "Z"), repeat=weight):
+                    chars = ["I"] * n
+                    for qubit, letter in zip(support, letters):
+                        chars[n - 1 - qubit] = letter
+                    labels.append("".join(chars))
+        return cls(tuple(labels))
 
     @classmethod
     def from_qiskit(cls, observables: object) -> "ObservableSet":

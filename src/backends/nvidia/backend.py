@@ -94,7 +94,7 @@ class NvidiaBackend:
         windows: np.ndarray,
         estimator: ExactFeatureEstimator,
         execution: ExecutionSpec,
-    ) -> tuple[Any, StateBatch | None]:
+    ) -> tuple[Any, StateBatch | None, dict[str, float], dict[str, int]]:
         try:
             import cupy as cp
         except ImportError as exc:
@@ -102,7 +102,9 @@ class NvidiaBackend:
                 "NvidiaBackend requires CuPy built for the local CUDA runtime."
             ) from exc
 
+        pack_started = perf_counter()
         flat, numeric_layout = pack_program(program, windows)
+        pack_seconds = perf_counter() - pack_started
         output_backend = "cupy" if execution.retain_device_array else "numpy"
         runner = make_runner(
             program,
@@ -116,20 +118,29 @@ class NvidiaBackend:
             runner._masks_from_pauli_label(label)
             for label in program.observables.labels
         ]
-        values = runner._run_flat_cupy_expectation_output(
-            flat=flat,
-            layout=numeric_layout,
-            angle_positioning_name=program.angle_map,
-            plus_state=runner._plus_state(program.num_qubits).astype(
-                estimator.precision.value, copy=False
-            ),
-            chunk_size=execution.chunk_size or self.chunk_size,
-            pauli_masks=masks,
-        ).reshape(
-            windows.shape[0],
-            program.num_reservoirs,
-            program.observables.size,
-        )
+        device = cp.cuda.Device(self.gpu_id) if self.gpu_id is not None else cp.cuda.Device()
+        pool = cp.get_default_memory_pool()
+        baseline_pool_bytes = int(pool.total_bytes())
+        with device:
+            cp.cuda.Stream.null.synchronize()
+            gpu_started = perf_counter()
+            values = runner._run_flat_cupy_expectation_output(
+                flat=flat,
+                layout=numeric_layout,
+                angle_positioning_name=program.angle_map,
+                plus_state=runner._plus_state(program.num_qubits).astype(
+                    estimator.precision.value, copy=False
+                ),
+                chunk_size=execution.chunk_size or self.chunk_size,
+                pauli_masks=masks,
+            ).reshape(
+                windows.shape[0],
+                program.num_reservoirs,
+                program.observables.size,
+            )
+            cp.cuda.Stream.null.synchronize()
+            gpu_seconds = perf_counter() - gpu_started
+        peak_pool_bytes = max(0, int(pool.total_bytes()) - baseline_pool_bytes)
 
         diagnostic = None
         if estimator.return_states:
@@ -141,7 +152,6 @@ class NvidiaBackend:
                 output_backend=output_backend,
                 output_kind="density_matrix",
             )
-            device = cp.cuda.Device(self.gpu_id) if self.gpu_id is not None else cp.cuda.Device()
             with device:
                 density = state_runner._run_flat_cupy_output(
                     flat=flat,
@@ -160,7 +170,15 @@ class NvidiaBackend:
             if not execution.retain_device_array:
                 density = cp.asnumpy(density)
             diagnostic = StateBatch(density)
-        return values, diagnostic
+        timings = {
+            "projection_pack_seconds": float(pack_seconds),
+            "gpu_execution_seconds": float(gpu_seconds),
+        }
+        resources = {
+            "gpu_pool_baseline_bytes": baseline_pool_bytes,
+            "gpu_peak_increment_bytes": peak_pool_bytes,
+        }
+        return values, diagnostic, timings, resources
 
     def execute(
         self,
@@ -180,7 +198,7 @@ class NvidiaBackend:
         diagnostic = None
 
         if isinstance(payload.estimator, ExactFeatureEstimator):
-            values, diagnostic = self._exact(
+            values, diagnostic, exact_timings, exact_resources = self._exact(
                 program, windows, payload.estimator, execution
             )
             estimator_metadata: dict[str, Any] = {
@@ -223,6 +241,9 @@ class NvidiaBackend:
                 **dict(compiled.compilation_metadata),
                 "elapsed_seconds": perf_counter() - started,
                 "chunk_size": execution.chunk_size or self.chunk_size,
+                "device_output": bool(execution.retain_device_array),
+                "timings": exact_timings if exact else {},
+                "resources": exact_resources if exact else {},
             },
         )
         return FeatureBatch(

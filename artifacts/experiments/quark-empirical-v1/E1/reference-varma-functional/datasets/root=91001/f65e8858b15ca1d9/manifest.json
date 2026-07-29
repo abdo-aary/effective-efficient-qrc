@@ -1,0 +1,11 @@
+{
+  "checksums": {
+    "context.npz": "821fdfecc4b72d380f813f6de712caadcf192c1775d37c980ba77ca96c5808db",
+    "dataset.json": "06773dc6a07ab9aaf0bf0567f97f1510761b98bc35e53a36620a151f8d894880",
+    "dataset.npz": "e21f41ca674a9a67e05fd8767baa0e1ef60d688e2f09be43b82fa98dc8e41649",
+    "process.npz": "d2fa69aa817571f4f3c6ec116c08f5b7f6f01ca44015d6b2aedb75a619087c46",
+    "seeds.json": "35199b1080c2afdb4de284f1290330298f2966150b6fb45b22aaf7885e235375"
+  },
+  "fingerprint": "f65e8858b15ca1d95dc5c9355172ff90b2e0a202a24e1e119027c1dee3bcecb8",
+  "schema_version": "quark.e1-dataset/v1"
+}

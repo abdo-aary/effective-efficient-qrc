@@ -1,0 +1,28 @@
+defaults:
+  - e1/data@data: reference_varma
+  - e1/program@program: reference
+  - e1/readout@readout: main
+  - _self_
+  - e1/mode: smoke
+
+protocol_version: quark-empirical-v1
+experiment_contract: quark-e1-functional-v1
+implementation_revision: e1-exact-nvidia-milestone-r1
+experiment: E1
+scenario: reference-varma-functional
+method: quark-exact
+mode: smoke
+stage: plan
+root: 91001
+structural_roots: [1101, 1102, 1103, 1104, 1105]
+allow_full: false
+
+artifacts:
+  root: artifacts/experiments/quark-empirical-v1
+  immutable: true
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: storage/hydra/e1/${now:%Y%m%dT%H%M%S}

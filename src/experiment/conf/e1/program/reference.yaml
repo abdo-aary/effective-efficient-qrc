@@ -1,0 +1,8 @@
+num_qubits: 5
+num_reservoirs: 3
+topology: ring
+projection: gaussian_jl
+reset_rate: 0.5
+locality: 2
+angle_map: tanh
+precision: complex128

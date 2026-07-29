@@ -1,0 +1,33 @@
+{
+  "artifact_kind": "e1-exact-nvidia-run",
+  "checksums": {
+    "context.npz": "821fdfecc4b72d380f813f6de712caadcf192c1775d37c980ba77ca96c5808db",
+    "dataset.json": "5a41a5bab3f6c3f2fe6b47302960736ba7042e27f90e77e18cc1966aab05d7e3",
+    "environment.json": "e6aebcf483fdac5c04eeccb771ee2b6df2f26f59b7ebb25170d3ebd01bfa2df9",
+    "execution.json": "8bc67661d24e00a644270a6d44d7946f49ff3b4f78098360632b30fc8243823b",
+    "learning_curve.csv": "7210f2786d85c620a23f1dd983fcf1748bb1b48cfd50454f16ca5144dc502c9e",
+    "metrics.csv": "41807f79647c3fec584cdcbf0af9c94bf946258bdc3a230064e6c01f0e98f37c",
+    "metrics.json": "fa24f4dc3284555c2d65d02d9684a8cabc7d06ee6457e1d4dc897c9f4c769f34",
+    "predictions.npz": "06e5e208b76cbdc05edf332bfbf64b7be480bba350fd45ea5a767e007998b64d",
+    "program.json": "50e54718cdd3521375560855c72559ec8433964a2b883c86288c253f18fe1ab8",
+    "program.npz": "4e2ce90390720dc87e66f4a9b7d84d79d0d4976256435bbc4eebc13746408a8c",
+    "readout.npz": "bf82b95503cb31a06cb0216c3630ae8aa069bcc39750d8dbc47fc001f76f2e2d",
+    "readout_candidates.csv": "c72b8b79d721ff7c33fc4fae7190a830127e87455e099f9f379df4dbc0ef97d9",
+    "regularization_path.csv": "186953e1c001b43c3e8837a24ec7e86819f6488b1367a3e0e53fed7426d384a2",
+    "resolved_config.json": "c62badc94b1f8e7d053ee654da891650513f07ddd19ec30b60087e12a23e0f4a",
+    "resources.json": "ac57cc7141ce981570df84df302d6724ae134473f7c2353f88202d772af5d930",
+    "results.npz": "54278bb10c74f0243045588b7fa20f018db0297649a417bc4e2e6156f01f57bf",
+    "run.log": "b542173556c6aa2c4f02275355acf32f73134858a939b8c5c6f84d4ec685ed32",
+    "run_identity.json": "e6d98801e12b0f3f5f40be461b164b38f01200d9dd1e9795b1eb7eac572715c8",
+    "seeds.json": "35199b1080c2afdb4de284f1290330298f2966150b6fb45b22aaf7885e235375",
+    "selected_readouts.json": "b1d384df8252cc0bc2034268918a7528e8b5c9ec849bd2f95e7b962e58c2787e",
+    "splits.npz": "2cfd849da765cd9dafadd57b7a454c30fa40cc6212e45669e0852537d89146eb",
+    "status.json": "c53e9111a25e1bc7a3e3d99467432279ee5267848114b84deb069d59b0f8429d",
+    "targets.npz": "f8c8db42873953f1bab191adc6755911f46fc998ff904867d30d6d922933fbf5",
+    "timings.json": "83163929eebc54062a72eac4c8b3bebaaa014e86c6638d89e7b2362e4523dc92"
+  },
+  "git_commit": "6a0374335e6e79e6112a23676dc316c774a8fd14",
+  "git_dirty": true,
+  "program_fingerprint": "aa514daa087aa175402270e8aa03328b6f1397f19e244fd665575723476e202e",
+  "schema_version": "quark.run/v1"
+}

@@ -1,0 +1,8 @@
+standardize_features: true
+nu: [1.5, 2.5, 5.0]
+xi: [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+lambda_K: [1.0e-6, 1.0e-4, 1.0e-2, 1.0, 1.0e2]
+tie_tolerance: 1.0e-12
+path_nu: 2.5
+path_xi: 1.0
+path_lambda_K: [1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 1.0e1, 1.0e2]

@@ -1,0 +1,44 @@
+{
+  "root_entropy": [
+    91001
+  ],
+  "schema_version": "quark.seed-bundle/v2",
+  "spawn_keys": {
+    "classical_baseline": [
+      8
+    ],
+    "dataset_generation": [
+      0
+    ],
+    "dataset_split": [
+      1
+    ],
+    "jl_projection": [
+      2
+    ],
+    "measurement_outcomes": [
+      7
+    ],
+    "model_selection": [
+      9
+    ],
+    "observable_selection": [
+      4
+    ],
+    "replicate": [
+      10
+    ],
+    "reservoir_parameters": [
+      3
+    ],
+    "reset_trajectories": [
+      5
+    ],
+    "shadow_bases": [
+      6
+    ],
+    "task_functionals": [
+      11
+    ]
+  }
+}

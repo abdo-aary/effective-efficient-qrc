@@ -51,6 +51,26 @@ respectively.  E1 learning curves use nested prefixes of the first 5000
 windows and reserve the final 20\% of each prefix for validation.  No random
 shuffling is performed.
 
+\paragraph{E1 Gaussian VARMA realization addendum.}
+For the E1 reference process, the innovation covariance is \(I_3\) and the
+bounded observation scale in \cref{eq:appendix-varma-observation} is
+\(c_x=1\). Three Gaussian AR matrix directions are normalized to unit
+spectral norm, assigned positive normalized random weights, and multiplied by
+a common scalar found by a deterministic bracketed root solve so that the
+companion spectral radius is \(0.7\) to numerical tolerance \(10^{-12}\).
+The MA coefficients are \(B_j=0.5(0.5)^{j-1}V_j\), where the \(V_j\) are
+independent Gaussian directions normalized to unit spectral norm. The
+augmented ARMA transition covariance is obtained from the discrete Lyapunov
+equation and the initial augmented state is drawn from the resulting stationary
+Gaussian law. Thus E1 uses no burn-in approximation. Here and throughout the
+controlled protocol, \(s=100\) denotes the distance between consecutive window
+endpoints, not a gap added to \(w\).
+
+The named seed list is extended append-only with
+\texttt{task\_functionals}; existing stream spawn keys are unchanged. E1's
+base directions \(u_3,v_3\) and decay \(\gamma\) are fixed protocol constants,
+so this stream is recorded as unused for E1.
+
 \paragraph{Reference program.}
 The common reference program is
 \[

@@ -1,0 +1,22 @@
+# @package _global_
+mode: full
+root: 1101
+data:
+  N: 6000
+  tasks: [future, exp_memory, volterra, delay_1, delay_5, delay_10, delay_20, cross_0_15]
+program:
+  num_qubits: 5
+  num_reservoirs: 3
+  locality: 2
+backend:
+  kind: nvidia
+  gpu_id: 0
+  engine: cupy
+  chunk_size: 512
+  allow_cpu_fallback: false
+split:
+  inner_train_stop: 4000
+  validation_stop: 5000
+  test_start: 5000
+  test_stop: 6000
+  prefixes: [250, 500, 1000, 2000, 5000]

@@ -6,6 +6,7 @@ from typing import Literal, Optional, Tuple
 import numpy as np
 
 from .base import BaseLabelFunctional, LabelNoise
+from .context import TeacherContext
 
 
 def _apply_nonlinearity(z: float, kind: Literal["none", "tanh", "sigmoid"]) -> float:
@@ -242,3 +243,137 @@ class VolteraFunctional(BaseLabelFunctional):
         z = float(Lu + 0.5 * (Lv**2))
         y = _apply_nonlinearity(z, self.nonlinearity)
         return float(self.noise.add(y, rng))
+
+
+# Theory-aligned, RNG-free protocol functionals used by E1. The legacy
+# functionals above remain solely for stored-configuration compatibility.
+U3 = np.asarray((1.0, -1.0, 1.0), dtype=float) / 3.0
+V3 = np.asarray((1.0, 1.0, -1.0), dtype=float) / 3.0
+
+
+def _protocol_direction(value: np.ndarray, d: int, name: str) -> np.ndarray:
+    vector = np.asarray(value, dtype=float).reshape(-1)
+    if vector.shape != (d,):
+        raise ValueError(f"{name} must have shape {(d,)}, got {vector.shape}.")
+    if np.linalg.norm(vector, ord=1) > 1.0 + 1e-15:
+        raise ValueError(f"{name} must have l1 norm at most one.")
+    return vector
+
+
+@dataclass(frozen=True)
+class OneStepFutureFunctional:
+    """Genuine one-step target using data strictly after the input window."""
+
+    u: np.ndarray = field(default_factory=lambda: U3.copy())
+    name: str = "future"
+
+    def evaluate(
+        self, X_win: np.ndarray, *, index: int, context: TeacherContext
+    ) -> float:
+        _, d = _check_X_win(X_win)
+        u = _protocol_direction(self.u, d, "u")
+        if not 0 <= int(index) < context.future_observations.shape[0]:
+            raise IndexError("Teacher-context index is outside the dataset.")
+        return float(context.future_observations[int(index)] @ u)
+
+
+@dataclass(frozen=True)
+class NormalizedExpMemoryFunctional:
+    gamma: float = 0.8
+    u: np.ndarray = field(default_factory=lambda: U3.copy())
+    name: str = "exp_memory"
+
+    def evaluate(
+        self, X_win: np.ndarray, *, index: int, context: TeacherContext
+    ) -> float:
+        del index, context
+        w, d = _check_X_win(X_win)
+        if not 0.0 < float(self.gamma) < 1.0:
+            raise ValueError("gamma must lie in (0,1).")
+        u = _protocol_direction(self.u, d, "u")
+        weights = float(self.gamma) ** np.arange(w, dtype=float)
+        return float((X_win[::-1] @ u) @ weights / np.sum(weights))
+
+
+@dataclass(frozen=True)
+class VolterraFunctional:
+    gamma: float = 0.8
+    u: np.ndarray = field(default_factory=lambda: U3.copy())
+    v: np.ndarray = field(default_factory=lambda: V3.copy())
+    name: str = "volterra"
+
+    def evaluate(
+        self, X_win: np.ndarray, *, index: int, context: TeacherContext
+    ) -> float:
+        del index, context
+        w, d = _check_X_win(X_win)
+        if not 0.0 < float(self.gamma) < 1.0:
+            raise ValueError("gamma must lie in (0,1).")
+        u = _protocol_direction(self.u, d, "u")
+        v = _protocol_direction(self.v, d, "v")
+        weights = float(self.gamma) ** np.arange(w, dtype=float)
+        A_w = float(np.sum(weights))
+        reverse = X_win[::-1]
+        L_u = float((reverse @ u) @ weights)
+        L_v = float((reverse @ v) @ weights)
+        return float((L_u + 0.5 * L_v * L_v) / (A_w + 0.5 * A_w * A_w))
+
+
+@dataclass(frozen=True)
+class DelayedRecallFunctional:
+    delay: int
+    u: np.ndarray = field(default_factory=lambda: U3.copy())
+    name: str | None = None
+
+    def __post_init__(self) -> None:
+        delay = int(self.delay)
+        if delay < 0:
+            raise ValueError("delay must be nonnegative.")
+        object.__setattr__(self, "delay", delay)
+        object.__setattr__(self, "name", self.name or f"delay_{delay}")
+
+    def evaluate(
+        self, X_win: np.ndarray, *, index: int, context: TeacherContext
+    ) -> float:
+        del index, context
+        w, d = _check_X_win(X_win)
+        if self.delay >= w:
+            raise ValueError(f"delay={self.delay} requires window length > delay.")
+        u = _protocol_direction(self.u, d, "u")
+        return float(X_win[-1 - self.delay] @ u)
+
+
+@dataclass(frozen=True)
+class SparseCrossLagFunctional:
+    delay_u: int = 0
+    delay_v: int = 15
+    u: np.ndarray = field(default_factory=lambda: U3.copy())
+    v: np.ndarray = field(default_factory=lambda: V3.copy())
+    name: str = "cross_0_15"
+
+    def evaluate(
+        self, X_win: np.ndarray, *, index: int, context: TeacherContext
+    ) -> float:
+        del index, context
+        w, d = _check_X_win(X_win)
+        tau_u, tau_v = int(self.delay_u), int(self.delay_v)
+        if min(tau_u, tau_v) < 0 or max(tau_u, tau_v) >= w:
+            raise ValueError("Cross-lag delays must lie inside the input window.")
+        u = _protocol_direction(self.u, d, "u")
+        v = _protocol_direction(self.v, d, "v")
+        return float((X_win[-1 - tau_u] @ u) * (X_win[-1 - tau_v] @ v))
+
+
+def e1_functionals() -> tuple[object, ...]:
+    """Return the complete E1 task suite in canonical artifact order."""
+
+    return (
+        OneStepFutureFunctional(),
+        NormalizedExpMemoryFunctional(),
+        VolterraFunctional(),
+        DelayedRecallFunctional(1),
+        DelayedRecallFunctional(5),
+        DelayedRecallFunctional(10),
+        DelayedRecallFunctional(20),
+        SparseCrossLagFunctional(),
+    )

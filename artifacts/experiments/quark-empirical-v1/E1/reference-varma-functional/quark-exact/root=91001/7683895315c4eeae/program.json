@@ -1,0 +1,42 @@
+{
+  "angle_map": "tanh",
+  "angle_scale": 3.1415895119971395,
+  "fingerprint": "aa514daa087aa175402270e8aa03328b6f1397f19e244fd665575723476e202e",
+  "input_dim": 3,
+  "num_qubits": 3,
+  "observable_labels": [
+    "IIX",
+    "IIY",
+    "IIZ",
+    "IXI",
+    "IYI",
+    "IZI",
+    "XII",
+    "YII",
+    "ZII"
+  ],
+  "projection_mode": "gaussian_jl",
+  "reservoir_ids": [
+    "reservoir-0",
+    "reservoir-1"
+  ],
+  "reset_state": "plus",
+  "topology": {
+    "edges": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        0
+      ]
+    ],
+    "name": "ring"
+  },
+  "window_length": 25
+}

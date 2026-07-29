@@ -1,0 +1,24 @@
+process: stationary_varma
+d: 3
+p: 3
+q: 3
+innovation_covariance: identity
+observation_scale: 1.0
+target_companion_radius: 0.7
+ar_draw: gaussian_unit_spectral_weighted
+ma_amplitude: 0.5
+ma_decay: 0.5
+stationary_initialization: lyapunov
+burn_in: 0
+N: 6000
+window_length: 25
+stride: 100
+tasks:
+  - future
+  - exp_memory
+  - volterra
+  - delay_1
+  - delay_5
+  - delay_10
+  - delay_20
+  - cross_0_15

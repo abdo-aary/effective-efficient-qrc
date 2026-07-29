@@ -1,0 +1,34 @@
+{
+  "rows": [
+    {
+      "eta": 1.25e-06,
+      "inner_train_size": 64,
+      "lambda_K": 0.0001,
+      "nu": 5.0,
+      "outer_train_size": 80,
+      "rkhs_norm": 3.862027256018765,
+      "task": "future",
+      "test_mse": 0.19767700336034083,
+      "test_nrmse": 1.0275239903048405,
+      "test_size": 16,
+      "train_mse": 1.874135653925667e-09,
+      "validation_mse": 0.2918656036205206,
+      "xi": 1.0
+    },
+    {
+      "eta": 1.25e-06,
+      "inner_train_size": 64,
+      "lambda_K": 0.0001,
+      "nu": 1.5,
+      "outer_train_size": 80,
+      "rkhs_norm": 0.3552043581193439,
+      "task": "volterra",
+      "test_mse": 0.0014167634508842355,
+      "test_nrmse": 0.9458094030670415,
+      "test_size": 16,
+      "train_mse": 2.057271725850709e-11,
+      "validation_mse": 0.0013337959283746914,
+      "xi": 2.0
+    }
+  ]
+}

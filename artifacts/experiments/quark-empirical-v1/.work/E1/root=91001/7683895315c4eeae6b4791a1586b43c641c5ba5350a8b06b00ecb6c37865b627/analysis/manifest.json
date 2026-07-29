@@ -1,0 +1,11 @@
+{
+  "checksums": {
+    "analysis.json": "7f0a777537ca5117a9aaf933a58b16ab8282b082fa359cc9b2e3b99dbe25bfbe",
+    "analysis.npz": "bd79020f1388b8b8509e9ebeb16ca083b1ddbe16da09df1b7a0f4d726e3e113d",
+    "learning_curve.csv": "f3d53d644b5fa2fccb7986d4a3be0a140a35471ca601b0e27667d879993ddaf5",
+    "metrics.csv": "da320eefdadcb62c9eea6e04080b01f0e92f39ab25e95e21875b0fe71ed68525",
+    "readout_candidates.csv": "d6403da040c5883e538e5bc5a9208bcdfc6031322df103f4479533d0918efad7",
+    "regularization_path.csv": "053b44b0134a1d04f17e6232733a2d394c4062664b9bd1a40e1ff3980d052103"
+  },
+  "schema_version": "quark.e1-analysis/v1"
+}

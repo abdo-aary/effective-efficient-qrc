@@ -1,0 +1,389 @@
+{
+  "learning_rows": [
+    {
+      "eta": 2.5e-06,
+      "inner_train_size": 32,
+      "lambda_K": 0.0001,
+      "nu": 5.0,
+      "outer_train_size": 40,
+      "prefix": 40,
+      "reused_main": false,
+      "rkhs_norm": 2.6262781162351647,
+      "task": "future",
+      "test_mse": 0.17948140622409237,
+      "test_nrmse": 1.0372133620074453,
+      "test_size": 16,
+      "train_mse": 2.1705508877931356e-09,
+      "validation_mse": 0.212828119532874,
+      "xi": 2.0
+    },
+    {
+      "eta": 2.5e-06,
+      "inner_train_size": 32,
+      "lambda_K": 0.0001,
+      "nu": 5.0,
+      "outer_train_size": 40,
+      "prefix": 40,
+      "reused_main": false,
+      "rkhs_norm": 0.26419339000640435,
+      "task": "volterra",
+      "test_mse": 0.0013630560212965308,
+      "test_nrmse": 0.8797244779952713,
+      "test_size": 16,
+      "train_mse": 2.0373273045292403e-11,
+      "validation_mse": 0.0013361847031621553,
+      "xi": 2.0
+    },
+    {
+      "eta": 1.25e-06,
+      "inner_train_size": 64,
+      "lambda_K": 0.0001,
+      "nu": 5.0,
+      "outer_train_size": 80,
+      "prefix": 80,
+      "reused_main": true,
+      "rkhs_norm": 3.862027256018765,
+      "task": "future",
+      "test_mse": 0.19767700336034083,
+      "test_nrmse": 1.0275239903048405,
+      "test_size": 16,
+      "train_mse": 1.874135653925667e-09,
+      "validation_mse": 0.2918656036205206,
+      "xi": 1.0
+    },
+    {
+      "eta": 1.25e-06,
+      "inner_train_size": 64,
+      "lambda_K": 0.0001,
+      "nu": 1.5,
+      "outer_train_size": 80,
+      "prefix": 80,
+      "reused_main": true,
+      "rkhs_norm": 0.3552043581193439,
+      "task": "volterra",
+      "test_mse": 0.0014167634508842355,
+      "test_nrmse": 0.9458094030670415,
+      "test_size": 16,
+      "train_mse": 2.057271725850709e-11,
+      "validation_mse": 0.0013337959283746914,
+      "xi": 2.0
+    }
+  ],
+  "metric_rows": [
+    {
+      "eta": 1.25e-06,
+      "inner_train_size": 64,
+      "lambda_K": 0.0001,
+      "nu": 5.0,
+      "outer_train_size": 80,
+      "rkhs_norm": 3.862027256018765,
+      "task": "future",
+      "test_mse": 0.19767700336034083,
+      "test_nrmse": 1.0275239903048405,
+      "test_size": 16,
+      "train_mse": 1.874135653925667e-09,
+      "validation_mse": 0.2918656036205206,
+      "xi": 1.0
+    },
+    {
+      "eta": 1.25e-06,
+      "inner_train_size": 64,
+      "lambda_K": 0.0001,
+      "nu": 1.5,
+      "outer_train_size": 80,
+      "rkhs_norm": 0.3552043581193439,
+      "task": "volterra",
+      "test_mse": 0.0014167634508842355,
+      "test_nrmse": 0.9458094030670415,
+      "test_size": 16,
+      "train_mse": 2.057271725850709e-11,
+      "validation_mse": 0.0013337959283746914,
+      "xi": 2.0
+    }
+  ],
+  "path_rows": [
+    {
+      "condition_K": 1.9550867460750938,
+      "condition_regularized": 1.9549645930239292,
+      "condition_status": "ok",
+      "eta": 1.5625e-06,
+      "lambda_K": 0.0001,
+      "nu": 2.5,
+      "rkhs_norm": 3.1850107853131235,
+      "status": "ok",
+      "task": "future",
+      "test_mse": 0.20871933138159215,
+      "train_mse": 1.5824171942698742e-09,
+      "validation_mse": 0.292387435032291,
+      "xi": 1.0
+    },
+    {
+      "condition_K": 1.9550867460750938,
+      "condition_regularized": 1.9549645930239292,
+      "condition_status": "ok",
+      "eta": 1.5625e-06,
+      "lambda_K": 0.0001,
+      "nu": 2.5,
+      "rkhs_norm": 0.3176745086091713,
+      "status": "ok",
+      "task": "volterra",
+      "test_mse": 0.001992027965691678,
+      "train_mse": 1.5191176498989287e-11,
+      "validation_mse": 0.0014749593007610977,
+      "xi": 1.0
+    },
+    {
+      "condition_K": 1.9550867460750938,
+      "condition_regularized": 1.9430241752561328,
+      "condition_status": "ok",
+      "eta": 0.00015625,
+      "lambda_K": 0.01,
+      "nu": 2.5,
+      "rkhs_norm": 3.1538491315578105,
+      "status": "ok",
+      "task": "future",
+      "test_mse": 0.2086860450884847,
+      "train_mse": 1.5511718404737525e-05,
+      "validation_mse": 0.2923976120465597,
+      "xi": 1.0
+    },
+    {
+      "condition_K": 1.9550867460750938,
+      "condition_regularized": 1.9430241752561328,
+      "condition_status": "ok",
+      "eta": 0.00015625,
+      "lambda_K": 0.01,
+      "nu": 2.5,
+      "rkhs_norm": 0.3146737982136314,
+      "status": "ok",
+      "task": "volterra",
+      "test_mse": 0.001992859434625563,
+      "train_mse": 1.4903884894535758e-07,
+      "validation_mse": 0.0014754760582395732,
+      "xi": 1.0
+    },
+    {
+      "condition_K": 1.9550867460750938,
+      "condition_regularized": 1.4190563184870937,
+      "condition_status": "ok",
+      "eta": 0.015625,
+      "lambda_K": 1.0,
+      "nu": 2.5,
+      "rkhs_norm": 1.603402677155486,
+      "status": "ok",
+      "task": "future",
+      "test_mse": 0.2078836785264862,
+      "train_mse": 0.03946746482270716,
+      "validation_mse": 0.2945374411634975,
+      "xi": 1.0
+    },
+    {
+      "condition_K": 1.9550867460750938,
+      "condition_regularized": 1.4190563184870937,
+      "condition_status": "ok",
+      "eta": 0.015625,
+      "lambda_K": 1.0,
+      "nu": 2.5,
+      "rkhs_norm": 0.1621635845555634,
+      "status": "ok",
+      "task": "volterra",
+      "test_mse": 0.0020413140263442573,
+      "train_mse": 0.00039352829387749176,
+      "validation_mse": 0.0015031372031961306,
+      "xi": 1.0
+    }
+  ],
+  "readout_diagnostics": {
+    "distance_seconds": 0.04465098799846601,
+    "kernel_rows": [
+      {
+        "nu": 1.5,
+        "seconds": 0.0032991470070555806,
+        "xi": 0.5
+      },
+      {
+        "nu": 1.5,
+        "seconds": 0.0005152969970367849,
+        "xi": 1.0
+      },
+      {
+        "nu": 1.5,
+        "seconds": 0.0004555240011541173,
+        "xi": 2.0
+      },
+      {
+        "nu": 5.0,
+        "seconds": 0.0028088130056858063,
+        "xi": 0.5
+      },
+      {
+        "nu": 5.0,
+        "seconds": 0.002937156008556485,
+        "xi": 1.0
+      },
+      {
+        "nu": 5.0,
+        "seconds": 0.0032530539901927114,
+        "xi": 2.0
+      }
+    ],
+    "refit_group_count": 2,
+    "solve_rows": [
+      {
+        "lambda_K": 0.0001,
+        "nu": 1.5,
+        "seconds": 0.03701515700959135,
+        "status": "ok",
+        "xi": 0.5
+      },
+      {
+        "lambda_K": 0.01,
+        "nu": 1.5,
+        "seconds": 0.0008850129961501807,
+        "status": "ok",
+        "xi": 0.5
+      },
+      {
+        "lambda_K": 1.0,
+        "nu": 1.5,
+        "seconds": 0.0007791980024194345,
+        "status": "ok",
+        "xi": 0.5
+      },
+      {
+        "lambda_K": 0.0001,
+        "nu": 1.5,
+        "seconds": 0.0007345230114879087,
+        "status": "ok",
+        "xi": 1.0
+      },
+      {
+        "lambda_K": 0.01,
+        "nu": 1.5,
+        "seconds": 0.0007675960077904165,
+        "status": "ok",
+        "xi": 1.0
+      },
+      {
+        "lambda_K": 1.0,
+        "nu": 1.5,
+        "seconds": 0.0007302779995370656,
+        "status": "ok",
+        "xi": 1.0
+      },
+      {
+        "lambda_K": 0.0001,
+        "nu": 1.5,
+        "seconds": 0.0007441829948220402,
+        "status": "ok",
+        "xi": 2.0
+      },
+      {
+        "lambda_K": 0.01,
+        "nu": 1.5,
+        "seconds": 0.0007141539972508326,
+        "status": "ok",
+        "xi": 2.0
+      },
+      {
+        "lambda_K": 1.0,
+        "nu": 1.5,
+        "seconds": 0.0007685960008529946,
+        "status": "ok",
+        "xi": 2.0
+      },
+      {
+        "lambda_K": 0.0001,
+        "nu": 5.0,
+        "seconds": 0.0007683680014451966,
+        "status": "ok",
+        "xi": 0.5
+      },
+      {
+        "lambda_K": 0.01,
+        "nu": 5.0,
+        "seconds": 0.0007338689902098849,
+        "status": "ok",
+        "xi": 0.5
+      },
+      {
+        "lambda_K": 1.0,
+        "nu": 5.0,
+        "seconds": 0.0007207000016933307,
+        "status": "ok",
+        "xi": 0.5
+      },
+      {
+        "lambda_K": 0.0001,
+        "nu": 5.0,
+        "seconds": 0.0007241270068334416,
+        "status": "ok",
+        "xi": 1.0
+      },
+      {
+        "lambda_K": 0.01,
+        "nu": 5.0,
+        "seconds": 0.0007551800081273541,
+        "status": "ok",
+        "xi": 1.0
+      },
+      {
+        "lambda_K": 1.0,
+        "nu": 5.0,
+        "seconds": 0.0007070680003380403,
+        "status": "ok",
+        "xi": 1.0
+      },
+      {
+        "lambda_K": 0.0001,
+        "nu": 5.0,
+        "seconds": 0.0007289479981409386,
+        "status": "ok",
+        "xi": 2.0
+      },
+      {
+        "lambda_K": 0.01,
+        "nu": 5.0,
+        "seconds": 0.0007212100026663393,
+        "status": "ok",
+        "xi": 2.0
+      },
+      {
+        "lambda_K": 1.0,
+        "nu": 5.0,
+        "seconds": 0.0007825289940228686,
+        "status": "ok",
+        "xi": 2.0
+      }
+    ]
+  },
+  "schema_version": "quark.e1-analysis/v1",
+  "selected": {
+    "future": {
+      "eta": 1.5625e-06,
+      "lambda_K": 0.0001,
+      "nu": 5.0,
+      "status": "ok",
+      "task": "future",
+      "validation_mse": 0.2918656036205206,
+      "xi": 1.0
+    },
+    "volterra": {
+      "eta": 1.5625e-06,
+      "lambda_K": 0.0001,
+      "nu": 1.5,
+      "status": "ok",
+      "task": "volterra",
+      "validation_mse": 0.0013337959283746914,
+      "xi": 2.0
+    }
+  },
+  "task_names": [
+    "future",
+    "volterra"
+  ],
+  "timings": {
+    "main_readout_seconds": 0.1248719790019095,
+    "nested_readout_seconds": 0.02338742600113619
+  }
+}

@@ -75,6 +75,19 @@ def _git_commit() -> str | None:
         return None
 
 
+def _git_dirty() -> bool | None:
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return bool(result.stdout.strip())
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
 def _environment() -> dict[str, Any]:
     packages = {}
     for distribution in (
@@ -108,6 +121,10 @@ def save_feature_artifact(
     predictions: np.ndarray | None = None,
     metrics: Mapping[str, Any] | None = None,
     logs: str | None = None,
+    extra_arrays: Mapping[str, Mapping[str, np.ndarray]] | None = None,
+    extra_json: Mapping[str, Mapping[str, Any]] | None = None,
+    extra_text: Mapping[str, str] | None = None,
+    artifact_kind: str = "feature-run",
 ) -> Path:
     """Atomically create an immutable feature-run directory."""
 
@@ -150,6 +167,22 @@ def save_feature_artifact(
             np.savez_compressed(
                 temporary / "shadow_snapshots.npz", **snapshot_arrays
             )
+
+        for filename, named_arrays in (extra_arrays or {}).items():
+            if Path(filename).name != filename or not filename.endswith(".npz"):
+                raise ValueError(f"Invalid extra-array filename {filename!r}.")
+            np.savez_compressed(
+                temporary / filename,
+                **{name: np.asarray(value) for name, value in named_arrays.items()},
+            )
+        for filename, document in (extra_json or {}).items():
+            if Path(filename).name != filename or not filename.endswith(".json"):
+                raise ValueError(f"Invalid extra-JSON filename {filename!r}.")
+            _write_json(temporary / filename, document)
+        for filename, content in (extra_text or {}).items():
+            if Path(filename).name != filename:
+                raise ValueError(f"Invalid extra-text filename {filename!r}.")
+            (temporary / filename).write_text(str(content), encoding="utf-8")
 
         _write_json(temporary / "seeds.json", execution.seeds.to_dict())
         _write_json(
@@ -202,7 +235,9 @@ def save_feature_artifact(
             temporary / "manifest.json",
             {
                 "schema_version": ARTIFACT_SCHEMA_VERSION,
+                "artifact_kind": str(artifact_kind),
                 "git_commit": _git_commit(),
+                "git_dirty": _git_dirty(),
                 "program_fingerprint": program.fingerprint(),
                 "checksums": checksums,
             },

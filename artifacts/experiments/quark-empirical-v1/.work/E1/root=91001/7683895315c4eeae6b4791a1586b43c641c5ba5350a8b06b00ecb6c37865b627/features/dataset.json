@@ -1,0 +1,50 @@
+{
+  "achieved_companion_radius": 0.7000000000000011,
+  "coefficient_scale": 0.741008507187788,
+  "dataset_child_spawn_keys": {
+    "coefficient_parameters": [
+      0,
+      0
+    ],
+    "innovations": [
+      0,
+      2
+    ],
+    "stationary_initial_state": [
+      0,
+      1
+    ]
+  },
+  "dimension": 3,
+  "fingerprint": "f65e8858b15ca1d95dc5c9355172ff90b2e0a202a24e1e119027c1dee3bcecb8",
+  "innovation_covariance": "identity",
+  "lyapunov_relative_residual": 1.8184198525708453e-15,
+  "ma_amplitude": 0.5,
+  "ma_decay": 0.5,
+  "num_windows": 96,
+  "observation_scale": 1.0,
+  "orders": {
+    "p": 3,
+    "q": 3
+  },
+  "protocol_version": "quark-e1-data/v1",
+  "raw_length": 9526,
+  "root_entropy": [
+    91001
+  ],
+  "stationary_initialization": "augmented-gaussian-lyapunov",
+  "stride": 100,
+  "target_companion_radius": 0.7,
+  "task_functionals_stream": "unused-fixed-protocol-directions",
+  "task_names": [
+    "future",
+    "exp_memory",
+    "volterra",
+    "delay_1",
+    "delay_5",
+    "delay_10",
+    "delay_20",
+    "cross_0_15"
+  ],
+  "window_length": 25
+}

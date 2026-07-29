@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-_STREAM_NAMES = (
+_STREAM_NAMES_V1 = (
     "dataset_generation",
     "dataset_split",
     "jl_projection",
@@ -19,6 +19,8 @@ _STREAM_NAMES = (
     "model_selection",
     "replicate",
 )
+_STREAM_NAMES = _STREAM_NAMES_V1 + ("task_functionals",)
+SEED_BUNDLE_SCHEMA_VERSION = "quark.seed-bundle/v2"
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,7 @@ class SeedBundle:
 
     def to_dict(self) -> dict[str, object]:
         return {
+            "schema_version": SEED_BUNDLE_SCHEMA_VERSION,
             "root_entropy": list(self.root_entropy),
             "spawn_keys": {
                 name: list(spawn_key) for name, spawn_key in self.spawn_keys
@@ -69,7 +72,17 @@ class SeedBundle:
         raw = payload["spawn_keys"]  # type: ignore[index]
         if not isinstance(raw, dict):
             raise TypeError("spawn_keys must be an object.")
+        unknown = set(raw) - set(_STREAM_NAMES)
+        if unknown:
+            raise ValueError(f"Unknown serialized seed streams: {sorted(unknown)}.")
+        canonical_children = np.random.SeedSequence(root).spawn(len(_STREAM_NAMES))
         spawn_keys = tuple(
-            (name, tuple(int(value) for value in raw[name])) for name in _STREAM_NAMES
+            (
+                name,
+                tuple(int(value) for value in raw[name])
+                if name in raw
+                else tuple(int(value) for value in canonical_children[index].spawn_key),
+            )
+            for index, name in enumerate(_STREAM_NAMES)
         )
         return cls(root_entropy=root, spawn_keys=spawn_keys)
