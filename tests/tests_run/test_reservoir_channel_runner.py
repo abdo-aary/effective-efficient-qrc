@@ -8,13 +8,16 @@ from omegaconf import OmegaConf
 from qiskit.quantum_info import DensityMatrix, Operator, SparsePauliOp, Statevector
 
 from src.models.qrc_featurizer import QRCFeaturizer
-from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.qrc_configs import RingQRConfig
-from src.qrc.circuits.utils import angle_positioning_linear, angle_positioning_tanh, generate_k_local_paulis
-from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactExpectationResults, ExactResults
-from src.qrc.run.cs_fmp_retriever import CSFeatureMapsRetriever
-from src.qrc.run.fmp_retriever import ExactFeatureMapsRetriever
-from src.qrc.run.reservoir_channel_runner import ExactReservoirChannelRunner
+from src.backends.aer.circuits import CircuitFactory
+from src.core.legacy_config import RingQRConfig
+from src.backends.qiskit_utils import angle_positioning_linear, angle_positioning_tanh, generate_k_local_paulis
+from src.backends.aer.legacy_runner import ExactAerCircuitsRunner, ExactExpectationResults, ExactResults
+from src.features.legacy_csmom import CSFeatureMapsRetriever
+from src.features.legacy_retrievers import ExactFeatureMapsRetriever
+from src.backends.nvidia.legacy_runner import (
+    ExactReservoirChannelRunner,
+    TruncatedReservoirChannelRunner,
+)
 
 
 def _make_pubs(cfg, X, *, angle_positioning=angle_positioning_linear, R=2, lam_0=0.17, seed=11):
@@ -287,8 +290,8 @@ def test_reservoir_channel_cupy_direct_expectations_match_density_and_aer_when_a
     np.testing.assert_allclose(cp.asnumpy(direct_phi), aer_phi, atol=1e-10, rtol=0.0)
 
 
-def test_reservoir_channel_cupy_direct_cshadow_is_seed_deterministic_when_available():
-    cp = _require_cupy()
+def test_reservoir_channel_cupy_direct_cshadow_rejects_expectation_only_input_when_available():
+    _require_cupy()
 
     cfg = RingQRConfig(input_dim=2, num_qubits=2, seed=44)
     X = np.random.default_rng(45).uniform(-0.5, 0.5, size=(2, 3, 2))
@@ -305,20 +308,12 @@ def test_reservoir_channel_cupy_direct_cshadow_is_seed_deterministic_when_availa
         output_kind="expectation",
     ).run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
 
-    cs_1 = CSFeatureMapsRetriever(cfg, observables, backend="cupy").get_feature_maps(
-        direct,
-        shots=200,
-        seed=2026,
-    )
-    cs_2 = CSFeatureMapsRetriever(cfg, observables, backend="cupy").get_feature_maps(
-        direct,
-        shots=200,
-        seed=2026,
-    )
-
-    assert isinstance(cs_1, cp.ndarray)
-    np.testing.assert_allclose(cp.asnumpy(cs_1), cp.asnumpy(cs_2), atol=0.0, rtol=0.0)
-    assert cp.asnumpy(cp.max(cp.abs(cs_1))) <= 1.0
+    with pytest.raises(ValueError, match="expectation values alone are insufficient"):
+        CSFeatureMapsRetriever(cfg, observables, backend="cupy").get_feature_maps(
+            direct,
+            shots=200,
+            seed=2026,
+        )
 
 
 def test_reservoir_channel_cupy_direct_does_not_materialize_density(monkeypatch):
@@ -360,6 +355,10 @@ def test_reservoir_channel_direct_validation_errors_when_available():
         ExactReservoirChannelRunner(cfg, engine="cupy", output_kind="expectation", max_history=0)
     with pytest.raises(ValueError, match="max_history truncation"):
         ExactReservoirChannelRunner(cfg, engine="cupy", max_history=64)
+    with pytest.raises(ValueError, match="forbids branch pruning and history truncation"):
+        ExactReservoirChannelRunner(
+            cfg, engine="cupy", output_kind="expectation", max_history=64
+        )
 
     runner = ExactReservoirChannelRunner(cfg, engine="cupy", output_kind="expectation")
     with pytest.raises(ValueError, match="requires observables"):
@@ -389,7 +388,7 @@ def test_reservoir_channel_cupy_direct_max_history_full_matches_exact_when_avail
         output_kind="expectation",
         chunk_size=4,
     ).run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
-    truncated_full = ExactReservoirChannelRunner(
+    truncated_full = TruncatedReservoirChannelRunner(
         cfg,
         engine="cupy",
         gpu_id=0,
@@ -424,7 +423,7 @@ def test_reservoir_channel_cupy_direct_truncation_error_is_tail_bounded_when_ava
         output_kind="expectation",
         chunk_size=4,
     ).run_pubs(pubs=pubs, angle_positioning_name="tanh", observables=observables)
-    truncated = ExactReservoirChannelRunner(
+    truncated = TruncatedReservoirChannelRunner(
         cfg,
         engine="cupy",
         gpu_id=0,
@@ -582,7 +581,7 @@ def test_reservoir_channel_cupy_direct_truncated_featurizer_matches_exact_when_h
     )
     truncated_featurizer = QRCFeaturizer(
         qrc_cfg=cfg,
-        runner=ExactReservoirChannelRunner(
+        runner=TruncatedReservoirChannelRunner(
             cfg,
             engine="cupy",
             gpu_id=0,

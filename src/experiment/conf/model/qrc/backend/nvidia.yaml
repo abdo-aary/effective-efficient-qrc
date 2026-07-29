@@ -1,0 +1,4 @@
+_target_: src.backends.nvidia.NvidiaBackend
+gpu_id: 0
+chunk_size: 512
+engine: cupy

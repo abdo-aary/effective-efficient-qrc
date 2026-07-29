@@ -87,10 +87,10 @@ def test_real_gpu_runner_executes_factory_pubs_or_skips():
     - Requests Aer GPU device.
     - Skips if GPU isn't available OR if GPU run fails at runtime.
     """
-    from src.qrc.circuits.qrc_configs import RingQRConfig
-    from src.qrc.circuits.circuit_factory import CircuitFactory
-    from src.qrc.circuits.utils import angle_positioning_tanh
-    from src.qrc.run.circuit_run import ExactAerCircuitsRunner
+    from src.core.legacy_config import RingQRConfig
+    from src.backends.aer.circuits import CircuitFactory
+    from src.backends.qiskit_utils import angle_positioning_tanh
+    from src.backends.aer.legacy_runner import ExactAerCircuitsRunner
 
     rng = np.random.default_rng(0)
     # tiny dataset: N=1 window, w=2 timesteps, d=input_dim=1

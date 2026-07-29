@@ -2,13 +2,32 @@
 
 The public release is intentionally narrow. The codebase should be read as three retained layers plus one wrapper:
 
-## 1. QuaRK Core
+## 1. QuaRK Core and Backends
 
-The QuaRK implementation remains in the existing `src/` packages:
+The refactored implementation lives directly in the existing `src/` package:
 
-- `src/qrc/` for circuit construction, runners, and feature retrieval
-- `src/models/` for the QuaRK feature-to-readout model stack
-- `src/experiment/` for experiment orchestration
+- `src/core/` contains immutable mathematical programs, resources, seeds,
+  capabilities, requests, and structured results.
+- `src/estimators/` defines exact expectation and local-Pauli CSMoM semantics.
+- `src/backends/aer/` is the independent density-matrix correctness oracle.
+- `src/backends/nvidia/` is the production CuPy implementation.
+- `src/backends/ibm/` implements stochastic reset trajectories, Runtime jobs,
+  and hardware provenance.
+- `src/features/` owns canonical `(N,R,K)` ordering and readout flattening.
+- `src/artifacts/` writes checksum-validated `quark.run/v1` artifacts.
+- `src/models/` and `src/experiment/` consume these typed APIs.
+
+The former `src/qrc/` hierarchy has been retired. Legacy implementations that
+remain necessary for artifact compatibility live behind explicit
+`legacy_*` modules within their owning layer.
+
+| Estimator | Aer CPU | NVIDIA GPU | IBM QPU |
+|---|---:|---:|---:|
+| Exact expectations | yes | yes | no |
+| Local-Pauli CSMoM | yes | yes | yes |
+
+Exact execution never enables history truncation or branch pruning. The legacy
+finite-history runner is explicitly named `TruncatedReservoirChannelRunner`.
 
 ## 2. Temporal Baseline
 

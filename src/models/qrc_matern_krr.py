@@ -413,7 +413,7 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
             test_ratio: float = 0.2,
             split_seed: int = 0,
             tuning: Optional[Dict[str, Any]] = None,
-            readout_backend: str = "auto",
+            readout_backend: str = "numpy",
             readout_dtype: str = "float64",
             readout_device: int | None = None,
     ):
@@ -492,6 +492,64 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
 
         qrc_cfg = instantiate(qrc_node.cfg)
 
+        execution_api = str(qrc_node.get("api", "legacy"))
+        if execution_api == "backend_neutral" and hasattr(qrc_cfg, "topology") and hasattr(qrc_cfg, "projection"):
+            from src.api import program_from_legacy_components
+            from src.core.requests import ExecutionSpec
+            from src.core.seeds import SeedBundle
+
+            pubs_container = OmegaConf.to_container(qrc_node.pubs, resolve=True)
+            window_length = pubs_container.get("window_length")
+            if window_length is None:
+                raise ValueError(
+                    "Backend-neutral qrc.pubs requires window_length; set it from the dataset sampling config."
+                )
+            program = program_from_legacy_components(
+                qrc_cfg=qrc_cfg,
+                observables=observables,
+                window_length=int(window_length),
+                num_reservoirs=int(pubs_container["num_reservoirs"]),
+                lam_0=float(pubs_container["lam_0"]),
+                reservoir_seed=int(pubs_container.get("seed", 12345)),
+                eps=float(pubs_container.get("eps", 1e-8)),
+                angle_map=str(pubs_container["angle_positioning"]),
+                dynamics_mode=str(pubs_container.get("dynamics_mode", "random")),
+            )
+            backend = instantiate(qrc_node.backend)
+            estimator = instantiate(qrc_node.estimator)
+            execution_node = OmegaConf.to_container(qrc_node.get("execution", {}), resolve=True) or {}
+            execution = ExecutionSpec(
+                seeds=SeedBundle.from_root(int(execution_node.pop("root_seed", 0))),
+                chunk_size=execution_node.pop("chunk_size", None),
+                retain_device_array=bool(execution_node.pop("retain_device_array", False)),
+                options=execution_node,
+            )
+            featurizer = QRCFeaturizer.from_backend_api(
+                program=program,
+                backend=backend,
+                estimator=estimator,
+                execution=execution,
+            )
+
+            training = model_cfg.get("training", {})
+            split = training.get("split", {})
+            preprocess = training.get("preprocess", {})
+            tuning = OmegaConf.to_container(model_cfg.get("tuning", {}), resolve=True) or {}
+            return QRCMaternKRRRegressor(
+                featurizer,
+                standardize=bool(preprocess.get("standardize", True)),
+                test_ratio=float(split.get("test_ratio", 0.2)),
+                split_seed=int(split.get("seed", 0)),
+                tuning=dict(tuning),
+                readout_backend=str(model_cfg.get("readout_backend", "numpy")),
+                readout_dtype=str(model_cfg.get("readout_dtype", "float64")),
+                readout_device=model_cfg.get("readout_device", None),
+            )
+        if execution_api not in {"legacy", "backend_neutral"}:
+            raise ValueError(
+                f"Unknown qrc.api={execution_api!r}; expected 'backend_neutral' or 'legacy'."
+            )
+
         # 1) Extract runtime kwargs (stay in config, but not passed to __init__)
         runner_kwargs = _to_plain_dict(qrc_node.runner.get("runner_kwargs"))
 
@@ -531,7 +589,7 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
         standardize = bool(preprocess.get("standardize", True))
 
         tuning = OmegaConf.to_container(model_cfg.get("tuning", {}), resolve=True) or {}
-        readout_backend = str(model_cfg.get("readout_backend", "auto"))
+        readout_backend = str(model_cfg.get("readout_backend", "numpy"))
         readout_dtype = str(model_cfg.get("readout_dtype", "float64"))
         readout_device = model_cfg.get("readout_device", None)
 
@@ -890,7 +948,7 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
             "standardize": bool(getattr(self, "standardize", False)),
             "test_ratio": float(getattr(self, "test_ratio", 0.0)),
             "split_seed": int(getattr(self, "split_seed", 0)),
-            "readout_backend": str(getattr(self, "readout_backend", "auto")),
+            "readout_backend": str(getattr(self, "readout_backend", "numpy")),
             "readout_dtype": str(getattr(self, "readout_dtype", "float64")),
             "readout_device": getattr(self, "readout_device", None),
             "n_outputs_": None if getattr(self, "n_outputs_", None) is None else int(self.n_outputs_),
@@ -935,7 +993,7 @@ class QRCMaternKRRRegressor(BaseEstimator, RegressorMixin):
         obj.standardize = bool(meta["standardize"])
         obj.test_ratio = float(meta["test_ratio"])
         obj.split_seed = int(meta["split_seed"])
-        obj.readout_backend = str(meta.get("readout_backend", getattr(obj, "readout_backend", "auto")))
+        obj.readout_backend = str(meta.get("readout_backend", getattr(obj, "readout_backend", "numpy")))
         obj.readout_dtype = str(meta.get("readout_dtype", getattr(obj, "readout_dtype", "float64")))
         obj.readout_device = meta.get("readout_device", getattr(obj, "readout_device", None))
         obj.n_outputs_ = meta.get("n_outputs_", None)

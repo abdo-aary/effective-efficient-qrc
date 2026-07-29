@@ -1,4 +1,4 @@
-"""src.qrc.circuits.configs
+"""Legacy configuration adapters used while stored Hydra configs migrate.
 ========================
 
 Configuration utilities for quantum reservoir circuits.

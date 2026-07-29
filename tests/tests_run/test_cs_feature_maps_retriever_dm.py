@@ -92,12 +92,12 @@ def param_order_from_metadata(qc):
     return J + hx + hz + [lam]
 
 
-from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactResults
-from src.qrc.run.fmp_retriever import ExactFeatureMapsRetriever
-from src.qrc.run.cs_fmp_retriever import CSFeatureMapsRetriever
-from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.qrc_configs import RingQRConfig
-from src.qrc.circuits.utils import angle_positioning_linear, generate_k_local_paulis, get_theoretical_shots
+from src.backends.aer.legacy_runner import ExactAerCircuitsRunner, ExactResults
+from src.features.legacy_retrievers import ExactFeatureMapsRetriever
+from src.features.legacy_csmom import CSFeatureMapsRetriever
+from src.backends.aer.circuits import CircuitFactory
+from src.core.legacy_config import RingQRConfig
+from src.backends.qiskit_utils import angle_positioning_linear, generate_k_local_paulis, get_theoretical_shots
 
 
 # ----------------------------- Helpers ---------------------------------

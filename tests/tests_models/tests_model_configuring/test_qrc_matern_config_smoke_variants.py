@@ -23,17 +23,17 @@ import pytest
 from omegaconf import OmegaConf
 
 from src.models.qrc_matern_krr import QRCMaternKRRRegressor
-from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactResults
+from src.backends.aer.legacy_runner import ExactAerCircuitsRunner, ExactResults
 
 
 def _observables_cfg(num_qubits: int, locality: int = 1) -> dict:
     """
     Build an observables instantiation config robust to function signature changes.
     """
-    fn = __import__("src.qrc.circuits.utils", fromlist=["generate_k_local_paulis"]).generate_k_local_paulis
+    fn = __import__("src.backends.qiskit_utils", fromlist=["generate_k_local_paulis"]).generate_k_local_paulis
     sig = inspect.signature(fn)
     cfg = {
-        "_target_": "src.qrc.circuits.utils.generate_k_local_paulis",
+        "_target_": "src.backends.qiskit_utils.generate_k_local_paulis",
         "locality": int(locality),
         "num_qubits": int(num_qubits),
     }
@@ -88,9 +88,9 @@ def _cfg_dict(
     observables_cfg = _observables_cfg(num_qubits=num_qubits, locality=1)
 
     if fmp_kind == "exact":
-        retriever_cfg = {"_target_": "src.qrc.run.fmp_retriever.ExactFeatureMapsRetriever"}
+        retriever_cfg = {"_target_": "src.features.legacy_retrievers.ExactFeatureMapsRetriever"}
     elif fmp_kind == "cs":
-        retriever_cfg = {"_target_": "src.qrc.run.cs_fmp_retriever.CSFeatureMapsRetriever"}
+        retriever_cfg = {"_target_": "src.features.legacy_csmom.CSFeatureMapsRetriever"}
     else:
         raise ValueError(f"Unknown fmp_kind={fmp_kind!r}")
 
@@ -99,7 +99,7 @@ def _cfg_dict(
         "model": {
             "qrc": {
                 "cfg": {
-                    "_target_": "src.qrc.circuits.qrc_configs.RingQRConfig",
+                    "_target_": "src.core.legacy_config.RingQRConfig",
                     "input_dim": int(input_dim),
                     "num_qubits": int(num_qubits),
                     "seed": 0,
@@ -112,7 +112,7 @@ def _cfg_dict(
                     "eps": 1e-8,
                 },
                 "runner": {
-                    "_target_": "src.qrc.run.circuit_run.ExactAerCircuitsRunner",
+                    "_target_": "src.backends.aer.legacy_runner.ExactAerCircuitsRunner",
                     "runner_kwargs": dict(runner_kwargs),
                 },
                 "features": {
@@ -328,7 +328,7 @@ def test_from_config_end_to_end_smoke_cs_feature_maps_kwargs_forwarded(
     _patch_runner_to_fake_states(monkeypatch)
 
     # Patch the *real* CSFeatureMapsRetriever class used by Hydra instantiation.
-    from src.qrc.run.cs_fmp_retriever import CSFeatureMapsRetriever
+    from src.features.legacy_csmom import CSFeatureMapsRetriever
 
     orig_get = CSFeatureMapsRetriever.get_feature_maps
 

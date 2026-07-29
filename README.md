@@ -44,6 +44,35 @@ Supported subcommands:
 
 The wrapper keeps the public workflow small and syncs canonical release artifacts into `artifacts/public_release/`.
 
+## Backend-neutral Python API
+
+New implementation work uses the typed API in `src/api.py`. The mathematical
+program is independent of Qiskit, CuPy, Hydra, and IBM Runtime. Feature arrays
+retain shape `(windows, reservoirs, observables)` until the classical readout.
+
+```python
+from src.api import CSMoMFeatureEstimator, ExecutionSpec, NvidiaBackend, SeedBundle
+
+features = CSMoMFeatureEstimator(
+    snapshots=3000,
+    median_blocks=10,
+).estimate(
+    program,
+    windows,
+    NvidiaBackend(gpu_id=0),
+    ExecutionSpec(seeds=SeedBundle.from_root(12345)),
+)
+
+readout_features = features.flatten_for_readout()
+```
+
+`ExactFeatureEstimator` is restricted to Aer CPU and NVIDIA simulation.
+`CSMoMFeatureEstimator` implements genuine local-Pauli classical shadows on
+Aer, NVIDIA, and IBM Runtime. IBM exact requests fail before job submission.
+
+Install optional adapters with `pip install -e '.[gpu]'`,
+`pip install -e '.[qiskit]'`, or `pip install -e '.[ibm]'`.
+
 ## Minimal Reproduction
 
 Prepare the retained real datasets:

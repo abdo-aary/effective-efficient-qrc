@@ -97,11 +97,11 @@ def param_order_from_metadata(qc):
 
 from qiskit.quantum_info import SparsePauliOp, Operator
 
-from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactResults
-from src.qrc.run.fmp_retriever import ExactFeatureMapsRetriever
-from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.qrc_configs import RingQRConfig
-from src.qrc.circuits.utils import angle_positioning_linear
+from src.backends.aer.legacy_runner import ExactAerCircuitsRunner, ExactResults
+from src.features.legacy_retrievers import ExactFeatureMapsRetriever
+from src.backends.aer.circuits import CircuitFactory
+from src.core.legacy_config import RingQRConfig
+from src.backends.qiskit_utils import angle_positioning_linear
 
 
 # ----------------------------- Helpers ----------------------------------------

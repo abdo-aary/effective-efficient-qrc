@@ -34,6 +34,7 @@ class DummyQRConfig:
     input_dim: int
     num_qubits: int
     seed: int = 0
+    projection_mode: str = "gaussian_jl"
 
 
 class DummyRunner:
@@ -45,8 +46,9 @@ class DummyRunner:
     qrc_cfg : Any
         The instantiated QR config (e.g., DummyQRConfig).
     """
-    def __init__(self, qrc_cfg: Any):
+    def __init__(self, qrc_cfg: Any, **kwargs: Any):
         self.qrc_cfg = qrc_cfg
+        self.kwargs = dict(kwargs)
 
 
 class DummyRetriever:
@@ -60,9 +62,10 @@ class DummyRetriever:
     observables : list
         Observables passed by `.from_config`.
     """
-    def __init__(self, qrc_cfg: Any, observables: List[Any]):
+    def __init__(self, qrc_cfg: Any, observables: List[Any], **kwargs: Any):
         self.qrc_cfg = qrc_cfg
         self.observables = list(observables)
+        self.kwargs = dict(kwargs)
 
 
 def make_dummy_observables(locality: int = 1, num_qubits: int = 1) -> List[str]:

@@ -17,9 +17,9 @@ from src.experiment.varma_ablation import (
     read_varma_ablation_metric_rows,
     varma_grid_regime,
 )
-from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.qrc_configs import RingQRConfig
-from src.qrc.circuits.utils import angle_positioning_tanh
+from src.backends.aer.circuits import CircuitFactory
+from src.core.legacy_config import RingQRConfig
+from src.backends.qiskit_utils import angle_positioning_tanh
 
 
 def test_prepare_varma_ablation_dataset_writes_split_and_metadata(tmp_path):

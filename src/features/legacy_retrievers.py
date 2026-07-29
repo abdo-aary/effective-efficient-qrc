@@ -1,4 +1,4 @@
-"""src.qrc.run.fmp_retriever
+"""Compatibility retrievers for legacy runner results.
 
 Feature-map retrievers for QRC outputs.
 
@@ -9,8 +9,8 @@ Two common cases are supported:
 
 - **Exact** feature maps from density matrices:
   ``phi(i,r,k) = Tr(rho_{i,r} O_k)``
-- **Approximate / noisy** feature maps (e.g., classical shadows) can be built on top
-  of exact expectations; see :mod:`src.qrc.run.cs_fmp_retriever`.
+- **Approximate / noisy** feature maps use the genuine shadow implementation in
+  :mod:`src.features.legacy_csmom`.
 
 This module defines a persistence API (`save` / `load`) to make retrievers
 easy to cache and reuse across experiments.
@@ -25,13 +25,13 @@ from typing import Sequence
 import numpy as np
 from qiskit.quantum_info import Operator, SparsePauliOp
 
-from src.compute.backend import asnumpy, get_array_module, import_cupy, is_cupy_array
-from src.qrc.circuits.qrc_configs import BaseQRConfig
-from .circuit_run import ExactExpectationResults, Results
+from src.compute.backend import import_cupy, is_cupy_array
+from src.core.legacy_config import BaseQRConfig
+from src.backends.aer.legacy_runner import ExactExpectationResults, Results
 
 
 class BaseFeatureMapsRetriever(ABC):
-    """Abstract base class for mapping :class:`~src.qrc.run.circuit_run.Results` to features.
+    """Abstract base class for mapping legacy runner results to features.
 
     Attributes
     ----------

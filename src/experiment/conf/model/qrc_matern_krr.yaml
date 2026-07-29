@@ -1,6 +1,8 @@
 defaults:
   - qrc/cfg@qrc.cfg: ring
   - qrc/runner@qrc.runner: reservoir_channel_cupy_direct
+  - qrc/backend@qrc.backend: nvidia
+  - qrc/estimator@qrc.estimator: csmom
   - qrc/features/retriever@qrc.features.retriever: cs
   - qrc/features/observables@qrc.features.observables: k_local_pauli
   - qrc/pubs@qrc.pubs: ising_ring
@@ -9,6 +11,12 @@ defaults:
   - _self_
 
 kind: qrc_matern_krr
+qrc:
+  api: backend_neutral
+  execution:
+    root_seed: ${seed}
+    chunk_size: 512
+    retain_device_array: false
 readout_backend: cupy
 readout_dtype: float64
 readout_device: 0

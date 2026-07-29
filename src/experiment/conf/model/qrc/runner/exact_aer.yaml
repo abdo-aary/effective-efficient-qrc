@@ -1,8 +1,8 @@
-_target_: src.qrc.run.circuit_run.ExactAerCircuitsRunner
+_target_: src.backends.aer.legacy_runner.ExactAerCircuitsRunner
 # NOTE: qr_cfg is injected by from_config via instantiate(cfg, qr_cfg)
 
 runner_kwargs:
-  device: "GPU"
+  device: "CPU"
 
   # Transpile cost: you are already in template mode, but keep it low.
   optimization_level: 0
@@ -13,7 +13,7 @@ runner_kwargs:
 
   # Parallelize over experiments (parameter-binds) — this is the one that matters
   # because you always run shots=1 in your runner.
-  # Start aggressive at 8; if you see GPU OOM or slowdown, try 4 or 2.
+  # Start at 8; reduce this if process memory becomes a bottleneck.
   max_parallel_experiments: 8
 
   # Shots parallelism is irrelevant for the exact-DM workflow (shots=1).

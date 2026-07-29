@@ -1,4 +1,4 @@
-r"""Reservoir-only exact runner for the SWAP-channel QRC paper circuit.
+r"""Optimized NumPy/CuPy reduced reset-channel kernels.
 
 The paper circuit implements the contraction channel through a SWAP dilation on
 ``2n + 1`` qubits, then saves the reduced reservoir density matrix. This runner
@@ -24,8 +24,8 @@ from qiskit import QuantumCircuit
 from qiskit.circuit import Parameter
 from qiskit.quantum_info import Operator, SparsePauliOp
 
-from src.qrc.circuits.qrc_configs import BaseQRConfig
-from src.qrc.run.circuit_run import BaseCircuitsRunner, ExactExpectationResults, ExactResults, PUB
+from src.core.legacy_config import BaseQRConfig
+from src.backends.aer.legacy_runner import BaseCircuitsRunner, ExactExpectationResults, ExactResults, PUB
 
 
 _DEFAULT_ANGLE_SCALE = np.pi * (1.0 - 1e-6)
@@ -72,6 +72,7 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         output_backend: str = "numpy",
         output_kind: str = "density_matrix",
         max_history: int | None = None,
+        _allow_approximate: bool = False,
     ) -> None:
         self.qrc_cfg = qrc_cfg
         self.state_dtype = np.dtype(state_dtype)
@@ -108,6 +109,13 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
                 raise ValueError(
                     "max_history truncation is supported only with engine='cupy' and output_kind='expectation'."
                 )
+        if not _allow_approximate and (
+            self.weight_atol > 0.0 or self.max_history is not None
+        ):
+            raise ValueError(
+                "ExactReservoirChannelRunner forbids branch pruning and history truncation. "
+                "Use TruncatedReservoirChannelRunner for explicitly approximate execution."
+            )
         self._cupy: Any | None = None
         self._cupy_gate_cache: _GateIndexCache | None = None
         if self.engine == "cupy":
@@ -251,7 +259,10 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         try:
             return int(col_by_param[param])
         except KeyError as exc:
-            raise ValueError(f"Parameter {param!r} from metadata[{group!r}] is not in metadata['param_order'].") from exc
+            raise ValueError(
+                f"Parameter {param!r} from metadata[{group!r}] "
+                "is not in metadata['param_order']."
+            ) from exc
 
     def _run_single_row(
         self,
@@ -859,3 +870,14 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         phase_diff = cp.exp(0.5j * theta)[:, None]
         phases = cp.where(same[None, :], phase_same, phase_diff).astype(states.dtype, copy=False)
         states *= phases[:, None, :]
+
+
+class TruncatedReservoirChannelRunner(ExactReservoirChannelRunner):
+    """Explicitly approximate finite-history/pruned reservoir runner."""
+
+    def __init__(self, qrc_cfg: BaseQRConfig, **kwargs: Any) -> None:
+        if kwargs.get("max_history") is None and float(kwargs.get("weight_atol", 0.0)) <= 0.0:
+            raise ValueError(
+                "TruncatedReservoirChannelRunner requires max_history or positive weight_atol."
+            )
+        super().__init__(qrc_cfg, _allow_approximate=True, **kwargs)

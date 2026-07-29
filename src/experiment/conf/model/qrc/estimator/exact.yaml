@@ -1,0 +1,3 @@
+_target_: src.estimators.ExactFeatureEstimator
+precision: complex128
+return_states: false

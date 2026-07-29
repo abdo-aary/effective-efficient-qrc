@@ -1,28 +1,30 @@
 """Quantum reservoir featurization.
 
-This module defines :class:`src.models.qrc_featurizer.QRCFeaturizer`, a lightweight transformer that turns
-a window dataset ``X`` of shape ``(N, w, d)`` into a feature matrix ``Phi`` of shape ``(N, D)`` by:
-
-1. Building a pubs dataset (circuits + parameter binds) using :class:`src.qrc.circuits.circuit_factory.CircuitFactory`.
-2. Executing pubs with a :class:`src.qrc.run.circuit_run.BaseCircuitsRunner`.
-3. Converting runner outputs (:class:`src.qrc.run.circuit_run.Results`) into real-valued features using a
-   :class:`src.qrc.run.fmp_retriever.BaseFeatureMapsRetriever`.
+This module defines :class:`src.models.qrc_featurizer.QRCFeaturizer`, a lightweight
+transformer that turns a window dataset ``X`` of shape ``(N, w, d)`` into a
+structured feature batch. New code delegates to a backend-neutral program,
+feature estimator, and execution backend. A legacy constructor remains for old
+experiment manifests and uses the relocated Aer circuit/runner components.
 
 The featurizer is intentionally *stateless*, so the same ``Phi`` can be reused for many downstream supervised
 tasks (including multi-output labels) without rerunning circuits.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict
 
 import numpy as np
 
-from src.qrc.circuits.qrc_configs import BaseQRConfig
-from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.utils import angle_positioning_linear, angle_positioning_tanh
-from src.qrc.run.circuit_run import BaseCircuitsRunner
-from src.qrc.run.fmp_retriever import BaseFeatureMapsRetriever
+from src.core.legacy_config import BaseQRConfig
+from src.backends.aer.circuits import CircuitFactory
+from src.backends.qiskit_utils import angle_positioning_linear, angle_positioning_tanh
+from src.backends.aer.legacy_runner import BaseCircuitsRunner
+from src.features.legacy_retrievers import BaseFeatureMapsRetriever
+from src.core.program import QuaRKProgram
+from src.core.requests import ExecutionSpec
+from src.core.results import FeatureBatch
+from src.estimators.base import FeatureEstimator
 
 _ANGLE_POS_REGISTRY = {
     "linear": angle_positioning_linear,
@@ -37,11 +39,11 @@ class QRCFeaturizer:
 
     Parameters
     ----------
-    qrc_cfg : src.qrc.circuits.qrc_configs.BaseQRConfig
+    qrc_cfg : src.core.legacy_config.BaseQRConfig
         Quantum reservoir configuration (number of qubits, input dimension, seed, ...).
-    runner : src.qrc.run.circuit_run.BaseCircuitsRunner
-        Runner used to execute pubs and return :class:`src.qrc.run.circuit_run.Results`.
-    fmp_retriever : src.qrc.run.fmp_retriever.BaseFeatureMapsRetriever
+    runner : src.backends.aer.legacy_runner.BaseCircuitsRunner
+        Runner used by the compatibility constructor to execute PUBs.
+    fmp_retriever : src.features.legacy_retrievers.BaseFeatureMapsRetriever
         Retriever that converts runner results into a feature matrix ``Phi``.
     pubs_family : str
         Name of the pubs family used to build circuits (e.g. ``"ising_ring_swap"``).
@@ -57,14 +59,54 @@ class QRCFeaturizer:
     -----
     This class is conceptually similar to an ``sklearn`` transformer, but kept minimal on purpose.
     """
-    qrc_cfg: BaseQRConfig
-    runner: BaseCircuitsRunner
-    fmp_retriever: BaseFeatureMapsRetriever
-    pubs_family: str
-    angle_positioning_name: str
-    pubs_kwargs: Dict[str, Any]
-    runner_kwargs: Dict[str, Any]
-    fmp_kwargs: Dict[str, Any]
+    qrc_cfg: BaseQRConfig | None = None
+    runner: BaseCircuitsRunner | None = None
+    fmp_retriever: BaseFeatureMapsRetriever | None = None
+    pubs_family: str | None = None
+    angle_positioning_name: str | None = None
+    pubs_kwargs: Dict[str, Any] = field(default_factory=dict)
+    runner_kwargs: Dict[str, Any] = field(default_factory=dict)
+    fmp_kwargs: Dict[str, Any] = field(default_factory=dict)
+    program: QuaRKProgram | None = None
+    backend: Any | None = None
+    estimator: FeatureEstimator | None = None
+    execution: ExecutionSpec = field(default_factory=ExecutionSpec)
+    last_feature_batch_: FeatureBatch | None = field(default=None, init=False, repr=False)
+
+    @classmethod
+    def from_backend_api(
+        cls,
+        *,
+        program: QuaRKProgram,
+        backend: Any,
+        estimator: FeatureEstimator,
+        execution: ExecutionSpec | None = None,
+    ) -> "QRCFeaturizer":
+        """Construct a featurizer with no runner, retriever, or PUB objects."""
+
+        return cls(
+            program=program,
+            backend=backend,
+            estimator=estimator,
+            execution=execution or ExecutionSpec(),
+        )
+
+    def transform_batch(self, X: np.ndarray) -> FeatureBatch:
+        """Return structured features from the backend-neutral API."""
+
+        if self.program is None or self.backend is None or self.estimator is None:
+            raise RuntimeError(
+                "transform_batch requires program, backend, and estimator; "
+                "this featurizer was constructed through the legacy runner API."
+            )
+        batch = self.estimator.estimate(
+            self.program,
+            X,
+            self.backend,
+            self.execution,
+        )
+        self.last_feature_batch_ = batch
+        return batch
 
     def transform(self, X: np.ndarray) -> np.ndarray:
         """
@@ -87,6 +129,22 @@ class QRCFeaturizer:
         """
         if X.ndim != 3:
             raise ValueError(f"X must be (N,w,d). Got {X.shape}.")
+
+        if self.program is not None or self.backend is not None or self.estimator is not None:
+            if self.program is None or self.backend is None or self.estimator is None:
+                raise ValueError(
+                    "Backend-neutral featurization requires program, backend, and estimator together."
+                )
+            return self.transform_batch(X).flatten_for_readout()
+
+        if self.qrc_cfg is None or self.runner is None or self.fmp_retriever is None:
+            raise ValueError(
+                "Legacy featurization requires qrc_cfg, runner, and fmp_retriever."
+            )
+        if self.pubs_family is None or self.angle_positioning_name is None:
+            raise ValueError(
+                "Legacy featurization requires pubs_family and angle_positioning_name."
+            )
 
         angle_positioning = _ANGLE_POS_REGISTRY.get(self.angle_positioning_name)
         if angle_positioning is None:

@@ -1,3 +1,3 @@
-_target_: src.qrc.circuits.utils.generate_k_local_paulis
+_target_: src.backends.qiskit_utils.generate_k_local_paulis
 locality: 2
 num_qubits: ${...cfg.num_qubits}

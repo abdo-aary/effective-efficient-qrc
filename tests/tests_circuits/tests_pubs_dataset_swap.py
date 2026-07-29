@@ -3,10 +3,10 @@ import pytest
 
 from qiskit import QuantumCircuit, transpile
 from qiskit.quantum_info import DensityMatrix, partial_trace
-from src.qrc.circuits.qrc_configs import RingQRConfig as Config
+from src.core.legacy_config import RingQRConfig as Config
 
-from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.utils import angle_positioning_tanh, angle_positioning_linear
+from src.backends.aer.circuits import CircuitFactory
+from src.backends.qiskit_utils import angle_positioning_tanh, angle_positioning_linear
 
 qiskit_aer = pytest.importorskip("qiskit_aer")
 from qiskit_aer import AerSimulator

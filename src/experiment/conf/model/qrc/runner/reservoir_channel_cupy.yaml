@@ -1,4 +1,4 @@
-_target_: src.qrc.run.reservoir_channel_runner.ExactReservoirChannelRunner
+_target_: src.backends.nvidia.legacy_runner.ExactReservoirChannelRunner
 
 state_dtype: complex128
 chunk_size: 4096

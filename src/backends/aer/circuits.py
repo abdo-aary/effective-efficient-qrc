@@ -1,4 +1,4 @@
-"""src.qrc.circuits.circuit_factory
+"""Qiskit circuit construction for the Aer oracle compatibility path.
 ================================
 
 Factory utilities to build the *quantum reservoir circuits* used throughout the
@@ -18,7 +18,8 @@ The main entry points are:
   and the contraction strength) remain free.
 
 - :meth:`CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP`, which
-  prepares a PUBS dataset compatible with :class:`src.qrc.run.circuit_run.ExactAerCircuitsRunner`.
+  prepares a PUBS dataset compatible with
+  :class:`src.backends.aer.legacy_runner.ExactAerCircuitsRunner`.
 
 Notes
 -----
@@ -45,7 +46,7 @@ import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector, Parameter
 
-from src.qrc.circuits.qrc_configs import RingQRConfig
+from src.core.legacy_config import RingQRConfig
 
 
 class CircuitFactory:
@@ -57,7 +58,7 @@ class CircuitFactory:
 
     See Also
     --------
-    src.qrc.run.circuit_run.ExactAerCircuitsRunner
+    src.backends.aer.legacy_runner.ExactAerCircuitsRunner
         Runner expecting the metadata contract described in this module docstring.
     """
 

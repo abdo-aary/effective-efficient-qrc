@@ -1,0 +1,4 @@
+_target_: src.backends.aer.AerCPUBackend
+max_qubits: 4
+max_windows: 32
+optimization_level: 0

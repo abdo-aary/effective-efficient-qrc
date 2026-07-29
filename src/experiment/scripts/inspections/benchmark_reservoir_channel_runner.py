@@ -13,12 +13,16 @@ from collections.abc import Callable
 
 import numpy as np
 
-from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.qrc_configs import RingQRConfig
-from src.qrc.circuits.utils import angle_positioning_tanh, generate_k_local_paulis
-from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactExpectationResults, ExactResults
-from src.qrc.run.fmp_retriever import ExactFeatureMapsRetriever
-from src.qrc.run.reservoir_channel_runner import ExactReservoirChannelRunner
+from src.backends.aer.circuits import CircuitFactory
+from src.core.legacy_config import RingQRConfig
+from src.core.seeds import SeedBundle
+from src.backends.qiskit_utils import angle_positioning_tanh, generate_k_local_paulis
+from src.backends.aer.legacy_runner import ExactAerCircuitsRunner, ExactExpectationResults, ExactResults
+from src.features.legacy_retrievers import ExactFeatureMapsRetriever
+from src.backends.nvidia.legacy_runner import (
+    ExactReservoirChannelRunner,
+    TruncatedReservoirChannelRunner,
+)
 
 
 def _make_pubs(*, N: int, w: int, d: int, n: int, R: int, seed: int):
@@ -76,11 +80,16 @@ def _run_case(
     )
     cfg, pubs = _make_pubs(N=N, w=w, d=d, n=n, R=R, seed=seed)
     observables = generate_k_local_paulis(locality=2, num_qubits=n)
+    direct_runner_cls = (
+        TruncatedReservoirChannelRunner
+        if max_history is not None
+        else ExactReservoirChannelRunner
+    )
 
     if direct_only:
         _time(
             "cupy-direct",
-            lambda: ExactReservoirChannelRunner(
+            lambda: direct_runner_cls(
                 cfg,
                 engine="cupy",
                 chunk_size=chunk_size,
@@ -129,7 +138,7 @@ def _run_case(
         _compare_pair("cupy-batched", cupy, batched)
         direct, _ = _time(
             "cupy-direct",
-            lambda: ExactReservoirChannelRunner(
+            lambda: direct_runner_cls(
                 cfg,
                 engine="cupy",
                 chunk_size=chunk_size,
@@ -180,6 +189,11 @@ def main() -> None:
     parser.add_argument("--direct-only", action="store_true")
     parser.add_argument("--max-history", type=int, default=None)
     args = parser.parse_args()
+    replicate_sequences = SeedBundle.from_root(args.seed).sequence("replicate").spawn(2)
+    replicate_seeds = [
+        int(sequence.generate_state(1, dtype=np.uint32)[0])
+        for sequence in replicate_sequences
+    ]
 
     _run_case(
         N=args.small_N,
@@ -187,7 +201,7 @@ def main() -> None:
         d=args.d,
         n=args.n,
         R=args.R,
-        seed=args.seed,
+        seed=replicate_seeds[0],
         chunk_size=args.chunk_size,
         include_reference=not args.skip_reference,
         include_aer=not args.skip_aer,
@@ -202,7 +216,7 @@ def main() -> None:
             d=args.d,
             n=args.n,
             R=args.R,
-            seed=args.seed + 1,
+            seed=replicate_seeds[1],
             chunk_size=args.chunk_size,
             include_reference=not args.skip_reference,
             include_aer=False,

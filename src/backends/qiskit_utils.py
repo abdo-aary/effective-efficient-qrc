@@ -1,4 +1,4 @@
-"""src.qrc.circuits.utils
+"""Qiskit-specific angle and observable construction utilities.
 ======================
 
 Small utilities used by the circuit construction and feature-map pipeline.
@@ -133,7 +133,7 @@ def generate_k_local_paulis(locality: int, num_qubits: int) -> List[SparsePauliO
     Examples
     --------
     For ``num_qubits=2`` and ``locality=1``, the function returns
-    ``[XI, YI, ZI, IX, IY, IZ]`` as `SparsePauliOp` objects.
+    ``[IX, IY, IZ, XI, YI, ZI]`` as `SparsePauliOp` objects.
     """
     if locality < 1:
         return []
@@ -143,9 +143,9 @@ def generate_k_local_paulis(locality: int, num_qubits: int) -> List[SparsePauliO
     paulis: List[SparsePauliOp] = []
     letters = ("X", "Y", "Z")
 
-    for l in range(1, locality + 1):
-        for qubit_indices in combinations(range(num_qubits), l):
-            for pauli_choice in product(letters, repeat=l):
+    for weight in range(1, locality + 1):
+        for qubit_indices in combinations(range(num_qubits), weight):
+            for pauli_choice in product(letters, repeat=weight):
                 chars = ["I"] * num_qubits
                 for q, p in zip(qubit_indices, pauli_choice):
                     str_idx = num_qubits - 1 - q  # qubit 0 is rightmost
@@ -204,7 +204,7 @@ def get_theoretical_shots(
     -----
     The formula implemented is:
 
-    ``N ≈ (34/eps^2) * (3/2)^k * log((R*M*num_obs)/delta)``.
+    ``N ≈ (34/eps^2) * 3^k * log((R*M*num_obs)/delta)``.
     """
     if eps <= 0:
         raise ValueError("eps must be > 0.")
@@ -212,7 +212,7 @@ def get_theoretical_shots(
         raise ValueError("delta must be in (0, 1).")
 
     prefactor = 34.0 / (eps ** 2)
-    shadow_norm_sq = (3.0 / 2.0) ** locality
+    shadow_norm_sq = 3.0 ** locality
     num_features = num_draws * num_data_pts * num_obs
     n_shots = prefactor * shadow_norm_sq * math.log(num_features / delta)
 

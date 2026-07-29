@@ -1,5 +1,6 @@
 family: ising_ring_swap
 angle_positioning: tanh
+window_length: ${data.sampling.w}
 
 # kwargs forwarded to CircuitFactory.create_pubs_dataset_reservoirs_IsingRingSWAP
 lam_0: 0.1

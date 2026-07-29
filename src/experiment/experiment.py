@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
+from time import perf_counter
 
 import numpy as np
 from omegaconf import DictConfig
@@ -30,6 +31,7 @@ from omegaconf import DictConfig
 from src.data.factory import DatasetArtifact, load_windows_dataset
 from src.data.generate.base import WindowsDataset
 from src.models.qrc_matern_krr import QRCMaternKRRRegressor
+from src.experiment.result import ExperimentResult
 
 _FRIENDLY_FUNCTIONAL_NAMES_BY_CLASS = {
     "OneStepForecastFunctional": "Single step forecasting",
@@ -121,6 +123,17 @@ class Experiment:
         """Train the wrapped model on the loaded dataset."""
         self.model.fit(self.dataset.X, self.dataset.y, num_workers=int(num_workers), **fit_kwargs)
         return self
+
+    def run(self, *, num_workers: int = 1, **fit_kwargs: Any) -> ExperimentResult:
+        """Fit the model and return an inspectable, persistable run result."""
+
+        started = perf_counter()
+        self.fit(num_workers=num_workers, **fit_kwargs)
+        return ExperimentResult(
+            experiment=self,
+            metrics=self.compute_metrics(),
+            elapsed_seconds=perf_counter() - started,
+        )
 
     def compute_metrics(self) -> Dict[str, Dict[str, float]]:
         """Compute metrics per functional.

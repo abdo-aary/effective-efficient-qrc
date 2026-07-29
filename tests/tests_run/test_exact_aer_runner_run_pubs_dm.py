@@ -7,10 +7,10 @@ pytest.importorskip("qiskit_aer")
 from qiskit_aer import AerSimulator
 from qiskit import transpile
 
-from src.qrc.circuits.circuit_factory import CircuitFactory
-from src.qrc.circuits.utils import angle_positioning_linear
-from src.qrc.run.circuit_run import ExactAerCircuitsRunner, ExactResults
-from src.qrc.circuits.qrc_configs import RingQRConfig
+from src.backends.aer.circuits import CircuitFactory
+from src.backends.qiskit_utils import angle_positioning_linear
+from src.backends.aer.legacy_runner import ExactAerCircuitsRunner, ExactResults
+from src.core.legacy_config import RingQRConfig
 
 
 # ----------------------------

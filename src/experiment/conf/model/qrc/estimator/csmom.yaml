@@ -1,0 +1,5 @@
+_target_: src.estimators.CSMoMFeatureEstimator
+snapshots: 1000
+median_blocks: 10
+measurement_ensemble: local_pauli
+retain_raw_snapshots: false

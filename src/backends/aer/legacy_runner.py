@@ -1,5 +1,5 @@
 """
-src.qrc.run.circuit_run
+Legacy Aer PUB runner retained as an independent correctness engine.
 ======================
 
 Runners and result containers for executing QRC circuits.
@@ -49,7 +49,7 @@ bindings must follow a deterministic parameter order:
 - Otherwise, runners fall back to rebuilding the order from metadata:
   ``list(J) + list(h_x) + list(h_z) + [lam]`` (legacy circuits).
 
-These metadata keys are produced by the circuit factory in :mod:`src.qrc.circuits`.
+These metadata keys are produced by :mod:`src.backends.aer.circuits`.
 
 Performance note
 ----------------
@@ -70,7 +70,7 @@ import pickle
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from qiskit.circuit import Parameter
-from src.qrc.circuits.qrc_configs import BaseQRConfig
+from src.core.legacy_config import BaseQRConfig
 
 PUB = Tuple[QuantumCircuit, np.ndarray]
 
@@ -102,12 +102,11 @@ class Results(ABC):
     ----------
     qrc_cfg : BaseQRConfig
         Configuration used to build/run the circuits (topology, number of qubits, etc.).
-    states : np.ndarray
-        Array storing simulator outputs. The exact meaning/shape depends on the subclass.
+    Concrete subclasses expose explicitly named output fields such as
+    ``states`` or ``expectations``.
     """
 
     qrc_cfg: BaseQRConfig
-    states: np.ndarray
 
     @abstractmethod
     def save(self, file: str | Path) -> None:
@@ -237,9 +236,6 @@ class ExactExpectationResults(Results):
     def __init__(self, *, expectations: Any, qrc_cfg: BaseQRConfig, observable_labels: list[str]) -> None:
         self.expectations = expectations
         self.qrc_cfg = qrc_cfg
-        # Alias expectations as ``states`` for the abstract result contract.
-        # Code that consumes this result should prefer ``expectations`` directly.
-        self.states = expectations
         self.observable_labels = list(observable_labels)
 
     def save(self, file: str | Path) -> None:
