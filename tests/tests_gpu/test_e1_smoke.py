@@ -22,13 +22,21 @@ def test_exact_nvidia_e1_smoke(tmp_path):
             config_name="e1",
             overrides=[
                 "e1/mode=smoke",
-                "stage=all",
+                "stage=features",
                 f"artifacts.root={tmp_path.as_posix()}",
             ],
         )
     resolved = OmegaConf.to_container(cfg, resolve=True)
-    result = run_e1(resolved)
+    feature_result = run_e1(resolved)
+    assert feature_result.path is not None
+    cached_feature_bytes = (feature_result.path / "results.npz").read_bytes()
+
+    analysis_config = dict(resolved)
+    analysis_config["stage"] = "analyze"
+    result = run_e1(analysis_config)
     assert result.path is not None
+    assert result.configuration_hash == feature_result.configuration_hash
+    assert (feature_result.path / "results.npz").read_bytes() == cached_feature_bytes
     assert (result.path / "manifest.json").exists()
     assert (result.path / "regularization_path.csv").exists()
     assert (result.path / "learning_curve.csv").exists()
@@ -45,6 +53,6 @@ def test_exact_nvidia_e1_smoke(tmp_path):
     assert identity["configuration_hash"] == result.configuration_hash
     assert identity["stage"] == "complete"
 
-    resumed = run_e1(resolved)
+    resumed = run_e1(analysis_config)
     assert resumed.path == result.path
     assert load_feature_artifact(resumed.path)["results"]["values"].shape == (96, 2, 9)

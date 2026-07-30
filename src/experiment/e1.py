@@ -499,7 +499,10 @@ def run_e1(config: Mapping[str, Any]) -> E1RunResult:
 
 
 def aggregate_e1(
-    *, artifact_root: str | Path, scenario: str = "reference-varma-functional"
+    *,
+    artifact_root: str | Path,
+    scenario: str = "reference-varma-functional",
+    mode: str | None = None,
 ) -> dict[str, Path]:
     """Regenerate E1 aggregate tables from immutable successful run artifacts."""
 
@@ -515,12 +518,19 @@ def aggregate_e1(
         status = json.loads(status_path.read_text(encoding="utf-8"))
         if status.get("status") != "complete":
             continue
+        resolved = json.loads(
+            (run_path / "resolved_config.json").read_text(encoding="utf-8")
+        )
+        run_mode = str(resolved.get("mode", "unknown"))
+        if mode is not None and run_mode != mode:
+            continue
         manifest = json.loads((run_path / "manifest.json").read_text(encoding="utf-8"))
         execution = json.loads((run_path / "execution.json").read_text(encoding="utf-8"))
         root_value = int(run_path.parent.name.split("=", 1)[1])
         run_rows.append(
             {
                 "root": root_value,
+                "mode": run_mode,
                 "configuration_hash": run_path.name,
                 "path": str(run_path),
                 "status": "complete",
@@ -531,7 +541,9 @@ def aggregate_e1(
         )
         metrics = json.loads((run_path / "metrics.json").read_text(encoding="utf-8"))
         for row in metrics.get("rows", []):
-            metric_rows.append({"root": root_value, "run_path": str(run_path), **row})
+            metric_rows.append(
+                {"root": root_value, "mode": run_mode, "run_path": str(run_path), **row}
+            )
 
     aggregate_root = artifact_root / "aggregate" / "E1"
     aggregate_root.mkdir(parents=True, exist_ok=True)

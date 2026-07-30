@@ -198,7 +198,15 @@ class E1ProtocolSpec:
             "program_fingerprint": str(program_fingerprint),
         }
         if resolved_configuration is not None:
-            payload["resolved_configuration"] = dict(resolved_configuration)
+            identity_configuration = dict(resolved_configuration)
+            # These fields control orchestration and authorization only. They
+            # must not split otherwise identical feature and analysis stages
+            # into different cache identities.
+            identity_configuration.pop("stage", None)
+            identity_configuration.pop("allow_full", None)
+            identity_configuration.pop("artifacts", None)
+            identity_configuration.pop("hydra", None)
+            payload["resolved_configuration"] = identity_configuration
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()

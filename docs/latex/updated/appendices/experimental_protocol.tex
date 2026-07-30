@@ -30,14 +30,14 @@ The canonical run identifier is
 \]
 The corresponding directory is
 \begin{verbatim}
-artifacts/experiments/quark-empirical-v1/
+storage/artifacts/experiments/quark-empirical-v1/
   <E1--E9>/<scenario>/<method>/root=<root>/<configuration-hash>/
 \end{verbatim}
 A complete run contains the versioned feature artifact, data and split
 manifests, selected readout candidate, predictions, long-form metrics, timings,
 resource counters, environment, and status.  Hardware runs additionally retain
 all Runtime job handles and raw shadow provenance.  Aggregate files are written
-under \texttt{artifacts/experiments/quark-empirical-v1/aggregate/}; they never
+under \texttt{storage/artifacts/experiments/quark-empirical-v1/aggregate/}; they never
 replace the immutable run directories.
 
 \subsection{Common data, model, and readout objects}

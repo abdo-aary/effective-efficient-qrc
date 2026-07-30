@@ -6,6 +6,9 @@
 # Don't ignore the placeholder file
 !/storage/placeholder
 
+# Preserve pre-refactor datasets and runs outside the active storage tree.
+/legacy_storage/
+
 venv/
 
 # Draft

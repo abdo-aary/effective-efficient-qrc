@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 from pathlib import Path
 from typing import Any, Callable
 
@@ -50,7 +51,10 @@ def _write_latex_summary(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def plot_e1(
-    *, artifact_root: str | Path, scenario: str = "reference-varma-functional"
+    *,
+    artifact_root: str | Path,
+    scenario: str = "reference-varma-functional",
+    mode: str | None = None,
 ) -> dict[str, Path]:
     import matplotlib
 
@@ -58,11 +62,27 @@ def plot_e1(
     import matplotlib.pyplot as plt
 
     artifact_root = Path(artifact_root)
-    aggregate_e1(artifact_root=artifact_root, scenario=scenario)
     method_root = artifact_root / "E1" / scenario / "quark-exact"
-    complete_runs = [path.parent for path in sorted(method_root.glob("root=*/*/status.json"))]
-    if not complete_runs:
+    available_runs: list[tuple[Path, str]] = []
+    for status_path in sorted(method_root.glob("root=*/*/status.json")):
+        status = json.loads(status_path.read_text(encoding="utf-8"))
+        if status.get("status") != "complete":
+            continue
+        run_path = status_path.parent
+        resolved = json.loads(
+            (run_path / "resolved_config.json").read_text(encoding="utf-8")
+        )
+        available_runs.append((run_path, str(resolved.get("mode", "unknown"))))
+    if not available_runs:
         raise FileNotFoundError("No complete E1 runs are available for plotting.")
+    available_modes = {run_mode for _, run_mode in available_runs}
+    selected_mode = mode or ("full" if "full" in available_modes else "smoke")
+    complete_runs = [
+        run_path for run_path, run_mode in available_runs if run_mode == selected_mode
+    ]
+    if not complete_runs:
+        raise FileNotFoundError(f"No complete E1 runs are available for mode={selected_mode!r}.")
+    aggregate_e1(artifact_root=artifact_root, scenario=scenario, mode=selected_mode)
     path_rows: list[dict[str, Any]] = []
     learning_rows: list[dict[str, Any]] = []
     metric_rows: list[dict[str, Any]] = []
@@ -156,12 +176,15 @@ def plot_e1(
     fig.savefig(pdf, bbox_inches="tight")
     plt.close(fig)
 
-    summary = output_root / "e1_smoke_summary.csv"
+    summary_prefix = (
+        "e1_functional_summary" if selected_mode == "full" else "e1_smoke_summary"
+    )
+    summary = output_root / f"{summary_prefix}.csv"
     summary.write_text(
         (output_root / "metrics_long.csv").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
-    latex = output_root / "e1_smoke_summary.tex"
+    latex = output_root / f"{summary_prefix}.tex"
     _write_latex_summary(latex, metric_rows)
     return {"png": png, "pdf": pdf, "summary": summary, "latex": latex}
 
@@ -169,11 +192,17 @@ def plot_e1(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--artifact-root", default="artifacts/experiments/quark-empirical-v1"
+        "--artifact-root",
+        default="storage/artifacts/experiments/quark-empirical-v1",
     )
     parser.add_argument("--scenario", default="reference-varma-functional")
+    parser.add_argument("--mode", choices=("smoke", "full"), default=None)
     arguments = parser.parse_args()
-    outputs = plot_e1(artifact_root=arguments.artifact_root, scenario=arguments.scenario)
+    outputs = plot_e1(
+        artifact_root=arguments.artifact_root,
+        scenario=arguments.scenario,
+        mode=arguments.mode,
+    )
     for name, path in outputs.items():
         print(f"{name}: {path}")
 
