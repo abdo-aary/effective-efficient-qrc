@@ -1,8 +1,0 @@
-{
-  "compile_seconds": 0.00012813399371225387,
-  "device_to_host_seconds": 7.910099520813674e-05,
-  "gpu_execution_seconds": 0.4251224519975949,
-  "main_readout_seconds": 0.1248719790019095,
-  "nested_readout_seconds": 0.02338742600113619,
-  "projection_pack_seconds": 0.0004010390111943707
-}

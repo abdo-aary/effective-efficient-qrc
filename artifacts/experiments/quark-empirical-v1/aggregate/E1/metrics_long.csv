@@ -1,3 +1,0 @@
-root,run_path,eta,inner_train_size,lambda_K,nu,outer_train_size,rkhs_norm,task,test_mse,test_nrmse,test_size,train_mse,validation_mse,xi
-91001,artifacts/experiments/quark-empirical-v1/E1/reference-varma-functional/quark-exact/root=91001/7683895315c4eeae,1.25e-06,64,0.0001,5.0,80,3.862027256018765,future,0.19767700336034083,1.0275239903048405,16,1.874135653925667e-09,0.2918656036205206,1.0
-91001,artifacts/experiments/quark-empirical-v1/E1/reference-varma-functional/quark-exact/root=91001/7683895315c4eeae,1.25e-06,64,0.0001,1.5,80,0.3552043581193439,volterra,0.0014167634508842355,0.9458094030670415,16,2.057271725850709e-11,0.0013337959283746914,2.0
