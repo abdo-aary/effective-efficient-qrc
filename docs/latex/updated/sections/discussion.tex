@@ -1,85 +1,81 @@
 \section{Discussion and Limitations}
 \label{sec:discussion}
 
-The analysis was designed to keep the dynamical, statistical, and measurement
-layers of \textsc{QuaRK} separate. This modularity clarifies what can be
-inferred from the current theory and where empirical evidence or additional
-analysis is still needed.
+QuaRK is designed to make resource choices visible rather than to argue that
+one quantum reservoir family dominates classical alternatives.  The
+architecture $\arch$ separates representation width, reservoir multiplicity,
+and memory range, while $M$, $S$, and $\Lambda$ govern measurement precision,
+frozen-design search, and readout capacity.  The final risk theorem reflects
+that separation: width controls an information floor, the frozen pool controls
+the chance of reaching near that floor, and the remaining resources control
+statistical, measurement, and finite-window discrepancies.
 
-\subsection{Statistical scope and memory trade-offs}
+The projection-information floor is target dependent.  Under the canonical
+Gaussian coupling it cannot increase with width, and for $n\geq d$ it vanishes
+almost surely because the projection is injective.  This is not a claim that
+each additional qubit strictly improves finite-sample prediction.  A target
+may already factor through a narrower projection.  Larger $n$ still increases
+physical circuit width and the number of exposed observables, but the RMS
+Mat\'ern metric prevents that larger coordinate count from mechanically
+inflating kernel distances or the shot/window risk-sensitivity bounds.  The
+empirical width study is therefore intended to identify tasks for which the
+additional projected information is actually useful.
 
-The single-design risk bound is uniform over an RKHS norm ball after the
-projection, reservoirs, observable family, window scheme, kernel parameters,
-and regularization level have been fixed. \Cref{cor:finite-family-selection}
-adds a controlled model-selection layer for a predeclared finite family,
-including sample-dependent validation selection, at a logarithmic cost in the
-number of candidates. Continuous optimization, adaptively enlarged search
-spaces, and sample-estimated preprocessing not included in that family still
-require separate analysis. The assumptions of stationary beta mixing and
-bounded labels are also substantive; nonstationarity, heavy-tailed targets,
-and online adaptation lie outside the present result.
+The finite-data projection theorem answers a different question.
+Johnson--Lindenstrauss preservation concerns only the finite raw inputs that
+appear in the observed windows and can permit $n\ll d$.  It does not eliminate
+the population information floor and is not used in the end-to-end risk proof.
+Conversely, the population result does not prescribe the smallest useful width
+for a particular finite dataset.  Keeping these statements separate avoids
+turning finite-set geometry preservation into an unsupported performance
+claim.
 
-The block length \(a\) and the window length \(w\) play different roles.
-Increasing \(a\) weakens the dependence penalty through \(\beta_Z(as-w)\) but
-reduces the effective block count \(\mu=N/(2a)\). Increasing \(w\), or choosing
-larger contraction parameters, reduces the worst-case loss of remote history,
-but may increase circuit cost and retain information that is irrelevant to the
-task. The theory exposes these trade-offs; it does not select an optimal
-operating point.
+The random-pool result also has a precise limitation.  Once an architecture
+contains a strictly good support point, continuity and full support imply a
+positive target-dependent mass $\hitMass$, and the probability of
+missing every good design is exactly $(1-\hitMass)^S$.  The paper does
+not provide a distribution-free numerical lower bound on
+$\hitMass$.  Such a bound would require quantitative small-ball
+control for the full random circuit and memory-rate law around target-useful
+parameter regions and could be extremely conservative.  The theorem therefore
+explains the role and asymptotic leverage of $S$ without pretending that a
+universal finite pool size can be prescribed for every task.
 
-\subsection{Measurement, hardware, and end-to-end resources}
+The mixer theorem should likewise be read at the correct level.  The identity
+support point remains sufficient for the asymptotic Stone--Weierstrass
+construction once multiplexing and a universal readout are unrestricted.
+What the nontrivial $W_n$ adds is a finite-resource mechanism: generic edge
+gates spread seed observables to larger Pauli supports, while the cycle bounds
+that spreading by graph neighborhoods and the edge bank supplies two-site
+seeds.  This does not imply that entanglement monotonically improves predictive
+risk, nor that the cycle is an expressivity-optimal topology.  The mixer
+ablation therefore reports operator spreading and feature-rank diagnostics
+alongside task error; if spreading increases without a predictive benefit, the
+architectural hypothesis is rejected for that regime.
 
-The main learning theorem uses exact observable expectations. The
-classical-shadow result addresses only finite sampling under independent local
-Pauli measurements, and \cref{cor:measurement-stability} propagates this error
-through a fixed readout. Training with a noisy Gram matrix, coherent gate
-errors, reset imperfections, decoherence, calibration drift, and correlated
-measurements require separate treatment. Likewise, the circuit in
-\cref{fig:reset-dilation} is an ideal dilation of the replacement channel.
-The compact experiment in \cref{sec:exp-hardware} instead uses pre-sampled
-reset trajectories and finite local-Pauli measurements.  It can quantify
-transfer at one operating point, but it does not establish general robustness
-to hardware noise.
+The statistical and physical fidelity bounds are sufficient and can be
+conservative.  The finite-shot term uses coordinatewise variance bounds, the
+dependent-data term uses independent-block coupling and a uniform RKHS bound,
+and the finite-window term uses worst-case contraction.  Their value is
+interpretability rather than numerical tightness.  In particular, the
+condition $\delta_g>0$ can require the raw-time gap to grow with sample size
+when $\beta_{\processZ}(g)$ is not negligible.  This restriction is explicit
+rather than asymptotically hidden: under the geometric envelope
+$\beta_{\processZ}(q)\leq\mixConst e^{-\mixDecay q}$,
+\cref{cor:geometric-mixing-gap} shows that $g=O(\log N)$ suffices at fixed
+confidence.  The constants remain process dependent, so the empirical study
+reports observed counterparts of these gaps rather than treating the
+worst-case bounds as fitted predictions.
 
-Resource accounting is therefore component-wise. The JL projection can reduce
-the logical encoded width on a finite point set, but applying a dense
-projection remains \(d\)-dependent.  The ambient-dimension experiment in
-\cref{sec:exp-high-dimensional} is designed to test fixed-width behavior,
-empirical projection distortion, and predictive degradation as \(d\) grows; it
-cannot by itself establish end-to-end runtime independence or practical
-scalability. Sequential execution of the \(R\)
-reservoirs can avoid an \(R\)-fold increase in peak width, at the cost of more
-state preparations and runtime. With \(N\) windows and \(S\) snapshots per
-reservoir output, feature extraction requires \(NRS\) state preparations and
-\(NRS w\) temporal channel applications. The shadow bound is logarithmic in
-the number of requested observables for fixed locality, but exponential in the
-locality \(k\). Dense kernel ridge regression adds quadratic memory and cubic
-naive training time.
-
-\subsection{Comparative interpretation}
-
-The state update, reset mechanism, and observable measurement process are
-quantum, whereas the projection and Mat\'ern readout are classical. None of the
-interpolation or generalization results identifies a predictive capability
-that is unavailable to a classical nonlinear reservoir or random feature map.
-Consequently, the practical value of the quantum featurizer must be assessed
-through matched comparisons that control feature dimension, readout, data
-splits, and model-selection effort. We do not claim quantum advantage,
-asymptotic speedup, state-of-the-art accuracy, or general superiority over
-classical temporal models.
-
-The chaotic, real-world, and hardware experiments have evidential roles that
-differ from the theory-aligned synthetic study.  Lorenz--63 and Mackey--Glass are explicit
-out-of-scope stress tests, while the three TSER datasets are limited external
-sanity checks for which stationarity and beta mixing are not asserted.  The IBM
-experiment is a compact finite-shot feasibility check using a frozen readout.
-These studies may reveal transfer or failure, but they do not expand the formal
-scope of the risk theorem.
-
-The method is general-purpose and is not tied to a sensitive deployment in its
-present form. Its foreseeable risks are the ordinary risks of temporal
-prediction---distribution shift, unreliable extrapolation, and overconfidence---
-together with overstated resource or advantage claims in an early-stage
-quantum setting. Making the analytical assumptions and resource ledger visible
-is intended to reduce these risks rather than to replace application-specific
-validation.
+Finally, the core empirical program remains inside a controlled beta-mixing,
+noiseless task family, where the Bayes risk is known and resource--difficulty
+interactions can be isolated.  Good behavior on chaotic or noisy tasks would
+be a robustness result, not an extension of the theorem.  The resource
+accounting uses the number of independent state preparations/circuit runs as
+the acquisition metric under a reusable-$n$-qubit hardware convention.  This
+should not be confused with the resources of one run: a length-$w$ trajectory
+has logical depth $O(w)$ and width $O(n)$.  Fully parallelizing the $R$ branches
+would instead trade wall-clock executions for $O(Rn)$ width.  Hardware-specific
+gate times, calibration drift, and
+fault-tolerant overhead remain outside scope.  No claim of quantum advantage
+follows from the current theory alone.

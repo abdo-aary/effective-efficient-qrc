@@ -1,484 +1,530 @@
-\section{Theory}
+\section{Learning and Representation Guarantees}
 \label{sec:theory}
 
-The method naturally leads to a sequence of analytical questions. How wide
-must the encoded input be on a finite dataset? Does the reservoir state depend
-on an arbitrary initialization? How accurately does a finite window represent
-the causal infinite-history feature? How does this approximation interact with
-the Mat\'ern readout, how does temporal dependence change the learning rate,
-and what price is paid when validation selects among finitely many candidate
-configurations? We answer these questions in the same order as the pipeline and
-then return to the finite-shot cost of estimating the observable features. Unless
-stated otherwise, the results use the analytical scope specified in
-\cref{sec:analytical-scope}. Complete proofs are collected in
-\cref{app:proofs}.
+The analysis follows the actual learning pipeline.  We first control the three
+errors that arise even for a fixed frozen representation: finite-window
+initialization, finite-shot measurement, and dependent finite data.  We then
+resolve the representational role of width $n$ by isolating the information
+lost by the shared Gaussian projection.  This width-resolved approximation
+result gives positive probability to neighborhoods of good frozen designs,
+which in turn makes the role of the pool size $S$ explicit.  The final theorem
+combines these ingredients for the full-sample ERM predictor returned by
+\cref{sec:model-selection}.
 
-\subsection{Finite-set projection}
-
-\begin{proposition}[Finite-set JL projection; adapted from
-\citealp{DasguptaGupta2003,Woodruff2014}]
-\label{prop:jl}
-Let \(\mathcal P\subset\R^d\) contain \(M\geq2\) points. For
-\(\varepsilon,\delta\in(0,1)\), there is a universal constant \(C>0\) such
-that, if
-\[
-    n\geq
-    C\varepsilon^{-2}\log\!\left(\frac{M}{\delta}\right)
-\]
-and \(\Pi_{ij}\overset{\mathrm{i.i.d.}}{\sim}\mathcal N(0,1/n)\), then with
-probability at least \(1-\delta\),
-\[
-    (1-\varepsilon)\norm{u-v}_2^2
-    \leq\norm{\Pi u-\Pi v}_2^2
-    \leq(1+\varepsilon)\norm{u-v}_2^2
-\]
-simultaneously for all \(u,v\in\mathcal P\). For the points occurring in
-\(N\) windows of length \(w\), one may take \(M\leq wN\).
-\end{proposition}
-
-For a prescribed finite set and distortion level, the proposition makes the
-encoded dimension logarithmic in the number of points rather than tied directly
-to \(d\). If the point set is the realized sample, the statement is read
-conditionally on that set, with \(\Pi\) drawn independently. This JL event is
-separate from the learning-theorem event unless their failure probabilities are
-combined explicitly. The statement concerns the projection before angle
-encoding: it neither guarantees that the final reservoir features are distinct
-nor removes the \(d\)-dependent cost of applying \(\Pi\). Having accounted for
-encoded width, we next study the temporal state generated from these inputs.
-
-\subsection{Contraction, causal states, and finite windows}
+\subsection{Memory fidelity}
+\label{sec:memory-fidelity}
 
 \begin{lemma}[Exact trace-norm contraction]
-\label{lem:contraction}
-For every sub-reservoir \(r\), input \(x\), and pair of density operators
-\(\rho,\rho'\),
+\label{lem:exact-contraction}
+Every branch with rate $\lambda$ satisfies
 \begin{equation}
-    \traceNorm{T_{r,x}(\rho)-T_{r,x}(\rho')}
-    =
-    \lambda_r\traceNorm{\rho-\rho'}.
-    \label{eq:exact-contraction}
+    \traceNorm{\reservoirChannel_x(\rho)-\reservoirChannel_x(\rho')}
+    =\lambda\traceNorm{\rho-\rho'}\leq2\lambda.
+    \label{eq:exact-trace-contraction}
 \end{equation}
-Consequently, for each input history there is a unique causal state obtained
-as the initialization time tends to \(-\infty\). Under the measurability
-condition in \cref{sec:analytical-scope}, the causal-state map is measurable.
-Two trajectories driven by the same last \(w\) inputs satisfy
-\begin{equation}
-    \traceNorm{\rho_0^{(r)}-\rho_0^{\prime(r)}}
-    \leq2\lambda_r^w.
-    \label{eq:state-forgetting}
-\end{equation}
+Hence every input history determines a unique causal state, and two
+trajectories driven by the same final $w$ inputs differ by at most
+$2\lambda^w$ in trace norm.
 \end{lemma}
 
-The state-level estimate immediately controls the observable representation
-used by the learner.
-
-\begin{proposition}[Finite-window feature error]
-\label{prop:feature-truncation}
-For every input history,
-\begin{align}
-    \norm{\PhiInf(x_{-\infty:0})-\PhiWin(x_{-w+1:0})}_2
+\begin{proposition}[Finite-window risk error]
+\label{prop:window-certificate}
+For every frozen design $\design\sim\designLaw_{\arch}$ and every
+$h\in\RKHS_{m_{\arch}}^\Lambda$,
+\begin{equation}
+\begin{aligned}
+    \abs{\risk_{\design,\infty}(h)-\risk_{\design,w}(h)}
     &\leq
-    2\sqrt{|\cO|\sum_{r=1}^R\lambda_r^{2w}}
-    \label{eq:feature-truncation}\\
+    4\Lambda(\Lambda+\Upsilon)\kLip
+    \left(\frac1R\sum_{r=1}^{R}\lambda_r^{2w}\right)^{1/2}\\
     &\leq
-    2\sqrt{R|\cO|}\,\lambdaMax^w,
-    \qquad
-    \lambdaMax:=\max_r\lambda_r.
-\end{align}
+    \underbrace{4\Lambda(\Lambda+\Upsilon)\kLip
+      \lambda_+^w}_{\epsWin(\arch)}.
+\end{aligned}
+    \label{eq:window-risk-bound}
+\end{equation}
 \end{proposition}
 
-Together, \cref{lem:contraction,prop:feature-truncation} show that the reservoir
-has a unique input-determined causal state and that a finite-window feature
-vector approaches its infinite-history counterpart geometrically. The
-parameters \(\lambda_r\) therefore expose a worst-case memory scale, while the
-window length \(w\) controls the corresponding approximation error. The next
-step is to determine how this feature error affects the kernel readout.
-
-\subsection{Mat\'ern stability and truncation of loss}
-
-\begin{lemma}[Mat\'ern RKHS section stability; derived from
-\citealp{Genton2001,PorcuEtAl2024}]
-\label{lem:matern-stability}
-Let \(\kappa\) be the normalized Mat\'ern kernel in
-\cref{eq:matern-profile,eq:matern-kernel} with \(\nu>1\). Then
+\begin{corollary}[Memory-endpoint calibration]
+\label{cor:lambda-plus-calibration}
+A requested tolerance $\epsilon_W>0$ is guaranteed whenever
 \begin{equation}
-    \norm{\kappa(z,\cdot)-\kappa(z',\cdot)}_{\cH_\kappa}
-    \leq
-    \frac1{\xi}\sqrt{\frac{\nu}{\nu-1}}\norm{z-z'}_2.
-    \label{eq:matern-section-lipschitz}
+    \lambda_0<\lambda_+\leq
+    \min\!\left\{1,
+    \left[\frac{\epsilon_W}
+      {4\Lambda(\Lambda+\Upsilon)\kLip}
+    \right]^{1/w}\right\}.
+    \label{eq:lambda-plus-calibration-condition}
 \end{equation}
-\end{lemma}
+If the right-hand upper bound is at most $\lambda_0$, the requested fidelity
+is incompatible with the fixed one-step lower memory endpoint.
+\end{corollary}
 
-\begin{corollary}[Prediction and loss truncation]
-\label{cor:loss-truncation}
-For every \(h\in\Hball\),
-\begin{align}
-    \abs{h(\PhiInf)-h(\PhiWin)}
+\paragraph{Interpretation.}
+Larger $\lambda_+$ retains longer memory but slows convergence from the
+finite-window implementation to its causal limit.  The calibration therefore
+turns a desired memory-fidelity tolerance into an explicit admissible endpoint.
+The RMS Mat\'ern geometry averages coordinatewise feature displacement, so
+merely concatenating more bounded branches or observables does not worsen this
+risk-sensitivity bound.  It does not claim that longer memory is always more
+predictive; that question belongs to the representation term introduced below.
+
+\subsection{Measurement fidelity}
+\label{sec:measurement-fidelity}
+
+\begin{proposition}[Grouped-measurement risk error]
+\label{prop:shot-certificate}
+For every frozen design and every $h\in\RKHS_{m_{\arch}}^\Lambda$,
+\begin{equation}
+\begin{aligned}
+    \abs{\oprisk_{\design,w}(h)-\risk_{\design,w}(h)}
     &\leq
-    \frac{2\Lambda}{\xi}
-    \sqrt{
-      \frac{\nu|\cO|}{\nu-1}
-      \sum_{r=1}^R\lambda_r^{2w}
-    },
-    \label{eq:prediction-truncation}\\
-    \abs{\risk_\infty(h)-\risk_w(h)}
+    2\Lambda(\Lambda+\Upsilon)\kLip
+    \left[
+      \frac1{Rq_n}\E\!\sum_{r=1}^{R}\sum_{O\in\gO_n}
+      \frac{1-\phi_{r,O}(X_{-w+1:0})^2}{a_n(O)M}
+    \right]^{1/2}\\
     &\leq
-    \tau_w,
-    \label{eq:risk-truncation}
-\end{align}
-where
-\begin{equation}
-    \tau_w
-    :=
-    \frac{4\Lambda(\Lambda+\Upsilon)}{\xi}
-    \sqrt{
-      \frac{\nu|\cO|}{\nu-1}
-      \sum_{r=1}^R\lambda_r^{2w}
-    }.
-    \label{eq:tau-window}
+    2\Lambda(\Lambda+\Upsilon)\kLip
+      \sqrt{\frac{1}{q_nM}\sum_{O\in\gO_n}\frac1{a_n(O)}}
+      =:\epsShot(\arch,M).
+\end{aligned}
+    \label{eq:operational-exact-risk-bound}
 \end{equation}
-\end{corollary}
+For the cycle cover,
+$\epsShot(\arch,M)=2\Lambda(\Lambda+\Upsilon)\kLip\sqrt{5/(6M)}$.
+\end{proposition}
 
-The corollary converts dynamical forgetting into a uniform approximation of
-predictions and squared risk over the RKHS ball. This term will appear
-additively in the learning bound. In particular, increasing the sample size
-alone cannot remove \(\tau_w\) when \(w\) and the reservoir parameters are held
-fixed.
-
-\subsection{Conditional interpolation capacity}
-
-The truncation result concerns stability of a bounded readout. A separate
-question is how much norm is needed to fit a finite set of exact features.
-
-\begin{theorem}[Conditional finite-sample interpolation; cf.
-\citealp{Aronszajn1950,KimeldorfWahba1971,HofmannScholkopfSmola2008}]
-\label{thm:interpolation}
-Let \(z_i=\PhiWin(x_i)\in\R^p\), \(i\in[N]\), be pairwise distinct exact
-feature vectors, and let \(K_{ij}=\kappa(z_i,z_j)\). The Mat\'ern Gram matrix
-\(K\) is positive definite. If \(\bm y\neq0\), define
-\[
-    \Lambda_\star
-    :=
-    \sqrt{\bm y^\top K^{-1}\bm y}.
-\]
-Then there is a unique minimum-norm interpolant
-\(h_\star\in\cH_\kappa\) with
-\(\norm{h_\star}_{\cH_\kappa}=\Lambda_\star\) and
-\(h_\star(z_i)=y_i\) for all \(i\). Therefore:
-\begin{enumerate}
-    \item for \(\Lambda\geq\Lambda_\star\),
-    \[
-        \min_{\norm{h}_{\cH_\kappa}\leq\Lambda}
-        \erisk_{N,w}(h)=0;
-    \]
-    \item for \(0\leq\Lambda\leq\Lambda_\star\),
-    \begin{equation}
-        \min_{\norm{h}_{\cH_\kappa}\leq\Lambda}
-        \erisk_{N,w}(h)
-        \leq
-        \left(1-\frac{\Lambda}{\Lambda_\star}\right)^2
-        \frac{\norm{\bm y}_2^2}{N}.
-        \label{eq:conditional-interpolation}
-    \end{equation}
-\end{enumerate}
-If \(\bm y=0\), the zero function interpolates with norm zero.
-\end{theorem}
-
-The theorem isolates the capacity of the Mat\'ern readout: once the exact
-feature vectors are distinct, a finite RKHS norm suffices to interpolate them,
-and scaling the interpolant gives a constructive training-error bound below
-that norm. Pairwise distinctness is an assumption of the result; neither the JL
-projection nor reservoir contraction guarantees it. This distinction is
-important because interpolation capacity alone says nothing about test risk.
-We now turn to that statistical question.
-
-\subsection{Dependence of strided windows}
-
-The learning sample is the window process \((W_j)\), not the raw process
-\((Z_t)\). The following lemma translates their mixing coefficients by tracking
-the first raw-time index appearing in a future window.
-
-\begin{lemma}[Mixing coefficient of the window process]
-\label{lem:window-mixing}
-Let \(W\) be the process in \cref{eq:window-process} with stride \(s=w+g\).
-For every integer \(a\geq1\),
+\begin{corollary}[Measurement-budget calibration]
+\label{cor:measurement-budget-calibration}
+For the cycle cover, $\epsShot(\arch,M)\leq\epsilon_M$ follows from
 \begin{equation}
-    \beta_W(a)
-    \leq
-    \beta_Z(as-w).
-    \label{eq:window-mixing}
-\end{equation}
-In particular, \(\beta_W(1)\leq\beta_Z(g)\).
-\end{lemma}
-
-The first raw input in a window at lag \(a\) occurs at \(as-w+1\). The displayed
-bound is conservative by one time index under \cref{eq:beta-definition}, using
-monotonicity of beta-mixing coefficients. It supplies the dependence term
-needed by the independent-block construction.
-
-\subsection{Generalization with dependent windows}
-
-For a sample \(\cS_\mu=(\widetilde W_1,\ldots,\widetilde W_\mu)\), define the
-empirical Rademacher complexity using the convention
-\begin{equation}
-    \hRad_{\cS_\mu}(\cF)
-    :=
-    \E_{\bm\sigma}\!\left[
-      \sup_{f\in\cF}
-      \abs{\frac2\mu\sum_{j=1}^\mu\sigma_j f(\widetilde W_j)}
-    \right],
-    \quad
-    \sigma_j\overset{\mathrm{i.i.d.}}{\sim}\mathrm{Unif}\{-1,+1\}.
-    \label{eq:rademacher-definition}
-\end{equation}
-This is the absolute-value convention used by
-\citet{MohriRostamizadeh2008}; keeping it explicit avoids hidden factor or
-centering changes when their theorem is specialized. For a length
-\(N=2\mu a\) sequence of windows, \(\cS_\mu\) denotes one fixed position from
-each of the \(\mu\) odd blocks of length \(a\). Let
-\[
-    \cF_\Lambda
-    :=
-    \set{
-      (x_{-w+1:0},y)
-      \mapsto
-      (h(\PhiWin(x_{-w+1:0}))-y)^2:
-      h\in\Hball
-    }.
-\]
-
-\begin{theorem}[One-sided risk bound for beta-mixing windows; adapted from
-\citealp{MohriRostamizadeh2008}]
-\label{thm:generalization}
-Under the analytical scope of \cref{sec:analytical-scope}, suppose that \(Z\)
-is stationary and beta mixing. Let \(N=2\mu a\), with \(\mu,a\in\N\), and set
-\begin{equation}
-    \delta'
-    :=
-    \delta-4(\mu-1)\beta_Z(as-w).
-    \label{eq:delta-prime}
-\end{equation}
-For every \(\delta\in(0,1)\) satisfying \(\delta'>0\), with probability at
-least \(1-\delta\), simultaneously for all \(h\in\Hball\),
-\begin{equation}
-    \risk_\infty(h)
-    \leq
-    \erisk_{N,w}(h)
-    +\hRad_{\cS_\mu}(\cF_\Lambda)
-    +3(\Lambda+\Upsilon)^2
-      \sqrt{\frac{\log(4/\delta')}{2\mu}}
-    +\tau_w.
-    \label{eq:empirical-rad-bound}
-\end{equation}
-\end{theorem}
-
-Define the source-convention squared-loss complexity constant
-\begin{equation}
-    C_{\Lambda,\Upsilon}
-    :=8\Lambda(\Lambda+\Upsilon)+2\Upsilon^2.
-    \label{eq:loss-complexity-constant}
-\end{equation}
-
-\begin{corollary}[Closed-form RKHS bound; using the contraction principle of
-\citealp{BartlettMendelson2002}]
-\label{cor:closed-generalization}
-Under the conditions of \cref{thm:generalization}, with the same probability,
-simultaneously for all \(h\in\Hball\),
-\begin{align}
-    \risk_\infty(h)
-    \leq\erisk_{N,w}(h)
-    &+\frac{C_{\Lambda,\Upsilon}}{\sqrt{\mu}}
-    +3(\Lambda+\Upsilon)^2
-      \sqrt{\frac{\log(4/\delta')}{2\mu}}
-    \notag\\
-    &+
-    \frac{4\Lambda(\Lambda+\Upsilon)}{\xi}
-    \sqrt{
-      \frac{\nu|\cO|}{\nu-1}
-      \sum_{r=1}^R\lambda_r^{2w}
-    }.
-    \label{eq:closed-generalization}
-\end{align}
-\end{corollary}
-
-The bound decomposes causal true risk into finite-window training risk, two
-stochastic terms based on the effective block count
-\(\mu=N/(2a)\), and the deterministic truncation term \(\tau_w\). Its
-uniformity over the fixed RKHS ball includes fixed-\(\eta\) KRR through
-\cref{eq:krr-norm-bound}, with \(\Lambda=\Upsilon/\sqrt\eta\). The statement is
-one-sided, and the condition \(\delta'>0\) makes the dependence--sample-size
-trade-off explicit: holding \(a=1\) while increasing \(N\) need not preserve
-the confidence condition.
-
-\subsection{Selection from a finite candidate family}
-
-The preceding bound fixes the featurizer and kernel before observing the
-sample. Empirical studies, however, commonly compare a finite grid of reservoir
-and readout configurations and select one using validation performance. The
-next result makes the bound simultaneous over such a predeclared family.
-
-\begin{corollary}[Finite-family model selection; finite-union argument based on
-\citealp{McDiarmid1989,BartlettMendelson2002}]
-\label{cor:finite-family-selection}
-Let \(\mathfrak C=\{1,\ldots,L\}\), with \(L\geq1\), be a finite,
-measurable family fixed before observing the sample, including every candidate's
-random seed and preprocessing map. All candidates share the same window length
-\(w\), stride \(s\), and block parameters \(N=2\mu a\). Candidate
-\(\ell\) specifies an exact causal and finite-window featurizer
-\(\Phi_\infty^{(\ell)},\Phi_w^{(\ell)}\), a normalized Mat\'ern kernel
-\(\kappa_\ell\) with \(\nu_\ell>1\), and an RKHS ball
-\[
-    \cH_\ell
-    :=
-    \set{h\in\cH_{\kappa_\ell}:\norm{h}_{\cH_{\kappa_\ell}}\leq\Lambda_\ell}.
-\]
-Let \(\tau_{w,\ell}\) be its truncation term from
-\cref{cor:loss-truncation}, define
-\[
-    B_{\mathfrak C}
-    :=
-    \max_{\ell\in[L]}(\Lambda_\ell+\Upsilon)^2,
-    \qquad
-    A_{\mathfrak C}
-    :=
-    \max_{\ell\in[L]}
-    \left[8\Lambda_\ell(\Lambda_\ell+\Upsilon)+2\Upsilon^2\right],
-\]
-and retain \(\delta'=\delta-4(\mu-1)\beta_Z(as-w)>0\). Then, with
-probability at least \(1-\delta\), simultaneously for every
-\(\ell\in[L]\) and \(h\in\cH_\ell\),
-\begin{align}
-    \risk_{\infty,\ell}(h)
-    \leq
-    \erisk_{N,w,\ell}(h)
-    &+\frac{A_{\mathfrak C}}{\sqrt\mu}
-    +2B_{\mathfrak C}
-      \sqrt{\frac{2\log L}{\mu}}
-    \notag\\
-    &+3B_{\mathfrak C}
-      \sqrt{\frac{\log(4/\delta')}{2\mu}}
-    +\tau_{w,\ell}.
-    \label{eq:finite-family-bound}
-\end{align}
-Here \(\risk_{\infty,\ell}\) and \(\erisk_{N,w,\ell}\) denote the risks
-induced by candidate \(\ell\). Consequently, the same event controls any
-measurable, sample-dependent selector \((\widehat\ell,\widehat h)\) whose
-output belongs to \(\bigcup_{\ell=1}^L\{\ell\}\times\cH_\ell\).
-\end{corollary}
-
-The additional term scales as \(\sqrt{\log L/\mu}\), so validation-based
-selection among a declared finite grid costs only logarithmically in the number
-of candidates. The result can cover finite choices of reservoir parameters,
-random seeds, observable families, and Mat\'ern readout parameters, provided
-the candidate list and its preprocessing are fixed in advance and the candidates
-share the window scheme used by the blocking argument. It does not cover
-continuous optimization, adaptive expansion of the search space, or
-sample-estimated preprocessing that is not included in the finite family.
-
-For geometric mixing, the block length can be increased slowly enough to
-control the coupling penalty without reducing the effective sample size too
-severely.
-
-\begin{corollary}[Geometrically mixing case]
-\label{cor:geometric-mixing}
-Suppose, in addition, that
-\(\beta_Z(q)\leq\beta_0e^{-cq}\) for constants \(\beta_0,c>0\), and keep
-\(w\) and \(s\) fixed. For a compatible sample size \(N=2\mu a\), choose an
-integer \(a\leq N/2\) satisfying
-\begin{equation}
-    a
-    \geq
+    M\geq
     \left\lceil
-      \max\left\{
-        1,\,
-        \frac1{cs}
-        \log\!\left(\frac{4\beta_0e^{cw}N}{\delta}\right)
-      \right\}
+      \frac{10\Lambda^2(\Lambda+\Upsilon)^2\kLip^2}{3\epsilon_M^2}
     \right\rceil.
-    \label{eq:geometric-block-choice}
+    \label{eq:risk-measurement-budget}
 \end{equation}
-Then \(\delta'\geq\delta/2\). For fixed
-\(\Lambda,\Upsilon,\delta,\beta_0,c,w,s\), the two stochastic terms in
-\cref{eq:closed-generalization} are
-\[
-    O\!\left(\sqrt{\frac{\log(N/\delta)}{N}}\right).
-\]
-If the available sample size is not divisible by \(2a\), retain
-\(N_a=2a\lfloor N/(2a)\rfloor\) observations (provided \(N_a\geq2a\)); at most
-\(2a-1\) terminal observations are discarded. For fixed problem parameters,
-the displayed choice satisfies \(a\leq N/2\) for all sufficiently large \(N\).
 \end{corollary}
 
-The corollary recovers an independent-like rate up to a logarithmic factor, but
-it does not remove the finite-window term. A consistency result would require a
-joint schedule for \(w\), \(s\), \(a\), and the readout class.
+\paragraph{Interpretation.}
+The sufficient repetitions per Pauli setting scale as
+$M=O(\epsilon_M^{-2})$ with no artificial $Rn$ factor: RMS kernel geometry
+prevents a larger feature vector from amplifying coordinatewise estimation
+noise solely through dimension.  This does \emph{not} make a larger quantum
+representation free.  The complete bank still requires $9RM$ independent
+branch-state preparations/circuit runs per input window under the reusable
+$n$-qubit convention, and each run uses an $n$-qubit trajectory of depth
+$O(w)$ as specified in \cref{sec:topology-observables}.
 
-\subsection{Finite-shot local-observable estimation}
+\subsection{Dependent-data generalization and ERM capacity}
+\label{sec:dependent-generalization}
+\label{sec:dependent-penalty}
 
-The preceding learning bound treats \(\PhiWin\) as an exact expectation vector.
-On a measurement-based implementation, every coordinate must instead be
-estimated from repeated preparations of the final reservoir state.
-
-\begin{proposition}[Local-Pauli classical-shadow requirement; adapted from
-\citealp{HuangKuengPreskill2020}]
-\label{prop:shadows}
-Suppose \(\cO\) contains \(M=|\cO|\) nonidentity Pauli strings of weight at
-most \(k\). In each snapshot, measure every qubit in an independently and
-uniformly selected \(X\), \(Y\), or \(Z\) basis. There is a universal
-constant \(C_{\mathrm{sh}}>0\) such that
+Condition on the shared preprocessor $\projection_n$ and the $S$ frozen
+designs.  Let $\measurementRecord_j$ collect all candidate measurement records
+for window $j$ and set
+$\augprocessW_j:=(\processW_j,\measurementRecord_j)$.  Independent measurement
+kernels preserve the one-step absolute-regularity coefficient, so
 \begin{equation}
-    S
-    \geq
-    C_{\mathrm{sh}}\,3^k\varepsilon^{-2}
-    \log\!\left(\frac{2M}{\delta_{\mathrm{sh}}}\right)
-    \label{eq:shadow-samples}
+    \beta_{\augprocessW}(1)=\beta_{\processW}(1)
+    \leq\beta_{\processZ}(g).
+    \label{eq:augmented-window-mixing}
 \end{equation}
-snapshots of one reservoir state suffice for simultaneous additive error at
-most \(\varepsilon\) for all observables, with probability at least
-\(1-\delta_{\mathrm{sh}}\).
-
-For \(N\) windows and \(R\) separately prepared sub-reservoir states, the
-choice
+For confidence $\delta\in(0,1)$, write
+$\delta_g:=\delta-4(\mu-1)\beta_{\processZ}(g)$ and assume $\delta_g>0$.
+Define
 \begin{equation}
-    S\geq
-    C_{\mathrm{sh}}\,3^k\varepsilon^{-2}
-    \log\!\left(\frac{2MNR}{\delta_{\mathrm{tot}}}\right)
-    \label{eq:shadow-samples-total}
+    \epsGen(\Lambda,S,\delta)
+    :=\frac{4\Lambda(\Lambda+\Upsilon)}{\sqrt\mu}
+      +3(\Lambda+\Upsilon)^2
+       \sqrt{\frac{\log(4S/\delta_g)}{2\mu}}.
+    \label{eq:dependent-certificate}
 \end{equation}
-gives the same coordinate-wise error simultaneously over all \(NR\) states,
-by a union bound. This requires \(NRS\) state preparations and \(NRSw\)
-temporal channel applications. Identity observables, if retained in a feature
-ledger, are known exactly.
+
+\begin{proposition}[Uniform measured-to-operational deviation]
+\label{prop:gapped-deviation}
+Conditional on any realized $\projection_n$ and frozen pool, with probability
+at least $1-\delta$ over the gapped sample and all training measurement
+outcomes, simultaneously for every $s\leq S$ and every
+$h\in\RKHS_{m_{\arch}}^\Lambda$,
+\begin{equation}
+    \abs{\erisk_{\design_s,w}(h)-\oprisk_{\design_s,w}(h)}
+    \leq\epsGen(\Lambda,S,\delta).
+    \label{eq:gapped-uniform-deviation}
+\end{equation}
 \end{proposition}
 
-\begin{corollary}[Uniform stability of RKHS readouts to measurement error]
-\label{cor:measurement-stability}
-Suppose every coordinate of \(\widehat\Phi_w-\PhiWin\) has magnitude at most
-\(\varepsilon\). On this deterministic event, the following inequalities hold
-simultaneously for every \(h\in\Hball\):
-\begin{align}
-    \abs{h(\widehat\Phi_w)-h(\PhiWin)}
-    &\leq
-    \frac{\Lambda}{\xi}
-    \sqrt{\frac{\nu R|\cO|}{\nu-1}}\,\varepsilon,
-    \label{eq:shot-prediction}\\
-    \abs{
-      \ell(h(\widehat\Phi_w),y)
-      -\ell(h(\PhiWin),y)
-    }
-    &\leq
-    \frac{2\Lambda(\Lambda+\Upsilon)}{\xi}
-    \sqrt{\frac{\nu R|\cO|}{\nu-1}}\,\varepsilon
-    \label{eq:shot-loss}
-\end{align}
-whenever \(\abs y\leq\Upsilon\).
+\begin{corollary}[Geometric-mixing gap rule]
+\label{cor:geometric-mixing-gap}
+Assume that the observed process has a known geometric absolute-regularity
+envelope
+\begin{equation}
+    \beta_{\processZ}(q)\leq \mixConst e^{-\mixDecay q},
+    \qquad q\geq0,
+    \label{eq:geometric-mixing-envelope}
+\end{equation}
+for constants $\mixConst\geq1$ and $\mixDecay>0$.  For $\mu\geq2$, the choice
+\begin{equation}
+    g\geq
+    \left\lceil
+      \frac1{\mixDecay}
+      \log\!\left(\frac{8\mixConst(\mu-1)}{\delta}\right)
+    \right\rceil
+    \label{eq:geometric-gap-rule}
+\end{equation}
+ensures $\delta_g\geq\delta/2$.  Hence
+\cref{prop:gapped-deviation} holds with the explicit upper bound
+\begin{equation}
+    \epsGen(\Lambda,S,\delta)
+    \leq
+    \frac{4\Lambda(\Lambda+\Upsilon)}{\sqrt\mu}
+    +3(\Lambda+\Upsilon)^2
+      \sqrt{\frac{\log(8S/\delta)}{2\mu}}.
+    \label{eq:geometric-generalization-bound}
+\end{equation}
+At fixed confidence, a raw-time gap of order $\log N$ is therefore sufficient
+to keep the unit-block coupling penalty controlled under geometric mixing.
 \end{corollary}
 
-For the stated measurement ensemble, observable locality determines the
-exponential factor \(3^k\), while the number of observables enters only
-logarithmically. The perturbation corollary is uniform over the RKHS ball and therefore applies
-to any already-chosen readout in that ball. It compares the same function on
-exact and estimated features; it does not compare a readout retrained on noisy
-features with the exact-feature estimator, nor does it cover physical errors in
-state preparation and evolution. Those effects are separate from finite-shot
-sampling.
+For a requested uniform-deviation tolerance $\epsilon_G$, abbreviate
+\[
+    a:=\frac4{\sqrt\mu},
+    \qquad
+    b:=3\sqrt{\frac{\log(4S/\delta_g)}{2\mu}},
+\]
+so that
+$\epsGen(\Lambda,S,\delta)=(a+b)\Lambda^2+(a+2b)\Upsilon\Lambda+b\Upsilon^2$.
+
+\begin{corollary}[Readout-capacity calibration]
+\label{cor:ivanov-capacity-calibration}
+If $\epsilon_G>b\Upsilon^2$, the unique positive radius satisfying
+$\epsGen(\Lambda,S,\delta)=\epsilon_G$ is
+\begin{equation}
+    \Lambda
+    =\frac{-(a+2b)\Upsilon
+      +\sqrt{(a+2b)^2\Upsilon^2
+        +4(a+b)(\epsilon_G-b\Upsilon^2)}}{2(a+b)}.
+    \label{eq:ivanov-radius}
+\end{equation}
+If $\epsilon_G\leq b\Upsilon^2$, no positive Ivanov radius attains the
+requested uniform tolerance with the declared $(N,g,S,\delta)$.
+\end{corollary}
+
+\paragraph{Why full-sample ERM remains controlled.}
+The deviation is simultaneous over the entire finite pool and the entire
+Ivanov ball.  Therefore the data-dependent minimizer in
+\Eqref{eq:frozen-pool-erm} is already covered by the same event; no independent
+validation fold is required for the theorem.  Searching more frozen designs
+is charged through $\log S$, while fitting a richer readout is charged through
+$\Lambda$.
+
+\subsection{What qubit width can improve: the projection-information floor}
+\label{sec:width-resolved-approximation}
+
+A finite-data Johnson--Lindenstrauss statement cannot by itself imply lower
+prediction risk.  The correct target-sensitive role of $n$ is the information
+retained by $\projection_n$.  For a fixed realization of the coupled Gaussian
+prefixes in \Eqref{eq:gaussian-projection}, let $\projection_n^{\sZ_-}$ act
+coordinatewise on histories and define
+\begin{equation}
+    \projClass_n
+    :=\left\{
+      G\circ\projection_n^{\sZ_-}:
+      G\in\gFFMP(\projection_n\gX)
+    \right\},
+    \qquad
+    \projFloor_n
+    :=\E\!\left[
+      \left(
+        F^\star(X_{-\infty:0})
+        -\E\!\left[F^\star(X_{-\infty:0})\mid
+          \sigma(\projection_nX_t:t\leq0)\right]
+      \right)^2
+    \right].
+    \label{eq:projection-information-floor}
+\end{equation}
+This is the information-theoretic excess risk caused by observing only the
+projected history.  Because $(\projection_n\gX)^{\sZ_-}$ is compact metrizable
+and continuous functions are dense in $L^2$ of every Borel probability on it,
+our FMP convention also gives the equivalent variational form
+\begin{equation}
+    \projFloor_n
+    =\inf_{F\in\projClass_n}
+      \E\!\left[(F(X_{-\infty:0})-F^\star(X_{-\infty:0}))^2\right].
+    \label{eq:projection-floor-variational}
+\end{equation}
+Thus the floor isolates projection information loss before any restriction to
+a particular reservoir realization.
+
+\paragraph{Why the approximation proof may use $\reservoirUnitary_n=\identity$.}
+The separation argument below uses the identity support point because it gives
+an especially transparent universality certificate.  This should not be read
+as a claim that mixing is redundant at finite resources.  The two questions
+are logically different: \cref{sec:mixer-expressivity} proves that a generic
+graph-local mixer exposes two- and three-stream interactions directly in raw
+observable coordinates that the identity dynamics cannot expose at the same
+observable locality, whereas the present section asks only whether the
+support-closure family with an unrestricted universal readout has an intrinsic
+approximation floor.  A universal readout can eventually compose local
+coordinates even when the mixer is set to the identity; the mixer theorem
+addresses how much interaction structure is already present before that
+classical composition.
+
+\begin{lemma}[Fading memory and projected-history separation]
+\label{lem:feature-map-separation}
+Fix $n\geq3$ and $\lambda_+\in(\lambda_0,1)$.  Every causal coordinate of an
+admissible single-reservoir design is a continuous fading-memory functional of
+the projected history.  Moreover, for every two distinct projected histories
+$\vz^-\neq\vz'^{-}$ in $(\projection_n\gX)^{\sZ_-}$, there exists a
+single-reservoir design in the support of the declared law whose causal
+feature vector separates them.
+\end{lemma}
+
+\begin{theorem}[Width-resolved QuaRK approximation]
+\label{thm:width-resolved-approximation}
+Fix a realized preprocessor $\projection_n$ and
+$\lambda_+\in(\lambda_0,1)$.  With
+$\arch_R:=(n,R,\lambda_+)$,
+\begin{equation}
+    \lim_{\Lambda\to\infty}
+      \inf_{R\geq1}
+      \inf_{\design\in\operatorname{supp}(\designLaw_{\arch_R})}
+      \epsApp(\design;\Lambda)
+    =\projFloor_n.
+    \label{eq:width-resolved-envelope}
+\end{equation}
+Equivalently, finite spatial multiplexing and finite-norm Mat\'ern readouts
+have no asymptotic approximation floor beyond the information discarded by
+$\projection_n$ itself.
+\end{theorem}
+
+\begin{corollary}[Monotone width and the injective regime]
+\label{cor:width-information-monotonicity}
+Under the canonical Gaussian coupling of \Eqref{eq:gaussian-projection},
+\begin{equation}
+    \projFloor_{n+1}\leq\projFloor_n,
+    \qquad n\geq3.
+    \label{eq:width-floor-monotonicity}
+\end{equation}
+If $n\geq d$, then $\projection_n$ has full column rank almost surely and
+\begin{equation}
+    \projFloor_n=0
+    \qquad\text{almost surely}.
+    \label{eq:width-floor-zero}
+\end{equation}
+No strict improvement is claimed at every increment of $n$: a target that
+already factors through a narrower projection can have the same floor at
+several widths.
+\end{corollary}
+
+\paragraph{Interpretation.}
+This is the predictive role of width that the finite-data JL lemma alone cannot
+supply.  Wider coupled projections never remove information available at a
+narrower width, while $n\geq d$ eliminates the projection bottleneck for a
+full-column-rank Gaussian map.  The theorem does not say that finite-sample
+risk must decrease monotonically with $n$: the newly retained information may
+be irrelevant to the target, and larger width still consumes more physical
+qubits even though the RMS readout prevents coordinate count alone from
+inflating the fidelity bounds.
+
+\subsection{Good-design mass and finite-pool coverage}
+\label{sec:pool-coverage}
+
+The width-resolved theorem is an existence statement over the support.  To
+connect it to random search, define the conditional probability mass of designs
+whose causal approximation error lies within $\epsRep>0$ of the projection
+floor,
+\begin{equation}
+    \goodMass_{\arch}(\epsRep;\Lambda\mid\projection_n)
+    :=\designLaw_{\arch}\!\left(
+       \epsApp(\design;\Lambda)
+       \leq\projFloor_n+\epsRep
+      \right).
+    \label{eq:good-design-mass}
+\end{equation}
+The notation emphasizes that the design law is sampled after the shared
+preprocessor has been frozen; the numerical value is target- and
+projection-dependent.
+
+\begin{proposition}[Support point implies positive good-design mass]
+\label{prop:positive-good-mass}
+Fix $\arch$, $\Lambda$, and $\epsRep>0$.  If some
+$\design_0\in\operatorname{supp}(\designLaw_{\arch})$ satisfies
+\begin{equation}
+    \epsApp(\design_0;\Lambda)<\projFloor_n+\epsRep,
+    \label{eq:strict-good-support-design}
+\end{equation}
+then
+$\goodMass_{\arch}(\epsRep;\Lambda\mid\projection_n)>0$.
+Consequently, by \cref{thm:width-resolved-approximation}, for every
+$\epsRep>0$ there exist finite $R$ and finite $\Lambda$ for which the good-design
+mass is positive.
+\end{proposition}
+
+\begin{proposition}[Finite-pool coverage]
+\label{prop:finite-pool-coverage}
+Let $\hitMass:=\goodMass_{\arch}(\epsRep;\Lambda\mid\projection_n)$.
+Conditional on $\projection_n$, an i.i.d. pool of size $S$ satisfies
+\begin{equation}
+    \Prob\!\left[
+      \min_{1\leq s\leq S}\epsApp(\design_s;\Lambda)
+      >\projFloor_n+\epsRep
+      \;\middle|\;\projection_n
+    \right]
+    =(1-\hitMass)^S.
+    \label{eq:pool-miss-probability}
+\end{equation}
+\end{proposition}
+
+\paragraph{Interpretation.}
+The pool size now has a direct theoretical role: it suppresses the probability
+of missing an $\epsRep$-good frozen representation exponentially fast.  The
+paper proves positivity of $\hitMass$ when the architecture has a
+strictly good support point, but it does not turn
+\Eqref{eq:pool-miss-probability} into an a-priori numerical calibration of
+$S$.  Such a calibration would require a useful quantitative lower bound on
+$\hitMass$, which is target-, projection-, and architecture-dependent and is
+not available under the present assumptions.  Campaign~III therefore measures
+the empirical leverage of $S$ rather than treating a formal inversion of the
+unknown hit mass as an operational prescription.
+
+\subsection{ERM oracle inequality and end-to-end performance}
+\label{sec:end-to-end-guarantee}
+
+\begin{theorem}[Finite-pool ERM oracle inequality]
+\label{thm:finite-pool-erm-oracle}
+If $\delta_g>0$, then conditional on any realized $\projection_n$ and frozen
+pool, with probability at least $1-\delta$ over the gapped sample and training
+measurements,
+\begin{equation}
+    \oprisk_{\selectedDesign,w}(\selectedReadout)
+    \leq
+    \min_{1\leq s\leq S}
+      \inf_{h\in\RKHS_{m_{\arch}}^\Lambda}
+      \oprisk_{\design_s,w}(h)
+    +2\epsGen(\Lambda,S,\delta).
+    \label{eq:finite-pool-operational-oracle}
+\end{equation}
+\end{theorem}
+
+The inequality is precisely the anti-overfitting role of the uniform bound:
+the design and readout are selected on the full sample, but the price of doing
+so is explicit and finite.
+
+\begin{theorem}[Resource-to-performance certificate]
+\label{thm:resource-performance}
+Fix $\arch=(n,R,\lambda_+)$, $M,S,\Lambda$, and $\epsRep>0$, and set
+$\hitMass:=\goodMass_{\arch}(\epsRep;\Lambda\mid\projection_n)$.
+If $\delta_g>0$, then conditional on the realized shared projection, jointly
+over the frozen pool, dependent sample, and training measurements, with
+probability at least
+\begin{equation}
+    1-\delta-(1-\hitMass)^S,
+    \label{eq:resource-performance-confidence}
+\end{equation}
+we have
+\begin{equation}
+\boxed{
+    \oprisk_{\selectedDesign,w}(\selectedReadout)-\risk^\star
+    \leq
+    \projFloor_n+\epsRep
+    +2\epsGen(\Lambda,S,\delta)
+    +\epsShot(\arch,M)
+    +\epsWin(\arch).
+}
+    \label{eq:resource-performance-bound}
+\end{equation}
+On the same event, the causal exact-feature counterpart obeys
+\begin{equation}
+    \risk_{\selectedDesign,\infty}(\selectedReadout)-\risk^\star
+    \leq
+    \projFloor_n+\epsRep
+    +2\epsGen(\Lambda,S,\delta)
+    +2\epsShot(\arch,M)
+    +2\epsWin(\arch).
+    \label{eq:resource-performance-causal}
+\end{equation}
+\end{theorem}
+
+\paragraph{How to read the theorem.}
+The terms have distinct roles.  Width $n$ controls the irreducible information
+floor $\projFloor_n$; finite $R$ and $\Lambda$ determine whether the design law
+places positive mass within $\epsRep$ of that floor; $S$ exponentially reduces
+the probability of missing such a design but simultaneously appears through
+$\log S$ in the statistical term; $M$ controls measurement fidelity; and
+$(w,\lambda_+)$ control finite-window fidelity.  Unlike a conjunction of
+unrelated certificates, every term in \Eqref{eq:resource-performance-bound}
+participates in the risk of the predictor that the algorithm actually returns.
+
+\begin{corollary}[Operational-budget calibration at fixed pool size]
+\label{cor:resource-budget-calibration}
+Fix tolerances $\epsRep,\epsilon_G,\epsilon_M,\epsilon_W>0$ and a declared
+pool size $S$.  For fixed $\arch$, $\Lambda$, and realized $\projection_n$,
+suppose $\hitMass>0$ and $\delta_g>0$.  If
+\begin{equation}
+\begin{aligned}
+    \epsGen(\Lambda,S,\delta)&\leq\epsilon_G,\\
+    M&\geq
+    \left\lceil
+      \frac{10\Lambda^2(\Lambda+\Upsilon)^2\kLip^2}{3\epsilon_M^2}
+    \right\rceil,\\
+    \lambda_+&\leq
+    \min\!\left\{1,
+      \left[\frac{\epsilon_W}
+      {4\Lambda(\Lambda+\Upsilon)\kLip}\right]^{1/w}
+    \right\},
+\end{aligned}
+    \label{eq:resource-budget-conditions}
+\end{equation}
+then, conditional on $\projection_n$, with probability at least
+$1-\delta-(1-\hitMass)^S$,
+\begin{equation}
+    \oprisk_{\selectedDesign,w}(\selectedReadout)-\risk^\star
+    \leq
+    \projFloor_n+\epsRep+2\epsilon_G+\epsilon_M+\epsilon_W.
+    \label{eq:calibrated-resource-performance}
+\end{equation}
+For fixed $(N,g,S,\delta)$, \cref{cor:ivanov-capacity-calibration} supplies the
+corresponding admissible Ivanov radius for a requested $\epsilon_G$.  This
+corollary calibrates the quantities whose bounds are explicit; it deliberately
+does not prescribe $S$ from the unknown target-specific hit mass.
+\end{corollary}
+
+\subsection{Complementary finite-data preprocessing geometry}
+\label{sec:finite-data-geometry}
+
+The preceding theorem gives the predictive meaning of width.  A separate
+finite-data question is how wide a Gaussian preprocessor must be to preserve
+the geometry of the raw inputs that actually appear in the observed windows.
+Let $\PointSet_N$ be their distinct values.  Since
+$|\PointSet_N|\leq Nw$, the width can be chosen without inspecting their
+realized geometry.
+
+\begin{proposition}[Finite-data JL width]
+\label{prop:finite-data-jl}
+Fix $\epsilon_\Pi,\delta_\Pi\in(0,1)$.  If $Nw\geq2$ and
+\begin{equation}
+    n\geq n_{\mathrm{JL}}
+    :=\frac{\log\!\left(2\binom{Nw}{2}/\delta_\Pi\right)}
+      {\epsilon_\Pi^2/4-\epsilon_\Pi^3/6},
+    \label{eq:joint-jl-width-rule}
+\end{equation}
+then, with probability at least $1-\delta_\Pi$ over $\projection_n$,
+\begin{equation}
+    (1-\epsilon_\Pi)\norm{u-v}_2^2
+    \leq\norm{\projection_nu-\projection_nv}_2^2
+    \leq(1+\epsilon_\Pi)\norm{u-v}_2^2
+    \label{eq:joint-jl-geometry}
+\end{equation}
+for every distinct $u,v\in\PointSet_N$.  The statement is vacuous when
+$Nw<2$.
+\end{proposition}
+
+The sufficient width is
+$O(\epsilon_\Pi^{-2}\log(Nw/\delta_\Pi))$ and does not depend on the ambient
+input dimension $d$.  This result is deliberately orthogonal to
+\cref{thm:resource-performance}: it certifies the geometry of the observed raw
+inputs, while $\projFloor_n$ quantifies what the projection can discard for the
+population prediction problem.  Finite-data JL preservation is therefore not
+used as a surrogate for approximation quality.

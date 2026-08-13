@@ -1,0 +1,62 @@
+\section{Finite Frozen-Pool ERM}
+\label{sec:model-selection}
+
+Fix an architecture $\arch$ together with measurement budget $M$, pool size
+$S$, and readout radius $\Lambda$.  Each candidate runs the same declared
+architecture but with an independently frozen realization.  Selection is over
+this finite pool only: no gate axis, angle, or contraction rate is optimized.
+
+\subsection{Frozen pool and cached measurements}
+\label{sec:frozen-pool-fitting}
+
+Draw
+\[
+    \design_1,\ldots,\design_S
+    \overset{\mathrm{i.i.d.}}{\sim}\designLaw_{\arch},
+\]
+independently of the labeled sample and freeze the pool.  For every observed
+window and every candidate $s$, generate
+$\measuredFeatureMap_{\design_s}$ once and cache it.  With the cycle cover,
+the complete measured training pool costs $9NMSR$ independent state
+preparations/branch-circuit runs under the reusable-$n$-qubit convention; all
+subsequent readout fits and design selection are classical.  As clarified in
+\cref{sec:topology-observables}, this acquisition count is separate from the
+$O(w)$ logical depth and $O(n)$ width of one trajectory.
+
+\subsection{Joint empirical-risk selection}
+\label{sec:full-sample-erm}
+\label{sec:structural-risk-selection}
+
+QuaRK selects the frozen design and its readout by one finite-pool empirical
+risk minimization,
+\begin{equation}
+    (\widehat s,\selectedReadout)
+    \in\argmin_{\substack{1\leq s\leq S\\
+                          h\in\RKHS_{m_{\arch}}^\Lambda}}
+       \erisk_{\design_s,w}(h),
+    \qquad
+    \selectedDesign:=\design_{\widehat s},
+    \label{eq:frozen-pool-erm}
+\end{equation}
+with a deterministic candidate tie rule and the minimum-RKHS-norm minimizer
+within a tied candidate.  Equivalently, one fits an Ivanov-regularized kernel
+least-squares readout for each frozen design and keeps the smallest measured
+empirical risk.  The representer theorem reduces every fit to a finite convex
+problem \citep{PageGrunewalder2019,scholkopf2001generalized}.
+
+Using the same sample for fitting and selection is deliberate rather than an
+assumption that overfitting cannot occur.  The uniform deviation result in
+\cref{sec:dependent-generalization} holds simultaneously over all $S$ designs
+and the entire Ivanov ball.  It therefore controls this data-dependent ERM
+directly: searching more frozen designs costs only a $\log S$ term, while
+readout adaptivity is controlled by $\Lambda$.  This makes the statistical
+price of frozen-pool search explicit without introducing a second validation
+procedure.
+
+The returned predictor is
+$\selectedReadout\circ\measuredFeatureMap_{\selectedDesign}$ operationally,
+with $\selectedReadout\circ\featureMap_{\selectedDesign,\infty}$ as its causal
+exact-feature counterpart.  The role of $S$ is quantified in
+\cref{sec:pool-coverage}: it increases the chance that the frozen pool contains
+a near-best representation, while the same increase is charged statistically
+through the uniform $\log S$ term.

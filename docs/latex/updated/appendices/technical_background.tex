@@ -1,152 +1,178 @@
-\section{Technical Background}
+\section{Technical Background and Attribution}
 \label{app:technical-background}
 
-\subsection{Quantum states, replacement channels, and trace norm}
+This appendix records the standard tools imported by the proofs and separates
+them from the QuaRK-specific arguments.
 
-An \(n\)-qubit density operator is a positive semidefinite matrix of trace one
-on \((\mathbb C^2)^{\otimes n}\). The trace norm is
-\(\traceNorm{A}=\Tr\sqrt{A^\dagger A}\), and the operator norm is
-\(\opNorm{A}\). We repeatedly use
-\[
-    \abs{\Tr[AB]}
-    \leq\opNorm{A}\traceNorm{B},
-\]
-unitary invariance of the trace norm, and the fact that two density operators
-have trace-norm distance at most two.
+\subsection{Quantum channels and norms}
 
-For completeness, the replacement map \(\mathcal R_\sigma(A)=\Tr[A]\sigma\)
-is completely positive and trace preserving; this is a finite-dimensional
-instance of the operator-sum representation of quantum operations
-\citep{Kraus1971}. Indeed, if
-\(\sigma=\sum_a r_a\lvert a\rangle\!\langle a\rvert\) and
-\(\{\lvert b\rangle\}_b\) is an orthonormal basis, the Kraus operators
-\(K_{ab}=\sqrt{r_a}\lvert a\rangle\!\langle b\rvert\) satisfy
+An $n$-qubit state is a positive semidefinite trace-one operator on
+$(\sC^2)^{\otimes n}$. The trace norm is
+$\traceNorm{\mQ}=\Tr\sqrt{\mQ^\dagger\mQ}$, and the operator norm is
+$\opNorm{\mQ}$. Trace duality gives
+\begin{equation}
+    \abs{\Tr[AB]}\leq\opNorm{A}\traceNorm{B}.
+    \label{eq:trace-duality-background}
+\end{equation}
+The trace norm is invariant under unitary conjugation, and two density
+operators are at trace distance at most two.
+
+The map $\replacementChannel(\mQ)=\Tr[\mQ]\rhoreset$ is a replacement
+channel. If $\rhoreset=\sum_j r_j\lvert j\rangle\!\langle j\rvert$ and
+$\{\lvert k\rangle\}_k$ is an orthonormal basis, then
+$\Kraus_{jk}=\sqrt{r_j}\lvert j\rangle\!\langle k\rvert$ satisfies
 \[
-    \sum_{a,b}K_{ab}A K_{ab}^\dagger=\Tr[A]\sigma,
+    \sum_{j,k}\Kraus_{jk}\mQ\Kraus_{jk}^\dagger=\Tr[\mQ]\rhoreset,
     \qquad
-    \sum_{a,b}K_{ab}^\dagger K_{ab}=I.
+    \sum_{j,k}\Kraus_{jk}^\dagger\Kraus_{jk}=\identity.
 \]
-Thus the reset update in \cref{eq:reset-channel} is a convex combination of
-two quantum channels.
+Thus $\replacementChannel$ is completely positive and trace preserving by
+the operator-sum representation \citep{Kraus1971}. The channel in
+\Eqref{eq:reservoir-channel} is a convex combination of this replacement map
+and a unitary channel.
 
-\subsection{Absolute regularity and the independent-block theorem}
+\subsection{Gaussian finite-set embeddings}
 
-For sigma-algebras \(\mathcal A\) and \(\mathcal B\), their absolute-regularity
-coefficient can be written as
+For a fixed vector $v\neq0$ and a matrix with independent $\gN(0,1/n)$
+entries, the ratio $\norm{\projection_nv}_2^2/\norm v_2^2$ is a normalized
+chi-square variable. The standard Gaussian-projection tail bound used in the
+proof of \cref{prop:finite-data-jl} is
 \[
-    \beta(\mathcal A,\mathcal B)
-    =
-    \frac12
-    \sup_{\{A_i\},\{B_j\}}
-    \sum_{i,j}
-    \abs{\Prob(A_i\cap B_j)-\Prob(A_i)\Prob(B_j)},
+\Pr\!\left[
+  \left|\norm{\projection_nv}_2^2-\norm v_2^2\right|
+  >\epsilon\norm v_2^2
+\right]
+\leq
+2\exp\!\left[-n\left(\frac{\epsilon^2}{4}-\frac{\epsilon^3}{6}\right)\right],
+\qquad \epsilon\in(0,1).
 \]
-where the supremum ranges over finite measurable partitions from the two
-sigma-algebras. The coefficient is monotone under inclusion of either
-sigma-algebra, and measurable transformations cannot increase it
-\citep{Bradley2005}.
+The manuscript uses this only as a finite-set statement; it does not claim
+that a projection into $\sR^n$ is globally injective when $n<d$.
 
-We use the following direct specialization of
-\citet[Theorem~2]{MohriRostamizadeh2008}. Let \((Q_j)_{j\in\Z}\) be stationary
-and beta mixing, let \(\mathcal F\) be a fixed measurable class of functions
-into \([0,B]\), and let \(m=2\mu a\). Divide \(Q_1,\ldots,Q_m\) into
-\(2\mu\) consecutive blocks of length \(a\), and form \(\cS_\mu\) by
-selecting the same fixed coordinate from every odd block. With the source
-paper's empirical Rademacher convention
+\subsection{Beta mixing and unit-block coupling}
+
+Absolute regularity is monotone under sigma-algebra inclusion, and measurable
+maps cannot increase it \citep{Bradley2005}. These properties yield
+\Eqref{eq:augmented-window-mixing} from the raw-time gap and independent
+measurement seeds.
+
+The independent-block technique of \citet{Yu1994} compares dependent
+collections with independent blocks having the same marginals. The general
+Rademacher analysis of \citet{MohriRostamizadeh2008} allows arbitrary block
+lengths. This paper fixes that length to one. The $N=2\mu$ windows are split
+into odd and even collections of $\mu$ single-window blocks, so the coupling
+cost is controlled by $\beta_{\processZ}(g)$.
+
+For independent observations, a class bounded by $L_{\max}$ obeys
 \begin{equation}
-    \hRad_{\cS_\mu}(\mathcal F)
-    :=
-    \E_{\bm\sigma}\!\left[
-      \sup_{f\in\mathcal F}
-      \abs{\frac2\mu\sum_{j=1}^{\mu}
-      \sigma_j f(\widetilde Q_j)}
-    \right],
-    \label{eq:source-rademacher-definition}
-\end{equation}
-if
-\[
-    \delta_Q'
-    :=
-    \delta-4(\mu-1)\beta_Q(a)>0,
-\]
-then, with probability at least \(1-\delta\), simultaneously for every
-\(f\in\mathcal F\),
-\begin{equation}
-    \E[f(Q_0)]
+    \sup_{f\in\gF}\abs{\E f-\widehat\E f}
     \leq
-    \frac1m\sum_{j=1}^m f(Q_j)
-    +\hRad_{\cS_\mu}(\mathcal F)
-    +3B\sqrt{\frac{\log(4/\delta_Q')}{2\mu}}.
-    \label{eq:mr-background}
+    2\Rad_\mu(\gF)
+    +3L_{\max}\sqrt{\frac{\log(2/\alpha)}{2\mu}}
+    \label{eq:iid-rademacher-background}
 \end{equation}
-The theorem is one-sided. A two-sided statement would require an additional
-reverse-deviation argument and a corresponding confidence allocation. We use
-\cref{eq:source-rademacher-definition} throughout so that the imported theorem
-and all constants in our specialization share exactly the same convention.
+with probability at least $1-\alpha$ under the convention used in the
+unit-block Rademacher bound. The contraction principle transfers the
+prediction-class complexity to squared loss
+\citep{BartlettMendelson2002}.
 
-\subsection{Spectral representation of the Mat\'ern kernel}
-\label{app:matern-spectral}
+\subsection{Grouped Pauli measurements}
+\label{app:grouped-pauli-measurements}
 
-By Bochner's theorem \citep{Bochner1933}, the normalized stationary
-Mat\'ern kernel has a probability spectral measure:
-\begin{equation}
-    \kappa(z,z')
-    =
-    \E_\Omega\!\left[e^{\ii\Omega^\top(z-z')}\right]
-    =
-    \E_\Omega\!\left[\cos(\Omega^\top(z-z'))\right].
-    \label{eq:matern-bochner}
-\end{equation}
-For the parameterization in \cref{eq:matern-profile}, its density on
-\(\R^p\) is
-\begin{equation}
-    p_{\nu,\xi}(\omega)
-    =
-    \frac{\Gamma(\nu+p/2)\,\xi^p}
-         {\Gamma(\nu)(2\nu\pi)^{p/2}}
-    \left(1+\frac{\xi^2\norm{\omega}_2^2}{2\nu}\right)^{-(\nu+p/2)},
-    \label{eq:matern-spectral-density}
-\end{equation}
-which is a centered multivariate Student density with \(2\nu\) degrees of
-freedom and scale matrix \(\xi^{-2}I\); see
-\citet{Genton2001,PorcuEtAl2024}. It is strictly positive everywhere. For
-\(\nu>1\), its covariance exists and is
-\begin{equation}
-    \E[\Omega\Omega^\top]
-    =
-    \frac{\nu}{(\nu-1)\xi^2}I.
-    \label{eq:matern-spectral-covariance}
-\end{equation}
-These identities yield the section-stability constant used in
-\cref{lem:matern-stability}. Positivity of the density also yields strict
-positive definiteness on distinct Euclidean points, as made explicit in the
-proof of \cref{thm:interpolation}; the general RKHS interpolation facts used
-there are standard \citep{Aronszajn1950,KimeldorfWahba1971}.
+A global Pauli setting assigns one of $X$, $Y$, and $Z$ to each qubit. One shot
+returns a sign for every qubit, and products of those signs estimate every
+compatible Pauli string. Because QuaRK declares its graph-local observables in
+advance, a deterministic cover can replace a generic shadow ensemble.
+Overlapping tomography relates such covers to covering arrays and provides
+constant-size constructions for nearest-neighbor two-body Pauli marginals
+\citep{HansenneEtAl2024}.
 
-\subsection{Local Pauli classical shadows}
+For the cycle, a balanced nine-setting cover can be constructed explicitly.
+Fix a proper vertex coloring $c:\gV_n\to\{0,1,2\}$ and identify
+$\{\pauliX,\pauliY,\pauliZ\}$ with $\{0,1,2\}$. For
+$(a,b)\in\{0,1,2\}^2$, define the setting whose basis at vertex $v$ is
+$a+bc(v)$ modulo $3$. Every one-qubit Pauli basis then appears in exactly
+three settings at each vertex. For adjacent vertices $u,v$, we have
+$c(u)\neq c(v)$, so
+\[
+    (a,b)\longmapsto
+    \bigl(a+bc(u),\,a+bc(v)\bigr)\pmod 3
+\]
+is a bijection of $\{0,1,2\}^2$. Hence every two-qubit Pauli pair on an edge
+appears in exactly one of the nine settings. This gives $a_n(O)=3$ for
+$O\in\gO_V(n)$ and $a_n(O)=1$ for $O\in\gO_E(n)$.
 
-In one snapshot of the local-Pauli shadow protocol, each qubit is measured in
-an independently and uniformly chosen \(X\), \(Y\), or \(Z\) basis. Inversion
-of the one-qubit measurement channel multiplies a nonidentity Pauli factor by
-three. Hence a Pauli string of weight \(q\) has squared shadow norm \(3^q\).
-The median-of-means guarantee of \citet{HuangKuengPreskill2020} therefore gives
-simultaneous estimation of \(M\) nonidentity, weight-at-most-\(k\) Pauli
-expectations with
-\(O(3^k\varepsilon^{-2}\log(M/\delta))\) independent snapshots. Identity
-observables, if included in a feature ledger, are known exactly and require no
-measurement.
+If $\phi=\Tr[O\rho]$, every compatible projective measurement of $O$ produces
+a sign with mean $\phi$ and variance $1-\phi^2$. Pooling all $a_n(O)M$
+compatible independent state preparations therefore gives coordinate
+variance
+\[
+    \frac{1-\phi^2}{a_n(O)M}.
+\]
+The same shot may contribute to several compatible coordinate estimators, so
+those estimators need not be independent. The finite-shot proof only sums
+their coordinatewise mean-squared errors and therefore does not require such
+independence.
 
-\subsection{Provenance of imported ingredients}
+\subsection{Expressivity and observability provenance}
 
-The replacement-channel representation follows the standard operator-sum
-framework \citep{Kraus1971}, and the spectral representation of the stationary
-Mat\'ern kernel invokes Bochner's theorem \citep{Bochner1933}. The finite-set
-projection result is the standard JL argument
-\citep{DasguptaGupta2003,Woodruff2014}; the dependent-data inequality is
-imported from \citet{MohriRostamizadeh2008}; the RKHS and representer facts are
-standard consequences of \citet{Aronszajn1950,KimeldorfWahba1971}; and the
-finite-union step uses the bounded-difference method of \citet{McDiarmid1989}
-and standard Rademacher-complexity tools \citep{BartlettMendelson2002}. The
-results specific to \textsc{QuaRK} are the way these ingredients are composed
-with its reset-contractive dynamics, finite-window approximation, observable
-map, and fixed-design temporal learning problem.
+The mixer analysis in \cref{sec:mixer-expressivity} uses only elementary Pauli
+conjugation and real-analyticity; it does not require a capacity theorem from
+the literature.  Its interpretation is informed by two complementary strands.
+For rotation-based quantum models, the data-encoding generators determine the
+available Fourier frequencies, whereas later circuit structure controls which
+Fourier coefficients can be populated \citep{SchuldSwekeMeyer2021}.  Recent
+QRC work extends this frequency/capacity viewpoint to temporal settings and
+shows explicitly that increasing reservoir size or dynamical complexity need
+not increase resolvable expressive capacity when input injection is the
+limiting factor \citep{SchuetteEtAl2026}.
+
+A separate line studies what the measurement interface can resolve.  The
+resolvable expressive capacity/eigentask framework incorporates finite
+sampling noise \citep{HuEtAl2023Eigentasks}, while Krylov observability uses
+time-evolved measured operators to estimate the effective observable space and
+has been shown to track QRC information-processing capacity closely
+\citep{CindrakLudgeJaurigue2025,CindrakJaurigueLudge2025}.  QuaRK therefore
+uses Pauli support growth and the observable-bank ablation as transparent
+mechanism diagnostics.  We do not identify Pauli weight, entanglement, Krylov
+dimension, or expressive capacity with predictive advantage without the
+corresponding task evidence.
+
+\subsection{Universality provenance}
+
+Classical reservoir universality is commonly proved through fading memory,
+point separation, and Stone--Weierstrass algebra arguments
+\citep{GrigoryevaOrtega2018}. \citet{MonzaniPrati2025} give a unified
+classical/quantum formulation and identify spatial multiplexing---parallel,
+uncoupled reservoirs driven by the same input with a joint readout---as a QRC
+mechanism for constructing the required polynomial algebra. We use that
+established mechanism only inside the width-resolved approximation argument in
+\cref{sec:width-resolved-approximation}; no novelty is claimed for the
+universality principle itself.
+
+The Mat\'ern RKHS plays a different role. Its full-support radial spectral
+density makes it universal on compact Euclidean subsets
+\citep{SriperumbudurEtAl2011}, while normalization gives an RKHS ball of
+radius $\Lambda$ the standard Rademacher bound of order
+$\Lambda/\sqrt{\mu}$.  QuaRK additionally evaluates the kernel on the RMS
+feature metric $\norm{z-z'}_2/\sqrt p$.  For each finite $p$ this is simply the
+invertible coordinate rescaling $z\mapsto z/\sqrt p$, so strict positive
+definiteness and universality are unchanged; the section-map Lipschitz constant
+with respect to the unscaled Euclidean feature vector is reduced by
+$1/\sqrt p$.  We therefore do not require the fixed-radius Mat\'ern
+ball itself to be a polynomial algebra. The polynomial algebra appears only
+as an intermediate spatial-multiplexing construction and is approximated on
+the resulting compact feature image by the Mat\'ern RKHS. This separation is
+also motivated by the QRC risk analysis of \citet{ChmielewskiEtAl2025}, who
+show unfavourable qubit scaling for the polynomial-readout classes they study
+and discuss spatial multiplexing as an alternative algebraic mechanism.
+
+\subsection{Novelty boundary}
+
+The paper does not claim novelty for Gaussian random projection, replacement
+channels, beta-mixing coupling, Rademacher complexity, Ivanov regularization,
+Mat\'ern kernels, covering arrays, or reservoir model selection in general.
+The QuaRK-specific contribution is the topology-aligned random reservoir
+family, the graph-local finite-resource spreading statement for that declared
+mixer/observable architecture, and explicit resource-to-risk-fidelity
+guarantees under dependent temporal sampling and grouped quantum measurement.

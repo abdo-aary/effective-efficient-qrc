@@ -1,484 +1,521 @@
 \section{Proofs}
 \label{app:proofs}
 
-\subsection{Finite-set JL projection}
+\subsection{Balanced circuit}
+\label{app:balanced-circuit}
 
-\begin{proof}
-For a fixed nonzero vector \(v\), concentration of
-\(\norm{\Pi v}_2^2/\norm v_2^2\) around one gives
+For the matching-order permutation $\tau$ contained in $\skeleton$, the
+unitary in \Eqref{eq:balanced-circuit-definition} is
+$\reservoirUnitary_n=\blockE_{\tau(J_n)}\cdots\blockE_{\tau(1)}\blockV$.
+Every vertex and edge appears once.  Setting all gate angles to zero gives the
+identity, and each matrix entry is real analytic in the finitely many angles.
+
+\subsection{Mixer locality and operator spreading}
+\label{app:mixer-spreading-proofs}
+
+\begin{proof}[Proof of \cref{prop:identity-mixer-locality}]
+Let $A=\operatorname{supp}(O)$.  When
+$\reservoirUnitary_n=\identity$, the input unitary factors as
+$\inputUnitary_n(x)=\inputUnitary_A(x_A)\otimes
+\inputUnitary_{A^c}(x_{A^c})$, where $x_A$ denotes the projected angle
+coordinates indexed by $A$.  Taking the partial trace of
+\cref{eq:reservoir-channel} over $A^c$ therefore gives the closed reduced
+recursion
 \[
-    \Prob\!\left(
-      \abs{\norm{\Pi v}_2^2-\norm v_2^2}
-      >\varepsilon\norm v_2^2
-    \right)
-    \leq 2e^{-c_0\varepsilon^2n}
+    \rho_A\longmapsto
+    \lambda\inputUnitary_A(x_A)\rho_A\inputUnitary_A(x_A)^\dagger
+    +(1-\lambda)\rho_{+,A}.
 \]
-for a universal \(c_0>0\). Apply this inequality to the fewer than \(M^2/2\)
-nonzero differences \(u-v\) and take a union bound. Choosing
-\(n\geq C\varepsilon^{-2}\log(M/\delta)\) for a sufficiently large universal
-\(C\) makes the total failure probability at most \(\delta\). This is the
-standard finite-set JL argument \citep{DasguptaGupta2003,Woodruff2014}. If
-\(\mathcal P\) is random but independent of \(\Pi\), the calculation holds
-conditionally on every realized \(\mathcal P\), and hence also unconditionally.
+Hence the reduced state on $A$, and therefore $\Tr[O\rho_A]$, is independent
+of every projected input coordinate outside $A$ at every finite time.  Passing
+to the unique causal limit preserves the same dependence restriction.  The
+claimed one- and two-stream conclusions follow from
+$|A|=1$ for $\gO_V(n)$ and $|A|=2$ for $\gO_E(n)$.
 \end{proof}
 
-\subsection{Trace-norm contraction}
+\begin{proof}[Proof of \cref{thm:graph-local-operator-spreading}]
+Conjugation by the vertex layer $\blockV$ cannot enlarge Pauli support because
+it is a tensor product of one-qubit unitaries.  Consider one matching layer.
+An edge gate on $e=\{a,b\}$ commutes with any Pauli component whose support is
+disjoint from $e$; if the component intersects $e$, conjugation can introduce
+the other endpoint but no site outside $e$.  Since the gates in a matching
+act on disjoint edges, one matching layer expands a support set by at most one
+graph neighborhood.  Iterating through the $J_n$ matching layers gives
+$\mathcal N_{C_n}^{J_n}(A)$, and repeating the same argument for $s$ blocks
+gives $\mathcal N_{C_n}^{sJ_n}(A)$.
 
-\begin{proof}
-For density operators \(\Tr[\rho]=\Tr[\rho']=1\), so the replacement
-components cancel when two outputs with the same input are subtracted:
+It remains to show that spreading is not merely allowed by this light cone but
+is generic under the declared law.  Fix an oriented edge $u\to v$ and define
+the Pauli coefficient
 \[
-    T_{r,x}(\rho)-T_{r,x}(\rho')
-    =
-    \lambda_rV_r(x)(\rho-\rho')V_r(x)^\dagger.
+    c_{uv}(\rpar)
+    :=2^{-n}\Tr\!\left[
+      \pauliZ_u\pauliZ_v
+      \reservoirUnitary_n(\rpar)^\dagger
+      \pauliX_u
+      \reservoirUnitary_n(\rpar)
+    \right].
 \]
-Homogeneity and unitary invariance of the trace norm give
-\cref{eq:exact-contraction}.
+For every fixed matching permutation this coefficient is a real-analytic
+function of the gate angles and, in local analytic charts, of the generator
+axes.  It is not identically zero.  Indeed, set every gate angle to zero except
+the edge $\{u,v\}$, choose its generator
+$\mG=\pauliY_u\pauliZ_v$, and take an interior angle
+$\theta\in(0,\gamma)$.  Since $\{\mG,\pauliX_u\}=0$ and $\mG^2=\identity$,
+\[
+    e^{\ii\theta\mG/2}\pauliX_u e^{-\ii\theta\mG/2}
+    =\pauliX_u\cos\theta+\pauliZ_u\pauliZ_v\sin\theta,
+\]
+so $c_{uv}=\sin\theta\neq0$.  A nonzero real-analytic function has a
+measure-zero zero set.  The axis law is smooth with full support on the sphere
+and the angle law is absolutely continuous with positive density on its
+interior, hence $c_{uv}\neq0$ almost surely.
 
-Iterating the equality for \(w\) common inputs yields
+For a length-two path $u-v-w$, define analogously
 \[
-    \traceNorm{\rho_0^{(r)}-\rho_0^{\prime(r)}}
-    \leq
-    \lambda_r^w
-    \traceNorm{\rho_{-w}^{(r)}-\rho_{-w}^{\prime(r)}}
-    \leq2\lambda_r^w.
+    d_{uvw}(\rpar)
+    :=2^{-n}\Tr\!\left[
+      \pauliX_u\pauliZ_v\pauliZ_w
+      \reservoirUnitary_n(\rpar)^\dagger
+      (\pauliX_u\pauliX_v)
+      \reservoirUnitary_n(\rpar)
+    \right].
 \]
-To construct the causal state, initialize the recursion at time \(-m\) in an
-arbitrary density operator and call the resulting time-zero state
-\(\rho_0^{[m]}\). If \(m'>m\), regard the recursion started at \(-m'\) as
-having some density operator at time \(-m\). The last \(m\) updates are common,
-so
+Set all angles to zero except the edge $\{v,w\}$, choose its generator
+$\pauliY_v\pauliZ_w$, and again take an interior nonzero angle.  The same
+anticommuting-Pauli identity gives
 \[
-    \traceNorm{\rho_0^{[m']}-\rho_0^{[m]}}
-    \leq2\lambda_r^m.
+    e^{\ii\theta\pauliY_v\pauliZ_w/2}
+      (\pauliX_u\pauliX_v)
+    e^{-\ii\theta\pauliY_v\pauliZ_w/2}
+    =\pauliX_u\pauliX_v\cos\theta
+      +\pauliX_u\pauliZ_v\pauliZ_w\sin\theta.
 \]
-Thus \((\rho_0^{[m]})_m\) is Cauchy in the finite-dimensional trace-norm
-space and converges. The bound also shows that the limit is independent of
-the chosen initial states. Shifting the argument in time produces a unique
-causal state sequence. For every finite start time, the time-zero state is a
-measurable function of a finite input block. Under
-\cref{sec:analytical-scope}, the causal state is their pointwise trace-norm
-limit and is therefore measurable.
+Thus $d_{uvw}$ is also a nontrivial real-analytic coefficient and is nonzero
+almost surely under the same law.
 \end{proof}
 
-\subsection{Finite-window feature error}
-
-\begin{proof}
-For every \(r\) and \(O\in\cO\), \cref{lem:contraction} and trace duality give
+\begin{proof}[Proof of \cref{cor:mixer-direct-interactions}]
+For one input step from $\rhoreset$, the unitary part of a feature is
 \[
-    \abs{
-      \Tr\!\left[
-        O\bigl(\rho_{\infty,0}^{(r)}-\rho_{w,0}^{(r)}\bigr)
-      \right]
-    }
-    \leq
-    \opNorm{O}
-    \traceNorm{\rho_{\infty,0}^{(r)}-\rho_{w,0}^{(r)}}
-    \leq2\lambda_r^w.
+    \Tr\!\left[
+      \rhoreset\inputUnitary_n(x)^\dagger
+      \reservoirUnitary_n^\dagger O\reservoirUnitary_n
+      \inputUnitary_n(x)
+    \right].
 \]
-Squaring and summing over \(r\) and \(O\) yields
+For the encoded one-qubit $|+\rangle$ state,
 \[
-    \norm{\PhiInf-\PhiWin}_2^2
-    \leq4|\cO|\sum_{r=1}^R\lambda_r^{2w}.
+    \langle\pauliX_j\rangle=\cos\alpha_j(x),\qquad
+    \langle\pauliZ_j\rangle=-\sin\alpha_j(x),\qquad
+    \langle\pauliY_j\rangle=0.
 \]
-Taking square roots proves the first inequality. The second follows from
-\(\lambda_r\leq\lambdaMax\).
+The nonzero $\pauliZ_u\pauliZ_v$ coefficient from
+\cref{thm:graph-local-operator-spreading} therefore contributes a nonzero
+multiple of $\sin\alpha_u\sin\alpha_v$ to the $\pauliX_u$ feature.  The
+nonzero $\pauliX_u\pauliZ_v\pauliZ_w$ coefficient similarly contributes a
+nonzero multiple of
+$\cos\alpha_u\sin\alpha_v\sin\alpha_w$ to the
+$\pauliX_u\pauliX_v$ feature.  These tensor-product trigonometric monomials
+correspond to unique $X/Z/I$ Pauli strings, so their coefficients cannot be
+canceled by a different Pauli component.  Multiplication by the branch factor
+$\lambda>0$ preserves them, while the replacement part adds only the fixed
+$\rhoreset$ expectation.  The identity-mixer comparison follows from
+\cref{prop:identity-mixer-locality}.
 \end{proof}
 
-\subsection{Mat\'ern RKHS section stability}
+\subsection{Contraction and finite-window control}
 
-\begin{proof}
-The reproducing property and normalization give
-\begin{align*}
-    \norm{\kappa(z,\cdot)-\kappa(z',\cdot)}_{\cH_\kappa}^2
-    &=
-    \kappa(z,z)+\kappa(z',z')-2\kappa(z,z')\\
-    &=
-    2\left(1-\varphi_{\nu,\xi}(\norm{z-z'}_2)\right).
-\end{align*}
-Let \(u=z-z'\). Using the spectral representation in
-\cref{eq:matern-bochner}, the elementary inequality
-\(1-\cos t\leq t^2/2\), and
-\cref{eq:matern-spectral-covariance},
-\begin{align*}
-    2(1-\kappa(z,z'))
-    &=
-    2\E[1-\cos(\Omega^\top u)]\\
-    &\leq
-    \E[(\Omega^\top u)^2]\\
-    &=
-    u^\top\E[\Omega\Omega^\top]u\\
-    &=
-    \frac{\nu}{(\nu-1)\xi^2}\norm u_2^2.
-\end{align*}
-Taking square roots proves the claim.
+\begin{proof}[Proof of \cref{lem:exact-contraction}]
+The replacement terms cancel on state differences.  The remaining term is
+$\lambda$ times unitary conjugation, which preserves the trace norm.  Iterating
+two trajectories driven by the same final $w$ inputs produces the factor
+$\lambda^w$, and the trace distance between two states is at most two.  Strict
+contraction also gives existence and uniqueness of the causal state.
 \end{proof}
 
-\subsection{Prediction and loss truncation}
-
-\begin{proof}
-For any \(h\in\Hball\), the reproducing property,
-\cref{lem:matern-stability}, and \cref{prop:feature-truncation} imply
-\begin{align*}
-    \abs{h(\PhiInf)-h(\PhiWin)}
-    &=
-    \abs{
-      \ip{h}{
-        \kappa(\PhiInf,\cdot)-\kappa(\PhiWin,\cdot)
-      }_{\cH_\kappa}
-    }\\
-    &\leq
-    \Lambda
-    \norm{
-      \kappa(\PhiInf,\cdot)-\kappa(\PhiWin,\cdot)
-    }_{\cH_\kappa}\\
-    &\leq
-    \frac{2\Lambda}{\xi}
-    \sqrt{
-      \frac{\nu|\cO|}{\nu-1}
-      \sum_{r=1}^R\lambda_r^{2w}
-    }.
-\end{align*}
-This is \cref{eq:prediction-truncation}.
-
-For \(u,v\in[-\Lambda,\Lambda]\) and \(\abs y\leq\Upsilon\),
-\[
-    \abs{(u-y)^2-(v-y)^2}
-    =
-    \abs{u-v}\abs{u+v-2y}
-    \leq2(\Lambda+\Upsilon)\abs{u-v}.
-\]
-Both predictions are in \([-\Lambda,\Lambda]\) by
-\cref{eq:prediction-bound}. Apply the last display pointwise with
-\(u=h(\PhiInf)\), \(v=h(\PhiWin)\), use the prediction bound above, and take
-expectations. This gives
-\(\abs{\risk_\infty(h)-\risk_w(h)}\leq\tau_w\).
-\end{proof}
-
-\subsection{Conditional interpolation}
-
-\begin{proof}
-The Mat\'ern spectral density in \cref{eq:matern-spectral-density} is strictly
-positive on \(\R^p\). For any \(\bm c\in\R^N\), Bochner's representation gives
-\[
-    \bm c^\top K\bm c
-    =
-    \int_{\R^p}
-    \left|\sum_{i=1}^N c_i e^{\ii\omega^\top z_i}\right|^2
-    p_{\nu,\xi}(\omega)\,d\omega.
-\]
-Suppose that the \(z_i\) are distinct and \(\bm c\neq0\). Choose a direction
-\(v\in\R^p\) outside the finite union of hyperplanes
-\(\{v:v^\top(z_i-z_j)=0\}\), so the scalars \(v^\top z_i\) are pairwise
-distinct. The restriction
-\(t\mapsto\sum_i c_i e^{\ii t v^\top z_i}\) is a one-dimensional exponential
-polynomial with distinct frequencies and cannot vanish identically unless all
-\(c_i=0\). Thus the multivariate exponential polynomial is nonzero at some
-point and, by continuity, on an open set of positive Lebesgue measure. Since
-\(p_{\nu,\xi}>0\) everywhere, the integral is strictly positive. Hence \(K\)
-is positive definite and invertible.
-
-Let \(\bm\alpha=K^{-1}\bm y\) and
-\[
-    h_\star(\cdot)=\sum_{i=1}^N\alpha_i\kappa(z_i,\cdot).
-\]
-Then \((h_\star(z_1),\ldots,h_\star(z_N))^\top=K\bm\alpha=\bm y\) and
-\[
-    \norm{h_\star}_{\cH_\kappa}^2
-    =\bm\alpha^\top K\bm\alpha
-    =\bm y^\top K^{-1}\bm y
-    =\Lambda_\star^2.
-\]
-Moreover, if \(h\) is any other interpolant, then
-\(g:=h-h_\star\) satisfies \(g(z_i)=0\) for all \(i\), so
-\(g\) is orthogonal to every kernel section \(\kappa(z_i,\cdot)\) and hence to
-\(h_\star\). Therefore
-\(\norm{h}_{\cH_\kappa}^2=\norm{h_\star}_{\cH_\kappa}^2+
-\norm{g}_{\cH_\kappa}^2\), proving that \(h_\star\) is the unique minimum-norm
-interpolant \citep{Aronszajn1950,KimeldorfWahba1971}.
-
-Thus \(h_\star\) is feasible for every \(\Lambda\geq\Lambda_\star\) and has
-zero empirical risk. For \(0\leq\Lambda\leq\Lambda_\star\), the function
-\(h_\Lambda=(\Lambda/\Lambda_\star)h_\star\) is feasible and satisfies
-\[
-    h_\Lambda(z_i)-y_i
-    =-\left(1-\frac{\Lambda}{\Lambda_\star}\right)y_i.
-\]
-Its empirical risk is the right-hand side of
-\cref{eq:conditional-interpolation}; the minimum over the ball cannot be
-larger. The case \(\bm y=0\) is immediate.
-\end{proof}
-
-\subsection{Mixing of the window process}
-
-\begin{proof}
-By stationarity it is enough to compare the sigma-algebra generated by
-\((W_j)_{j\leq0}\) with that generated by \((W_j)_{j\geq a}\). Every raw
-variable occurring in a past window has time index at most zero, so
-\[
-    \sigma(W_j:j\leq0)
-    \subseteq
-    \sigma(Z_t:t\leq0).
-\]
-The first raw input appearing in \(W_a\) has index \(as-w+1\), and all raw
-variables in later windows occur no earlier. Therefore
-\[
-    \sigma(W_j:j\geq a)
-    \subseteq
-    \sigma(Z_t:t\geq as-w+1).
-\]
-Monotonicity of \(\beta(\cdot,\cdot)\) under sigma-algebra inclusion gives
-\[
-    \beta_W(a)
-    \leq
-    \beta_Z(as-w+1)
-    \leq
-    \beta_Z(as-w),
-\]
-where the last inequality uses that mixing coefficients are nonincreasing.
-For \(a=1\) and \(s=w+g\), \(as-w=g\).
-\end{proof}
-
-\subsection{One-sided dependent-data risk bound}
-
-\begin{proof}
-For \(h\in\Hball\), define
-\[
-    f_h(W_j)
-    =
-    \left(
-      h(\PhiWin(X_{js-w+1:js}))-Y_{js}
-    \right)^2.
-\]
-By \cref{eq:prediction-bound} and \(\abs{Y_t}\leq\Upsilon\),
-\[
-    0\leq f_h(W_j)\leq B,
-    \qquad B=(\Lambda+\Upsilon)^2.
-\]
-The class \(\cF_\Lambda=\set{f_h:h\in\Hball}\) is fixed independently of the
-sample under the analytical scope of \cref{sec:analytical-scope}. Apply \cref{eq:mr-background} to the
-stationary window process. By \cref{lem:window-mixing},
-\[
-    \beta_W(a)
-    \leq\beta_Z(as-w),
-\]
-Let \(\delta'_W=\delta-4(\mu-1)\beta_W(a)\) denote the source-theorem
-remainder. The mixing bound gives \(0<\delta'\leq\delta'_W\), so the source
-theorem applies; using the smaller \(\delta'\) only enlarges the confidence
-term. Consequently, simultaneously for all \(h\in\Hball\),
-\[
-    \risk_w(h)
-    \leq
-    \erisk_{N,w}(h)
-    +\hRad_{\cS_\mu}(\cF_\Lambda)
-    +3(\Lambda+\Upsilon)^2
-      \sqrt{\frac{\log(4/\delta')}{2\mu}}.
-\]
-Finally, \cref{cor:loss-truncation} gives
-\(\risk_\infty(h)\leq\risk_w(h)+\tau_w\). Combining the two inequalities
-proves \cref{eq:empirical-rad-bound}.
-\end{proof}
-
-\subsection{Closed-form RKHS complexity bound}
-
-\begin{proof}
-Condition on \(\cS_\mu=((u_j,y_j))_{j=1}^\mu\), where
-\(u_j=\PhiWin(x_j)\), and let \(\mathcal G_\Lambda\) be the prediction class
-induced by \(\Hball\) on these features. Because the RKHS ball is symmetric,
-\begin{align*}
-    \hRad_{\cS_\mu}(\mathcal G_\Lambda)
-    &=
-    \E_{\bm\sigma}\!\left[
-      \sup_{\norm{h}_{\cH_\kappa}\leq\Lambda}
-      \abs{\frac2\mu
-      \ip{h}{\sum_{j=1}^\mu\sigma_j\kappa(u_j,\cdot)}_{\cH_\kappa}}
-    \right]\\
-    &=
-    \frac{2\Lambda}{\mu}
-    \E_{\bm\sigma}
-    \norm{\sum_{j=1}^\mu\sigma_j\kappa(u_j,\cdot)}_{\cH_\kappa}\\
-    &\leq
-    \frac{2\Lambda}{\mu}
-    \sqrt{\sum_{j=1}^\mu\kappa(u_j,u_j)}
-    =\frac{2\Lambda}{\sqrt\mu}.
-\end{align*}
-
-For each \(j\), define
-\(\psi_j(t)=(t-y_j)^2-y_j^2\). On \([-\Lambda,\Lambda]\),
-\(\psi_j(0)=0\) and \(\psi_j\) is
-\(2(\Lambda+\Upsilon)\)-Lipschitz. The absolute-value contraction principle
-\citep{BartlettMendelson2002} gives the safe bound
-\[
-    \E_{\bm\sigma}\sup_{h\in\Hball}
-    \abs{\frac2\mu\sum_{j=1}^\mu\sigma_j\psi_j(h(u_j))}
-    \leq
-    4(\Lambda+\Upsilon)
-    \hRad_{\cS_\mu}(\mathcal G_\Lambda)
-    \leq
-    \frac{8\Lambda(\Lambda+\Upsilon)}{\sqrt\mu}.
-\]
-The source convention contains an absolute value, so the label-only offset must
-also be retained. By Jensen's inequality and independence of the Rademacher
-signs,
-\[
-    \E_{\bm\sigma}
-    \abs{\frac2\mu\sum_{j=1}^\mu\sigma_j y_j^2}
-    \leq
-    \frac2\mu\sqrt{\sum_{j=1}^\mu y_j^4}
-    \leq\frac{2\Upsilon^2}{\sqrt\mu}.
-\]
-The triangle inequality therefore yields
-\[
-    \hRad_{\cS_\mu}(\cF_\Lambda)
-    \leq
-    \frac{8\Lambda(\Lambda+\Upsilon)+2\Upsilon^2}{\sqrt\mu}
-    =\frac{C_{\Lambda,\Upsilon}}{\sqrt\mu}.
-\]
-Substitution into \cref{eq:empirical-rad-bound}, followed by the definition of
-\(\tau_w\), proves \cref{eq:closed-generalization}.
-\end{proof}
-
-\subsection{Finite-family model selection}
-
-\begin{proof}
-For candidate \(\ell\), let
-\[
-    \cF_\ell
-    :=
-    \set{(x_{-w+1:0},y)\mapsto
-      (h(\Phi_w^{(\ell)}(x_{-w+1:0}))-y)^2:
-      h\in\cH_\ell},
-\]
-and define the fixed union
-\(\cF_{\mathfrak C}:=\bigcup_{\ell=1}^L\cF_\ell\). Every function in this
-union is measurable and takes values in \([0,B_{\mathfrak C}]\). Apply
-\cref{eq:mr-background} once to \(\cF_{\mathfrak C}\), using
-\cref{lem:window-mixing} exactly as in the proof of
-\cref{thm:generalization}. With probability at least \(1-\delta\),
-simultaneously for every \(\ell\) and \(h\in\cH_\ell\),
+\begin{lemma}[Mat\'ern section stability]
+\label{lem:matern-section-stability}
+For every feature dimension $p$,
 \begin{equation}
-    \risk_{w,\ell}(h)
-    \leq
-    \erisk_{N,w,\ell}(h)
-    +\hRad_{\cS_\mu}(\cF_{\mathfrak C})
-    +3B_{\mathfrak C}
-      \sqrt{\frac{\log(4/\delta')}{2\mu}}.
-    \label{eq:finite-union-intermediate}
+    \norm{\kernel_p(z,\cdot)-\kernel_p(z',\cdot)}_{\RKHS_p}
+    \leq\kLip\rmsMetric_p(z,z')
+    =\frac{\kLip}{\sqrt p}\norm{z-z'}_2.
+    \label{eq:matern-section-stability}
 \end{equation}
-
-Condition on \(\cS_\mu\) and define
-\[
-    Z_\ell(\bm\sigma)
-    :=
-    \sup_{f\in\cF_\ell}
-    \abs{\frac2\mu\sum_{j=1}^\mu
-    \sigma_j f(\widetilde W_j)}.
-\]
-Changing one Rademacher sign changes \(Z_\ell\) by at most
-\(4B_{\mathfrak C}/\mu\). The bounded-difference exponential inequality
-\citep{McDiarmid1989} therefore gives, for every \(t>0\),
-\[
-    \E_{\bm\sigma}
-    \exp\!\left(t[Z_\ell-\E_{\bm\sigma}Z_\ell]\right)
-    \leq
-    \exp\!\left(\frac{2t^2B_{\mathfrak C}^2}{\mu}\right).
-\]
-The log-sum-exp inequality then gives
-\[
-    \E_{\bm\sigma}\max_{\ell\in[L]}Z_\ell
-    \leq
-    \max_{\ell\in[L]}\E_{\bm\sigma}Z_\ell
-    +\frac{\log L}{t}+\frac{2tB_{\mathfrak C}^2}{\mu}.
-\]
-Optimizing at
-\(t=\sqrt{\mu\log L/(2B_{\mathfrak C}^2)}\) (with the \(L=1\) case
-immediate) yields the standard finite-union estimate
-\citep{BartlettMendelson2002}
-\[
-    \hRad_{\cS_\mu}(\cF_{\mathfrak C})
-    \leq
-    \max_{\ell\in[L]}\hRad_{\cS_\mu}(\cF_\ell)
-    +2B_{\mathfrak C}\sqrt{\frac{2\log L}{\mu}}.
-\]
-The preceding closed-form calculation applies candidate by candidate, so
-\[
-    \hRad_{\cS_\mu}(\cF_\ell)
-    \leq
-    \frac{8\Lambda_\ell(\Lambda_\ell+\Upsilon)+2\Upsilon^2}{\sqrt\mu}
-    \leq\frac{A_{\mathfrak C}}{\sqrt\mu}.
-\]
-Substitute these bounds into \cref{eq:finite-union-intermediate} and apply the
-candidate-specific inequality
-\(\risk_{\infty,\ell}(h)\leq\risk_{w,\ell}(h)+\tau_{w,\ell}\).
-This proves \cref{eq:finite-family-bound}. Because the event is simultaneous
-over the complete fixed union, it remains valid after any measurable
-sample-dependent selector taking values in that union.
-\end{proof}
-
-\subsection{Geometrically mixing case}
+\end{lemma}
 
 \begin{proof}
-Since \(\mu=N/(2a)\) and \(a\geq1\),
+The reproducing property gives
+$\norm{\kernel_p(z,\cdot)-\kernel_p(z',\cdot)}_{\RKHS_p}^2
+=2(1-\kernel_p(z,z'))$.  Relative to the raw feature coordinate, the
+RMS-rescaled kernel is the ordinary Mat\'ern kernel applied to $z/\sqrt p$;
+its normalized spectral law therefore has covariance
+$\nu I/(p(\nu-1)\xi^2)$.  Applying $1-\cos u\leq u^2/2$ yields the claim.
+\end{proof}
+
+\begin{proof}[Proof of \cref{prop:window-certificate}]
+Apply \cref{lem:exact-contraction} to all $R$ branches.  Since every
+$O\in\gO_n$ has operator norm one, trace duality gives, uniformly in the input
+history,
+\[
+    \norm{\featureMap_{\design,\infty}(\vx^-)
+      -\featureMap_{\design}(x_{-w+1:0})}_2
+    \leq2\sqrt{q_n\sum_{r=1}^{R}\lambda_r^{2w}}.
+\]
+For $h\in\RKHS_{m_{\arch}}^\Lambda$,
+\cref{lem:matern-section-stability} and the reproducing property multiply this
+by $\Lambda\kLip/\sqrt{Rq_n}$.  Thus the raw feature-count factor cancels and
+the prediction discrepancy is bounded by
+$2\Lambda\kLip\sqrt{R^{-1}\sum_r\lambda_r^{2w}}$.  Finally,
+$|(u-y)^2-(v-y)^2|\leq2(\Lambda+\Upsilon)|u-v|$.  Since
+$\lambda_r\leq\lambda_+$ for every branch, \Eqref{eq:window-risk-bound}
+follows.
+\end{proof}
+
+\begin{proof}[Proof of \cref{cor:lambda-plus-calibration}]
+Solve the upper bound in \Eqref{eq:window-risk-bound} for $\lambda_+$ under
+$\epsWin(\arch)\leq\epsilon_W$.
+\end{proof}
+
+\subsection{Grouped-measurement control}
+
+\begin{proof}[Proof of \cref{prop:shot-certificate}]
+For branch $r$ and observable $O$, each compatible Pauli measurement is a sign
+with mean $\phi_{r,O}$ and variance $1-\phi_{r,O}^2$.  Pooling $a_n(O)M$
+compatible independent preparations therefore gives coordinate variance
+$(1-\phi_{r,O}^2)/(a_n(O)M)$.  Summing coordinatewise mean-square errors over
+all branches does not require independence between distinct feature
+coordinates.  Jensen's inequality, \cref{lem:matern-section-stability}, and
+the bounded squared-loss inequality introduce the factor
+$1/\sqrt{Rq_n}$ and give the first line of
+\Eqref{eq:operational-exact-risk-bound}; bounding each variance by one gives
+the second.  For the cycle cover,
+$\sum_{O\in\gO_n}a_n(O)^{-1}=10n$ and $q_n=12n$, hence their normalized ratio
+is $5/6$.
+\end{proof}
+
+\begin{proof}[Proof of \cref{cor:measurement-budget-calibration}]
+Insert the cycle value
+$\epsShot(\arch,M)=2\Lambda(\Lambda+\Upsilon)\kLip\sqrt{5/(6M)}$ and solve
+$\epsShot(\arch,M)\leq\epsilon_M$ for $M$.
+\end{proof}
+
+\subsection{Mixing and the uniform generalization bound}
+
+\begin{lemma}[Augmented-window mixing]
+\label{lem:augmented-window-mixing}
+Conditional on a realized shared projection and frozen pool,
+$\beta_{\augprocessW}(1)=\beta_{\processW}(1)\leq\beta_{\processZ}(g)$.
+\end{lemma}
+
+\begin{proof}
+The raw variables supporting adjacent windows are separated by $g$, so
+monotonicity of absolute regularity gives
+$\beta_{\processW}(1)\leq\beta_{\processZ}(g)$.  Conditional on the projection
+and pool, each measurement record is generated from its own window through an
+independent measurement kernel.  Such kernels cannot increase total variation,
+while projection from $\augprocessW_j$ back to $\processW_j$ gives the reverse
+inequality.
+\end{proof}
+
+\begin{lemma}[Independent measured-window deviation]
+\label{lem:iid-weighted-deviation}
+For $\mu$ independent augmented windows with the stationary one-window
+marginal, a fixed design, and $\alpha\in(0,1)$, with probability at least
+$1-\alpha$,
+\begin{equation}
+\sup_{h\in\RKHS_{m_{\arch}}^\Lambda}
+\left|
+\oprisk_{\design,w}(h)
+-\frac1\mu\sum_{j=1}^\mu
+  \bigl(h(\measuredFeatureMap_{\design}(U_j^X;U_j^M))-U_j^Y\bigr)^2
+\right|
+\leq
+\frac{4\Lambda(\Lambda+\Upsilon)}{\sqrt\mu}
++3(\Lambda+\Upsilon)^2
+\sqrt{\frac{\log(2/\alpha)}{2\mu}}.
+\label{eq:iid-measured-window-deviation}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Kernel normalization gives prediction-class Rademacher complexity at most
+$\Lambda/\sqrt\mu$.  For fixed $y\in[-\Upsilon,\Upsilon]$, the centered
+squared loss is $2(\Lambda+\Upsilon)$-Lipschitz on the prediction range.  The
+contraction principle and the standard two-sided Rademacher inequality
+\citep{BartlettMendelson2002} give the result.
+\end{proof}
+
+\begin{proof}[Proof of \cref{prop:gapped-deviation}]
+Split the $N=2\mu$ augmented windows into odd and even collections.  The
+independent-block coupling of \citet{Yu1994} replaces either collection by an
+independent sample with the same one-window marginal, with transfer cost at
+most $2(\mu-1)\beta_{\processZ}(g)$ per parity under the convention of
+\citet{MohriRostamizadeh2008}.  For each candidate and parity, apply
+\cref{lem:iid-weighted-deviation} with $\alpha=\delta_g/(2S)$.  A union bound
+over both parities and all $S$ candidates costs $\delta_g$, while the coupling
+costs $4(\mu-1)\beta_{\processZ}(g)$.  This gives
+\Eqref{eq:dependent-certificate} and \Eqref{eq:gapped-uniform-deviation}.
+\end{proof}
+
+\begin{proof}[Proof of \cref{cor:geometric-mixing-gap}]
+Under \Eqref{eq:geometric-gap-rule},
+\[
+    4(\mu-1)\beta_{\processZ}(g)
+    \leq4(\mu-1)\mixConst e^{-\mixDecay g}
+    \leq\frac{\delta}{2}.
+\]
+Therefore $\delta_g\geq\delta/2$.  Substituting this inequality into
+$\log(4S/\delta_g)$ gives
+$\log(4S/\delta_g)\leq\log(8S/\delta)$, which yields
+\Eqref{eq:geometric-generalization-bound}.  Since $\mu=N/2$, the sufficient
+gap in \Eqref{eq:geometric-gap-rule} is $O(\log N)$ for fixed
+$(\mixConst,\mixDecay,\delta)$.
+\end{proof}
+
+\begin{proof}[Proof of \cref{cor:ivanov-capacity-calibration}]
+With $a=4/\sqrt\mu$ and
+$b=3\sqrt{\log(4S/\delta_g)/(2\mu)}$, expanding
+\Eqref{eq:dependent-certificate} gives
+$\epsGen=(a+b)\Lambda^2+(a+2b)\Upsilon\Lambda+b\Upsilon^2$.  This expression
+is strictly increasing for $\Lambda\geq0$.  Solving
+$\epsGen=\epsilon_G$ by the quadratic formula gives
+\Eqref{eq:ivanov-radius}, and a positive solution exists exactly when
+$\epsilon_G>b\Upsilon^2$.
+\end{proof}
+
+\subsection{Width-resolved representation}
+
+\begin{proof}[Proof of \cref{lem:feature-map-separation}]
+Write a projected history as
+$\vz^-=(\ldots,z_{-1},z_0)\in(\projection_n\gX)^{\sZ_-}$.  Strict
+contraction gives a unique causal state for every admissible branch.  For a
+fixed branch with rate $\lambda<1$, projected inputs more than $L$ steps in the
+past affect the current state by at most $2\lambda^L$ in trace norm.  After
+choosing $L$ so that this tail is arbitrarily small, continuity of the finite
+composition of the input-dependent unitary channels controls the remaining
+recent projected inputs.  Trace duality therefore shows that every causal
+coordinate is continuous in the fading-memory topology on the projected
+history space.
+
+For separation, take $\vz^-\neq\vz'^{-}$ and let $\ell_0$ be their most recent
+differing lag.  Some coordinate $j$ satisfies
+$z_{-\ell_0,j}\neq z'_{-\ell_0,j}$.  Choose the zero-angle support point
+$\reservoirUnitary_n=\identity$ and, only as a proof device combining two
+coordinates of the same observable bank, define
+$F_{j,\vz^-}(\lambda):=\langle\pauliX_j-\ii\pauliZ_j\rangle$.  With
+\[
+    \alpha_{j,\ell}(\vz^-):=\vartheta(z_{-\ell,j}),
+    \qquad
+    z_{j,s}^{\circ}(\vz^-):=
+    \exp\!\left(\ii\sum_{\ell=0}^{s-1}\alpha_{j,\ell}(\vz^-)\right),
+    \qquad z_{j,0}^{\circ}:=1,
+\]
+the causal reset expansion is
+\begin{equation}
+    F_{j,\vz^-}(\lambda)
+    =1+\sum_{s=1}^{\infty}\lambda^s
+      \bigl(z_{j,s}^{\circ}(\vz^-)-z_{j,s-1}^{\circ}(\vz^-)\bigr).
+    \label{eq:causal-memory-series}
+\end{equation}
+The series is analytic for $\lambda\in(0,1)$.  In the difference between the
+two histories, all coefficients before order $\ell_0+1$ vanish, whereas the
+coefficient at that order is nonzero.  Indeed, all more recent projected inputs
+agree and $\vartheta:\sR\to(-\pi,\pi)$ is injective, so the first differing
+cumulative phase cannot differ by a nonzero multiple of $2\pi$.  The analytic
+difference is therefore not identically zero, and its zero set cannot contain
+$(\lambda_0,\lambda_+)$.  Some rate in the support consequently makes
+$F_{j,\vz^-}\neq F_{j,\vz'^{-}}$.  At least one of the $\pauliX_j$ or
+$\pauliZ_j$ expectations must then differ, and both belong to $\gO_n$.
+\end{proof}
+
+\begin{proof}[Proof of \cref{thm:width-resolved-approximation}]
+By \cref{lem:feature-map-separation}, as admissible single-reservoir designs
+vary, their scalar causal coordinates are continuous fading-memory functionals
+on $(\projection_n\gX)^{\sZ_-}$ and separate projected histories.  The real
+algebra generated by these coordinates and constants is therefore dense in
+$\gFFMP(\projection_n\gX)$ by the Stone--Weierstrass mechanism of
+\citet{MonzaniPrati2025}.  Any approximating polynomial uses finitely many
+coordinates, and spatial multiplexing places the corresponding single-reservoir
+designs into one finite-$R$ product-support design.  The image of the resulting
+feature map is compact, so universality of the normalized Mat\'ern kernel on
+compact Euclidean subsets \citep{SriperumbudurEtAl2011} replaces the
+intermediate polynomial by a finite-norm RKHS readout.  Consequently the
+support-closure QuaRK predictors are uniformly dense in $\projClass_n$.
+
+Every causal QuaRK predictor is measurable with respect to
+$\sigma(\projection_nX_t:t\leq0)$, because the entire driven channel sees
+$x_t$ only through $\projection_nx_t$.  Orthogonality of conditional
+expectation under squared loss therefore gives the information-theoretic lower
+bound $\projFloor_n$ in \Eqref{eq:projection-information-floor}; no predictor
+that only sees the projected history can do better.
+
+For the converse, let
+$\bar F_n:=\E[F^\star(X_{-\infty:0})\mid
+\sigma(\projection_nX_t:t\leq0)]$, viewed as an $L^2$ function of the projected
+history.  The projected history space is compact metrizable, so continuous
+functions are dense in its $L^2$ law.  Since our fading-memory class is exactly
+the continuous class for the product topology, for any $\xi>0$ there exists
+$F_\xi\in\projClass_n$ whose squared error relative to $F^\star$ is at most
+$\projFloor_n+\xi$; this is \Eqref{eq:projection-floor-variational}.  Uniform
+density of QuaRK in $\projClass_n$ then supplies a finite $R$, a support design,
+and a finite-norm readout arbitrarily close to $F_\xi$ on the compact history
+space.  Since $F_\xi$ and $F^\star$ are bounded, the corresponding squared
+error converges to that of $F_\xi$.  Thus the infimum over finite-norm QuaRK
+predictors is at most $\projFloor_n+\xi$.  Letting $\xi\downarrow0$ proves
+equality.  The radius-truncated infimum is nonincreasing in $\Lambda$, and its
+infimum over all finite radii is the unrestricted finite-norm infimum just
+identified; therefore its limit is $\projFloor_n$.
+\end{proof}
+
+\begin{proof}[Proof of \cref{cor:width-information-monotonicity}]
+From \Eqref{eq:projection-prefix-recovery},
+$\sigma(\projection_nX_t:t\leq0)$ is contained in
+$\sigma(\projection_{n+1}X_t:t\leq0)$.  Conditional expectation is the
+orthogonal projection in $L^2$, so enlarging the conditioning sigma-field
+cannot increase the residual squared norm.  This gives
+$\projFloor_{n+1}\leq\projFloor_n$ directly.
+
+If $n\geq d$, the Gaussian matrix $\projection_n$ has full column rank almost
+surely.  The full input history is then measurable with respect to the
+projected history (indeed the inverse is linear on the image), so
+$\sigma(\projection_nX_t:t\leq0)=\sigma(X_t:t\leq0)$.  Because $F^\star$ is
+measurable with respect to the latter sigma-field, the conditional residual in
+\Eqref{eq:projection-information-floor} is zero.
+\end{proof}
+
+\subsection{Positive mass and finite-pool coverage}
+
+\begin{proof}[Proof of \cref{prop:positive-good-mass}]
+Choose $h_0\in\RKHS_{m_{\arch}}^\Lambda$ such that
+\[
+    \risk_{\design_0,\infty}(h_0)-\risk^\star
+    <\projFloor_n+\epsRep;
+\]
+such an $h_0$ exists because \Eqref{eq:strict-good-support-design} is a strict
+inequality.  It is enough to show that the causal risk of this fixed readout is
+continuous in the frozen design near $\design_0$.
+
+For branch $r$, let
+\[
+    c_r(\design,\design_0)
+    :=\sup_{x\in\gX}\sup_{\rho}
+      \traceNorm{\reservoirChannel^{\design}_{r,x}(\rho)
+       -\reservoirChannel^{\design_0}_{r,x}(\rho)}.
+\]
+The one-step channel is continuous in the finite-dimensional rate, axis, and
+angle parameters.  In a sufficiently small neighborhood of $\design_0$, all
+rates are bounded by a common $\bar\lambda<1$.  The standard perturbation
+comparison for contractive recursions then gives
+\[
+    \sup_{\vx^-}
+    \traceNorm{\rho^{\design}_{r,\infty}(\vx^-)
+      -\rho^{\design_0}_{r,\infty}(\vx^-)}
+    \leq\frac{c_r(\design,\design_0)}{1-\bar\lambda}.
+\]
+Thus the causal feature maps converge uniformly as
+$\design\to\design_0$.  By \cref{lem:matern-section-stability} and the
+reproducing property, $h_0\circ\featureMap_{\design,\infty}$ also converges
+uniformly, and bounded squared loss makes
+$\risk_{\design,\infty}(h_0)$ continuous.  The strict inequality therefore
+persists on some open neighborhood $\mathcal N$ of $\design_0$.  Because
+$\design_0\in\operatorname{supp}(\designLaw_{\arch})$,
+$\designLaw_{\arch}(\mathcal N)>0$, and every design in $\mathcal N$ is counted
+by \Eqref{eq:good-design-mass}.  Hence the good-design mass is positive.
+
+For the final statement, \cref{thm:width-resolved-approximation} gives, for any
+$\epsRep>0$, finite $R$, finite $\Lambda$, and a product-support design with
+approximation error strictly below $\projFloor_n+\epsRep$; apply the first part.
+\end{proof}
+
+\begin{proof}[Proof of \cref{prop:finite-pool-coverage}]
+Conditional on $\projection_n$, the events
+$\{\epsApp(\design_s;\Lambda)>\projFloor_n+\epsRep\}$ are independent and each
+has probability $1-\hitMass$.  Their intersection therefore has
+probability $(1-\hitMass)^S$, proving
+\Eqref{eq:pool-miss-probability}.
+\end{proof}
+
+\subsection{ERM oracle and resource-to-performance guarantee}
+
+\begin{proof}[Proof of \cref{thm:finite-pool-erm-oracle}]
+Work on the simultaneous event of \cref{prop:gapped-deviation}.  For any
+candidate $s$ and any $h\in\RKHS_{m_{\arch}}^\Lambda$, the joint ERM property
+\Eqref{eq:frozen-pool-erm} gives
 \begin{align*}
-    4(\mu-1)\beta_Z(as-w)
-    &\leq
-    \frac{2N}{a}\beta_0e^{-c(as-w)}\\
-    &\leq
-    2N\beta_0e^{cw}e^{-cas}.
+    \oprisk_{\selectedDesign,w}(\selectedReadout)
+    &\leq\erisk_{\selectedDesign,w}(\selectedReadout)+\epsGen\\
+    &\leq\erisk_{\design_s,w}(h)+\epsGen\\
+    &\leq\oprisk_{\design_s,w}(h)+2\epsGen,
 \end{align*}
-The choice in \cref{eq:geometric-block-choice} makes the last expression at
-most \(\delta/2\), so \(\delta'\geq\delta/2\). It also gives
-\(a=O(\log(N/\delta))\) with the remaining quantities fixed. Since
-\(\mu=N/(2a)\), both stochastic terms in
-\cref{eq:closed-generalization} are
-\(O(\sqrt{a/N})=O(\sqrt{\log(N/\delta)/N})\).
-
-For a nondivisible available sample size, retain
-\(N_a=2a\lfloor N/(2a)\rfloor\) observations. When \(N_a\geq2a\), stationarity
-permits applying the same bound to this retained consecutive segment, and the
-number discarded is at most \(2a-1\). For fixed parameters, the chosen
-\(a=O(\log N)\), so \(a\leq N/2\) and \(N_a\geq2a\) for all sufficiently
-large \(N\).
+where $\epsGen=\epsGen(\Lambda,S,\delta)$.  Taking first the infimum over $h$
+and then the minimum over $s$ proves \Eqref{eq:finite-pool-operational-oracle}.
 \end{proof}
 
-\subsection{Local-Pauli shadow requirement}
-
-\begin{proof}
-For independently uniform local \(X/Y/Z\) measurements, a nonidentity
-Pauli string of weight \(q\leq k\) has squared shadow norm
-\(3^q\leq3^k\). The median-of-means classical-shadow guarantee applied to
-\(M\) observables therefore gives
+\begin{proof}[Proof of \cref{thm:resource-performance}]
+Let $E_{\mathrm{pool}}$ be the event that at least one sampled design
+satisfies
+$\epsApp(\design_s;\Lambda)\leq\projFloor_n+\epsRep$.  By
+\cref{prop:finite-pool-coverage}, conditional on $\projection_n$,
 \[
-    S
-    \geq
-    C_{\mathrm{sh}}3^k\varepsilon^{-2}
-    \log(2M/\delta_{\mathrm{sh}})
+    \Prob(E_{\mathrm{pool}}^c\mid\projection_n)
+    =(1-\hitMass)^S.
 \]
-for a universal constant \(C_{\mathrm{sh}}\); see
-\citet{HuangKuengPreskill2020}. For \(NR\) reservoir output states, assign failure probability
-\(\delta_{\mathrm{sh}}=\delta_{\mathrm{tot}}/(NR)\) to each state and take a
-union bound. This gives \cref{eq:shadow-samples-total}. Each state requires
-\(S\) independently randomized snapshots, for \(NRS\) state preparations.
-Since each snapshot replays the \(w\)-step recursion, the total is \(NRSw\)
-channel applications.
+On $E_{\mathrm{pool}}$, choose such a candidate $s_0$.  For any
+$h\in\RKHS_{m_{\arch}}^\Lambda$,
+\[
+    \oprisk_{\design_{s_0},w}(h)
+    \leq\risk_{\design_{s_0},\infty}(h)
+       +\epsShot(\arch,M)+\epsWin(\arch)
+\]
+by \cref{prop:shot-certificate,prop:window-certificate}.  Taking the infimum in
+$h$ gives
+\[
+    \inf_h\oprisk_{\design_{s_0},w}(h)-\risk^\star
+    \leq\projFloor_n+\epsRep+\epsShot+\epsWin.
+\]
+Intersect this pool event with the event of
+\cref{thm:finite-pool-erm-oracle}.  A union bound gives confidence
+\Eqref{eq:resource-performance-confidence}, and substitution yields
+\Eqref{eq:resource-performance-bound}.
+
+For the causal exact-feature counterpart, apply
+\cref{prop:shot-certificate,prop:window-certificate} once more to the selected
+readout:
+$\risk_{\selectedDesign,\infty}(\selectedReadout)
+\leq\oprisk_{\selectedDesign,w}(\selectedReadout)+\epsShot+\epsWin$.
+Combining with \Eqref{eq:resource-performance-bound} proves
+\Eqref{eq:resource-performance-causal}.
 \end{proof}
 
-\subsection{Finite-shot feature perturbations}
+\begin{proof}[Proof of \cref{cor:resource-budget-calibration}]
+The first condition in \Eqref{eq:resource-budget-conditions} bounds the two statistical deviations in
+\Eqref{eq:resource-performance-bound} by $2\epsilon_G$; the remaining two
+conditions are exactly
+\cref{cor:measurement-budget-calibration,cor:lambda-plus-calibration}.
+Substitution into \cref{thm:resource-performance} yields
+\Eqref{eq:calibrated-resource-performance} with confidence
+$1-\delta-(1-\hitMass)^S$.
+\end{proof}
 
-\begin{proof}
-The coordinate-wise event gives
-\(\norm{\widehat\Phi_w-\PhiWin}_2\leq\sqrt{R|\cO|}\,\varepsilon\).
-The following argument is deterministic and uses only
-\(\norm{h}_{\cH_\kappa}\leq\Lambda\), so it holds simultaneously for every
-\(h\in\Hball\). The reproducing property and
-\cref{lem:matern-stability} yield
-\(
-\abs{h(\widehat\Phi_w)-h(\PhiWin)}
+\subsection{Finite-data Gaussian geometry}
+
+\begin{proof}[Proof of \cref{prop:finite-data-jl}]
+Condition on the realized input windows.  For fixed $v\neq0$, the normalized
+Gaussian projection satisfies
+\[
+\Pr\!\left[
+  \left|\norm{\projection_nv}_2^2-\norm v_2^2\right|
+  >\epsilon_\Pi\norm v_2^2
+\right]
 \leq
-\Lambda\norm{\kappa(\widehat\Phi_w,\cdot)-\kappa(\PhiWin,\cdot)}_{\cH_\kappa}
-\leq
-(\Lambda/\xi)\sqrt{\nu R|\cO|/(\nu-1)}\,\varepsilon
-\), proving \cref{eq:shot-prediction}. Both predictions lie in
-\([-\Lambda,\Lambda]\); the squared-loss Lipschitz inequality used in the
-proof of \cref{cor:loss-truncation} therefore gives \cref{eq:shot-loss}.
+2\exp\!\left[-n\left(\frac{\epsilon_\Pi^2}{4}
+-\frac{\epsilon_\Pi^3}{6}\right)\right].
+\]
+There are at most $\binom{Nw}{2}$ nonzero pairwise differences among the raw
+vectors appearing in the sample.  A union bound under
+\Eqref{eq:joint-jl-width-rule} gives failure probability at most
+$\delta_\Pi$.  Since $\projection_n$ is independent of the temporal sample,
+the same probability statement holds after averaging over that sample.
 \end{proof}

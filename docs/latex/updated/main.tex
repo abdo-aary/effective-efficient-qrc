@@ -4,12 +4,8 @@
 % De-anonymized preprint: \usepackage[preprint]{tmlr}
 
 \input{preamble.tex}
-\input{math_commands.tex}
 
-\title{QuaRK: A Resource-Aware Quantum Reservoir Kernel for Temporal Learning}
-
-% Keep the review source anonymous. Replace only after acceptance or when
-% preparing a de-anonymized preprint with the corresponding tmlr option.
+\title{QuaRK: Quantum Reservoir Kernels for Temporal Learning}
 \author{\name Anonymous Authors}
 
 \def\month{MM}
@@ -21,33 +17,45 @@
 \maketitle
 
 \begin{abstract}
-Temporal learning requires representations that retain useful history while
-keeping statistical dependence and implementation cost explicit. We introduce
-\textsc{QuaRK}, a quantum-reservoir-based framework in which a finite-set
-Johnson--Lindenstrauss projection maps inputs to a quantum register, a bank of
-reset-contractive reservoirs processes each temporal window, local-observable
-expectations form a classical feature vector, and a regularized Mat\'ern kernel
-provides the readout. The analysis follows this pipeline. Exact trace-norm
-contraction yields a unique causal state and a geometrically decaying
-finite-window approximation; Mat\'ern RKHS geometry transfers this error to
-predictions and squared loss. Conditional on distinct exact features, the
-readout admits a finite-norm interpolant. For a fixed exact featurizer and
-stationary beta-mixing input--output data, an independent-block argument gives
-a one-sided risk bound governed by an explicit effective block count and the
-finite-window error. A finite-family extension makes this guarantee
-simultaneous over a predeclared collection of featurizer--readout
-configurations, adding only a logarithmic model-selection term. A separate
-classical-shadow result quantifies the measurements needed for local Pauli
-features and propagates finite-shot error uniformly over a bounded RKHS readout class. Together, these results provide a resource-aware,
-assumption-explicit basis for evaluating quantum reservoir kernels without
-claiming quantum advantage, hardware-noise robustness, or superiority over
-classical temporal models.
+QuaRK studies frozen quantum reservoir learning for causal temporal regression
+when data are dependent, measurements are finite, and only a finite pool of
+random reservoir realizations can be searched.  The architecture exposes qubit
+width, spatial multiplexing, and memory range, while grouped Pauli measurements
+and an RMS-normalized, norm-controlled Mat\'ern readout make the remaining
+statistical and measurement budgets explicit without letting feature dimension
+alone distort kernel geometry.  A graph-local operator-spreading theorem
+shows that product input injection cannot enlarge Pauli support, whereas a
+generic cycle mixer activates higher-support components and therefore exposes
+higher-order projected-input interactions directly in measured features; this
+is a finite-resource representation statement, not a claim that entanglement
+creates new encoding frequencies or guarantees lower risk.  We replace
+validation-based reservoir ranking by full-sample empirical-risk minimization
+over the finite frozen pool and give
+a uniform beta-mixing bound that controls the resulting data-dependent
+selection.  A width-resolved approximation theorem separates information lost
+by the shared Gaussian projection from approximation by the reservoir family:
+under a canonical coupled projection, the resulting population information
+floor is nonincreasing with width and vanishes almost surely once the projection
+is injective, while finite spatial multiplexing and finite-norm Mat\'ern
+readouts introduce no additional asymptotic floor.  Continuity and full support
+then give positive probability to neighborhoods of good frozen designs, so a
+pool of size $S$ misses all such designs with probability exactly
+$(1-\hitMass)^S$.  Combining this pool-coverage term with dependent-data
+generalization, finite-shot error, and finite-window error yields an end-to-end
+excess-risk certificate for the predictor actually returned.  Under a
+geometric beta-mixing envelope, a raw-time gap logarithmic in sample size is
+sufficient to keep the unit-block coupling term controlled.  A separate
+Johnson--Lindenstrauss result is retained only as a finite-data geometry
+certificate, not as a surrogate for predictive approximation.  The theory does
+not claim a distribution-free numerical lower bound on $\hitMass$ or a
+quantum advantage.
 \end{abstract}
 
 \input{sections/introduction.tex}
 \input{sections/related_work.tex}
 \input{sections/problem_setting.tex}
-\input{sections/method.tex}
+\input{sections/quark_family.tex}
+\input{sections/model_selection.tex}
 \input{sections/theory.tex}
 \input{sections/experiments.tex}
 \input{sections/discussion.tex}
@@ -59,11 +67,6 @@ classical temporal models.
 \appendix
 \input{appendices/technical_background.tex}
 \input{appendices/proofs.tex}
-\input{appendices/experimental_protocol.tex}
-\input{appendices/dependent_families.tex}
-\input{appendices/functionals.tex}
-\input{appendices/chaotic_stress_tests.tex}
-\input{appendices/real_world_sanity.tex}
-\input{appendices/hardware_validation.tex}
+\input{appendices/empirical_materials.tex}
 
 \end{document}

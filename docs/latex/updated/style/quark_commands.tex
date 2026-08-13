@@ -1,0 +1,110 @@
+% QuaRK-specific notation built on the ICLR and Template.zip conventions.
+
+% Greek vectors and matrices not included in the base command file.
+\newcommand{\veta}{\bm{\eta}}
+\newcommand{\vGamma}{\bm{\Gamma}}
+\newcommand{\vvarpi}{\bm{\varpi}}
+\newcommand{\vOmega}{\bm{\Omega}}
+\newcommand{\mPi}{\bm{\Pi}}
+
+% Scalar operators and delimiters used throughout the manuscript.
+\newcommand{\Prob}{\sP}
+\newcommand{\ii}{\mathrm{i}}
+\newcommand{\wt}{\operatorname{wt}}
+\newcommand{\Lip}{\operatorname{Lip}}
+\newcommand{\Arg}{\operatorname{Arg}}
+\newcommand{\traceNorm}[1]{\norm{#1}_{1}}
+\newcommand{\opNorm}[1]{\norm{#1}_{\infty}}
+
+% Recurrent paper objects.
+\newcommand{\risk}{\gR}
+\newcommand{\oprisk}{\gR^{\mathrm{op}}}
+\newcommand{\erisk}{\widehat{\gR}}
+\newcommand{\rhoreset}{\rho_{+}}
+\newcommand{\kLip}{L_{\kappa}}
+\newcommand{\arch}{\veta}
+\newcommand{\rpar}{\vomega}
+\newcommand{\skeleton}{\vGamma}
+\newcommand{\gateangles}{\vtheta}
+\newcommand{\rates}{\vlambda}
+\newcommand{\design}{\mathsf D}
+\newcommand{\candidate}{\mathsf c}
+\newcommand{\CandidateSet}{\mathfrak C}
+\newcommand{\ArchitectureSet}{\mathfrak E}
+\newcommand{\selectedDesign}{{\mathsf{D}^{\star}}}
+\newcommand{\selectedReadout}{{h^{\star}}}
+\newcommand{\designLaw}{\mathbb P}
+\newcommand{\srmPenalty}{\operatorname{pen}}
+\newcommand{\codeLength}{\ell_{\mathrm{code}}}
+\newcommand{\kernel}{\kappa}
+
+% Error terms in the end-to-end guarantee.
+\newcommand{\epsApp}{\varepsilon_{\mathrm{app}}}
+\newcommand{\epsDep}{\varepsilon_{\mathrm{dep}}}
+\newcommand{\epsWin}{\varepsilon_{\mathrm{win}}}
+\newcommand{\epsShot}{\varepsilon_{\mathrm{shot}}}
+\newcommand{\epsOpt}{\varepsilon_{\mathrm{opt}}}
+\newcommand{\epsRem}{\varepsilon_{\mathrm{rem}}}
+\newcommand{\epsGen}{\varepsilon_{\mathrm{gen}}}
+\newcommand{\epsEtoE}{\varepsilon_{\mathrm{E2E}}}
+\newcommand{\epsBurn}{\varepsilon_{\mathrm{burn}}}
+
+% Process and data notation.
+\newcommand{\processZ}{\mathsf Z}
+\newcommand{\processW}{\mathsf W}
+\newcommand{\augprocessW}{\mathsf U}
+\newcommand{\measurementRecord}{\mathsf M}
+\newcommand{\Data}{\gD}
+\newcommand{\HistorySpace}{\gX^{\sZ_{-}}}
+
+% Quantum operators and channels. Matrices/operators use bold roman letters;
+% channels and operator families use calligraphic letters.
+\newcommand{\pauliX}{\mX}
+\newcommand{\pauliY}{\mY}
+\newcommand{\pauliZ}{\mZ}
+\newcommand{\pauliVec}{\vsigma}
+\newcommand{\inputUnitary}{\mU^{\mathrm{in}}}
+\newcommand{\reservoirUnitary}{\mW}
+\newcommand{\replacementChannel}{\gP_{+}}
+\newcommand{\unitaryChannel}{\gU}
+\newcommand{\reservoirChannel}{\gT}
+
+% Feature and kernel notation.
+\newcommand{\featureMap}{\Phi}
+\newcommand{\measuredFeatureMap}{\widehat\Phi}
+\newcommand{\singleFeatureMap}{\phi}
+\newcommand{\RKHS}{\gH}
+\newcommand{\Loss}{\gL}
+\newcommand{\rmsMetric}{d^{\mathrm{rms}}}
+
+% Additional named objects used to keep source expressions compact.
+\newcommand{\projection}{\mPi}
+\newcommand{\identity}{\mI}
+\newcommand{\WindowSet}{\mathfrak X}
+\newcommand{\QuaRKFamily}{\mathfrak Q}
+\newcommand{\Rad}{\mathfrak R}
+\newcommand{\empRad}{\widehat{\mathfrak R}}
+\newcommand{\Prep}{\operatorname{Prep}}
+\newcommand{\Score}{\operatorname{Score}}
+\newcommand{\blockV}{\mV}
+\newcommand{\blockE}{\mE}
+\newcommand{\blockC}{\mC}
+\newcommand{\Gram}{\mK}
+\newcommand{\PointSet}{\mathfrak P}
+\newcommand{\JLEvent}{\mathscr E_{\Pi}}
+\newcommand{\MarginEvent}{\mathscr E_{\tau}}
+\newcommand{\Kraus}{\mL}
+\newcommand{\LambdaSet}{\mathcal{G}_{\Lambda}}
+
+% Width-resolved representation and finite-pool search.
+\newcommand{\projClass}{\gF^{\Pi}}
+\newcommand{\projFloor}{\mathfrak I^{\Pi}}
+\newcommand{\goodMass}{\mathfrak p}
+\newcommand{\hitMass}{\mathfrak p_{\mathrm{hit}}}
+\newcommand{\epsRep}{\varepsilon_{\mathrm{rep}}}
+
+% Mixer expressivity and dependence calibration.
+\newcommand{\pauliOrder}{\operatorname{pord}}
+\newcommand{\spreadScore}{\operatorname{Spr}}
+\newcommand{\mixConst}{C_{\beta}}
+\newcommand{\mixDecay}{c_{\beta}}

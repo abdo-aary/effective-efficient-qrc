@@ -1,33 +1,46 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-We introduced \textsc{QuaRK}, a temporal learning framework that combines a
-finite-set input projection, reset-contractive quantum reservoirs,
-concatenated local-observable features, and a regularized Mat\'ern kernel
-readout. The architecture separates encoded width, reservoir memory, feature
-dimension, measurement cost, and classical kernel training, allowing each
-resource to be interpreted on its own terms.
+QuaRK organizes frozen quantum reservoir learning around a compact hierarchy:
+an architecture $\arch$ specifies the representation, a design
+$\design\sim\designLaw_{\arch}$ fixes one random realization, the causal map
+$\featureMap_{\design,\infty}$ exposes topology-local observables, and a
+dimension-normalized, norm-controlled Mat\'ern readout performs regression.
+The RMS feature metric keeps one kernel specification meaningful across
+architectures without per-$(n,R)$ retuning.  A finite pool of such designs is
+selected by full-sample ERM, with no optimization of internal quantum
+parameters.
 
-The theoretical analysis mirrors this construction. Exact trace-norm
-contraction yields a unique causal state and a geometrically decaying
-finite-window feature error. Mat\'ern RKHS stability transfers that error to
-predictions and squared risk, while strict positive definiteness characterizes
-the norm needed to interpolate distinct finite feature sets. For a fixed exact
-featurizer and stationary beta-mixing data, the independent-block analysis
-provides a one-sided risk bound governed by an effective block count and the
-finite-window approximation. A finite-family extension makes the guarantee
-simultaneous over a predeclared collection of reservoir and readout
-configurations, thereby covering validation-based selection with an explicit
-logarithmic penalty. A separate classical-shadow result connects observable
-locality and measurement accuracy to the evaluation of a fixed readout.
+The theory first clarifies why the declared mixer is not merely decorative.
+With product input injection, the identity mixer leaves every raw observable
+coordinate confined to its seed qubits; generic graph-local mixing activates
+higher-support Pauli components, and edge observables expose the first
+nontrivial correlation layer and seed further spreading.  This is a
+finite-resource feature statement rather than a claim of monotone benefit from
+entanglement, and the empirical mixer ablation is designed to test whether the
+additional observable structure is task useful.
 
-These results establish a coherent analytical basis for studying quantum
-reservoir kernels, while leaving comparative predictive value to empirical
-evaluation. The empirical protocol is organized around a predeclared hierarchy of
-forecasting, fading-memory, delayed-recall, cross-lag, regime-filtering, and
-volatility tasks; robustness across three beta-mixing data families; an
-ambient-dimension study of JL width control; matched classical and component
-controls; resource ablations; finite-shot behavior; out-of-scope chaotic
-stress tests; three limited real-world sanity checks; a compact IBM hardware
-transfer experiment; and uncertainty across repeated runs.  Numerical conclusions will be added only after the
-corresponding artifacts have been audited.
+The representation and learning results then connect directly.  At width $n$,
+the projection-information floor isolates what the shared
+Gaussian preprocessing can discard; it is nonincreasing under coupled widths
+and vanishes almost surely in the injective regime.  QuaRK's finite-multiplex
+support family can approach that floor, and continuity turns a strictly good
+support design into positive random-design mass.  Pool size $S$ therefore has
+an explicit probabilistic role through the miss probability
+$(1-\hitMass)^S$, while the uniform beta-mixing bound controls the
+overfitting price of selecting from that same pool.  Adding finite-shot and
+finite-window fidelity yields a single excess-risk certificate for the
+operational predictor returned by the algorithm.  For geometrically mixing
+processes, the accompanying gap corollary makes the dependence requirement
+explicit through a sufficient $O(\log N)$ raw-time gap.
+
+A complementary finite-data JL theorem remains available for calibrating
+observed preprocessing geometry, but it is no longer conflated with predictive
+approximation.  The empirical program can therefore test the theory's intended
+resource roles separately: when additional width preserves useful input
+information, when the mixer and observable bank expose useful higher-order interactions,
+when spatial multiplexing and random search improve frozen representations,
+and when measurement or memory fidelity becomes the dominant cost.  The
+reported acquisition metric counts branch-circuit runs under reusable $n$-qubit
+hardware; per-run width and depth remain explicit separately through $n$ and
+$w$.

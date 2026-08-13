@@ -1,79 +1,105 @@
 \section{Related Work}
 \label{sec:related-work}
 
-\textsc{QuaRK} sits at the intersection of reservoir computing, quantum
-feature generation, kernel learning, and statistical learning from dependent
-data. The method does not replace the central ideas from these areas; rather,
-it combines them in a temporal architecture whose dynamical, statistical, and
-measurement assumptions can be tracked jointly.
+\paragraph{Reservoir computing and fading memory.}
+Echo-state networks and liquid-state machines established the use of fixed
+driven dynamics with trained readouts
+\citep{Jaeger2001,MaassNatschlagerMarkram2002}.  Fading memory formalizes the
+decreasing influence of the remote past \citep{BoydChua1985}; universal
+approximation and statistical risk bounds are available for several classical
+reservoir families \citep{GrigoryevaOrtega2018,GononGrigoryevaOrtega2020}.
+QuaRK adopts the same separation between frozen dynamics and learned readout,
+but makes the physical width, reservoir multiplicity, memory range, and
+measurement budget explicit.
 
-\paragraph{Reservoir computing, causal filters, and fading memory.}
-Echo-state networks and liquid-state machines established the principle of
-driving a fixed recurrent system and training only its readout
-\citep{Jaeger2001,MaassNatschlagerMarkram2002}. Fading memory formalizes
-continuity of a causal filter with respect to increasingly remote inputs
-\citep{BoydChua1985}, while universality and risk analyses study, respectively,
-the functions representable by reservoir families and the statistical
-behavior of learned readouts
-\citep{GrigoryevaOrtega2018,GononGrigoryevaOrtega2020}. In the present work,
-uniform contraction is used for the narrower purpose of proving loss of
-initialization dependence and uniqueness of the causal state for one
-reset-based architecture. We do not rely on a separate universality or formal
-fading-memory theorem.
+\paragraph{Quantum reservoirs and spatial multiplexing.}
+QRC replaces the recurrent state by a driven quantum system and extracts
+classical features from quantum observables \citep{FujiiNakajima2017,
+ChenNurdin2019,ChenNurdinYamamoto2020}.  Existing constructions use resets,
+dissipation, multiplexing, and gate-model dynamics
+\citep{NakajimaEtAl2019,MujalEtAl2023,MolteniDestriPrati2023,HuEtAl2024},
+while formal work studies fading-memory and universality properties of quantum
+reservoir filters \citep{MartinezPenaOrtega2023,MartinezPenaOrtega2025,
+MonzaniPrati2025}.  In particular, \citet{MartinezPenaOrtega2025} analyze
+\emph{contracted-encoded quantum channels}: an input-encoding channel followed
+by a strictly contractive channel, together with conditions under which the
+resulting reservoir filter remains genuinely input-dependent.  This design
+principle directly motivates the stable input-dependent channel used in QuaRK;
+our contribution lies in combining it with topology-aware frozen mixing,
+heterogeneous memory scales, grouped measurements, and resource-aware
+learning guarantees.  We use spatial multiplexing in the standard sense of
+parallel uncoupled reservoirs driven by the same input.  Its role here is
+representational: finitely many separating reservoir coordinates can coexist
+inside one feature map.  The learned readout remains a norm-controlled Mat\'ern
+RKHS rather than the polynomial class used only in the approximation argument,
+which also avoids importing the unfavorable qubit-dependent complexity of
+some polynomial-readout QRC bounds \citep{ChmielewskiEtAl2025}.
 
-\paragraph{Quantum reservoir computing.}
-Quantum reservoir computing realizes the driven state system with quantum
-dynamics \citep{FujiiNakajima2017}. Existing proposals have considered
-dissipative evolution, reset mechanisms, noisy processors, weak or repeated
-measurements, and spatial multiplexing
-\citep{ChenNurdin2019,ChenNurdinYamamoto2020,NakajimaEtAl2019,
-MolteniDestriPrati2023,MujalEtAl2023,HuEtAl2024}. Finite-dimensional quantum
-reservoir filters and the role of input dependence have also received formal
-treatment \citep{MartinezPenaOrtega2023}. \textsc{QuaRK} uses a replacement
-channel whose contraction coefficient is exact and tunable. Its multiple
-reservoir instances are modeled as separate state evolutions, so they may be
-executed in parallel or sequentially on reused hardware; this distinction is
-important for separating peak width from runtime and state-preparation cost.
+\paragraph{Expressivity, operator spreading, and observability.}
+Fourier analyses of parametrized quantum models show that data encoding fixes
+the accessible frequency set, while the remaining circuit determines which
+coefficient directions inside that set can actually be realized
+\citep{SchuldSwekeMeyer2021}.  Recent QRC analysis extends this viewpoint to
+temporal inputs and emphasizes that increasing reservoir size or dynamical
+complexity alone need not increase resolvable expressive capacity when the
+encoding is already the bottleneck \citep{SchuetteEtAl2026}.  Complementary
+finite-sampling work formalizes resolvable expressive capacity and eigentasks,
+including evidence that measured correlations can improve the functions
+resolved above sampling noise \citep{HuEtAl2023Eigentasks}.  Krylov-based QRC
+studies instead inspect the span generated by time-evolved measured operators;
+Krylov observability closely tracks information-processing capacity and makes
+the choice of measured observables part of the expressivity question
+\citep{CindrakLudgeJaurigue2025,CindrakJaurigueLudge2025}.
 
-\paragraph{Quantum features and kernel readouts.}
-Quantum feature methods encode classical data into quantum states or
-measurement statistics before applying a classical learner
-\citep{SchuldKilloran2019,HuangBroughtonEtAl2021}. Here the features are
-history-dependent: they are generated after a quantum reservoir has processed
-a temporal window. The downstream Mat\'ern kernel is an ordinary classical
-positive-definite kernel on these measured features. Kernel ridge regression
-provides a regularized nonlinear readout, while the normalized RKHS structure
-bounds predictions and allows feature perturbations to be propagated to the
-readout \citep{Genton2001,PorcuEtAl2024,HofmannScholkopfSmola2008}. Thus the
-quantum component lies in the temporal featurizer, not in a claim that the
-Mat\'ern kernel lacks a classical analogue.
+QuaRK uses these results as motivation rather than importing their capacity
+claims.  Our self-contained statement is narrower: product input injection
+cannot enlarge Pauli support, the identity mixer therefore leaves each raw
+observable coordinate confined to its seed qubits, whereas a generic
+edge-local mixer activates higher-support Pauli components whose spatial reach
+is controlled by graph distance.  This identifies operator spreading and
+observable locality as concrete finite-resource mechanisms without claiming
+that entanglement by itself improves risk or creates frequencies absent from
+the encoding.
 
-\paragraph{Projection and measurement.}
-The JL lemma preserves pairwise geometry on a finite set under a random linear
-map whose target dimension grows logarithmically with the set size
-\citep{DasguptaGupta2003,Woodruff2014}. We use it to relate the number of
-encoded coordinates to the finite collection of points being processed; the
-classical projection cost and the subsequent nonlinear dynamics remain part of
-the method. On the measurement side, classical shadows estimate many
-observables from shared randomized measurements \citep{HuangKuengPreskill2020}.
-For local random Pauli measurements, a Pauli string of weight at most \(k\) has
-squared shadow norm scaling as \(3^k\), which determines the locality dependence
-in our shot bound.
+\paragraph{Random preprocessing and kernel readouts.}
+Gaussian Johnson--Lindenstrauss embeddings preserve finite-set geometry at a
+target dimension logarithmic in the number of points
+\citep{DasguptaGupta2003,Woodruff2014}.  QuaRK uses this fact only for the raw
+inputs present in the observed windows; it does not interpret finite-data
+projection preservation as global injectivity.  The classical readout uses a
+normalized Mat\'ern kernel evaluated on an RMS feature metric, equivalently on
+features scaled by the inverse square root of their dimension.  This fixed,
+label-independent rescaling removes dimension-induced distance inflation while
+preserving the standard Mat\'ern function class at each finite dimension.
+Mat\'ern kernels are strictly positive definite
+and universal on compact Euclidean subsets under the standard spectral
+conditions \citep{Genton2001,SriperumbudurEtAl2011,PorcuEtAl2024}; here those
+properties provide bounded RKHS complexity and the final approximation step,
+not a claim of quantum advantage.
 
-\paragraph{Learning with dependent observations.}
-Independent-block methods compare a beta-mixing sequence with a collection of
-independent blocks and yield uniform learning bounds in terms of an effective
-block count \citep{Yu1994,MohriRostamizadeh2008,DedeckerEtAl2007}. We apply this
-machinery to strided temporal windows. The resulting confidence condition
-depends on the raw-time separation between blocks, and the stochastic terms
-scale with the number of approximately independent blocks rather than the raw
-number of windows.
+\paragraph{Learning under temporal dependence.}
+Independent-block coupling converts beta-mixing samples into nearby independent
+collections and underlies Rademacher bounds for non-i.i.d. data
+\citep{Yu1994,MohriRostamizadeh2008}.  Our sampling protocol fixes the
+auxiliary block length to one by constructing already-gapped windows, so the
+dependence term remains visible through $\beta_{\processZ}(g)$.  The resulting
+uniform deviation is taken simultaneously over the finite frozen pool and the
+Ivanov ball, allowing full-sample empirical-risk selection while charging the
+search adaptivity explicitly through $\log S$.
 
-The standard ingredients above become useful for \textsc{QuaRK} only after
-they are connected to the same temporal feature map. The technical
-contribution is therefore their architecture-specific integration: tuple-based
-multiplexing, finite-window error propagation through the Mat\'ern readout, a
-window-process mixing calculation that retains the effective block count, and
-separate accounting of exact-feature learning and finite-shot measurement. We
-now introduce the stochastic objects needed to state this connection
-precisely.
+\paragraph{Grouped quantum measurements.}
+Large observable families can be estimated by randomized schemes such as
+classical shadows \citep{HuangKuengPreskill2020}.  QuaRK instead declares a
+small topology-local Pauli bank in advance and exploits a deterministic cover.
+Overlapping tomography relates such schedules to covering arrays and provides
+constant-size constructions for nearest-neighbor two-body Pauli marginals
+\citep{HansenneEtAl2024}.  Aligning the measurement bank with the interaction
+graph makes the feature dimension and state-preparation cost directly
+interpretable.
+
+The contribution is therefore not any one of these ingredients in isolation.
+It is the resource-accounted combination of a frozen topology-aware QRC law,
+a finite-pool learning protocol, a dependent-data finite-pool ERM certificate,
+an explicit random-pool coverage term, and a width-resolved representation
+argument expressed in the same
+architecture/design/feature-map hierarchy.

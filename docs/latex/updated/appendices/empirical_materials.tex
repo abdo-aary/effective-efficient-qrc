@@ -1,0 +1,450 @@
+\section{Empirical Materials}
+\label{app:empirical-materials}
+
+This appendix fixes the experimental objects that are part of the empirical
+protocol but would interrupt the main narrative: structured resource grids, exact task
+formulas, maximal-cache reuse, paired randomization, baseline matching, and
+reported diagnostics.  No numerical result is inferred from this appendix;
+the final release will additionally contain the realized random seeds,
+measurement caches, fit outputs, and scripts producing every figure and table.
+The source project also carries a theorem-to-code implementation contract that
+freezes indexing, initialization, measurement, readout, selection, and paired
+comparison semantics before numerical results are generated.
+
+\subsection{Resource grids and fixed reference settings}
+\label{app:dyadic-grids}
+
+All one-dimensional resource sweeps use powers of two (with zero added only where it is a meaningful boundary value), except for qubit width.  Width is swept densely over the small hardware-relevant interval $3\leq n\leq12$ so that the empirical onset of projection-information loss is not hidden between widely spaced dyadic widths.  The planned grids are
+\begin{align*}
+\mathcal G_L
+    &=\{0,1,2,4,8,16,32,64\},\\
+\mathcal G_{\tau_+}
+    &=\{2,4,8,16,32,64\},\\
+\mathcal G_R
+    &=\{1,2,4,8,16,32,64\},\\
+\mathcal G_H
+    &=\{1,2,4,8\},\\
+\mathcal G_d
+    &=\{1,2,4,8,16,32,64\},\\
+\mathcal G_n
+    &=\{3,4,5,6,7,8,9,10,11,12\},\\
+\mathcal G_p
+    &=\{1,2,4,8,16,32\},\\
+\mathcal G_\iota
+    &=\{1,2,4,8,16\},\\
+\mathcal G_M
+    &=\{1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192\},\\
+\mathcal G_w
+    &=\{1,2,4,8,16,32,64,128,256,512\},\\
+\mathcal G_g
+    &=\{0,1,2,4,8,16,32,64\},\\
+\mathcal G_N
+    &=\{128,256,512,1024,2048,4096\},\\
+\mathcal G_S
+    &=\{1,2,4,8,16,32,64,128,256\},\\
+\mathcal G_{\tau_{\mathrm{dep}}}
+    &=\{1,2,4,8,16\}.
+\end{align*}
+The independent input process $\rho_{\mathrm{in}}=0$ is included separately
+from $\mathcal G_{\tau_{\mathrm{dep}}}$.  For a positive dependence half-life,
+$\rho_{\mathrm{in}}=2^{-1/\tau_{\mathrm{dep}}}$.  The memory endpoint is
+$\lambda_+=e^{-1/\tau_+}$, so every value in
+$\mathcal G_{\tau_+}$ lies strictly above the lower endpoint
+$\lambda_0=e^{-1}$.
+
+Unless a campaign varies the corresponding object, the reference settings are
+$\arch_{\mathrm{ref}}=(8,16,e^{-1/32})$, $N_0=1024$,
+$w_{\mathrm{ref}}=512$, $g_{\mathrm{ref}}=0$, causal-proxy burn-in $B=1024$,
+$S=1$, exact quantum features, and an i.i.d. input drive.  At the largest planned memory
+endpoint $\tau_+=64$, the worst-case branch-state discrepancy between this
+burned-in proxy and the infinite-past causal state is at most
+$2e^{-16}\approx2.25\times10^{-7}$; the corresponding risk residual is the
+quantity $\epsBurn(\arch,B)$ defined in
+\cref{eq:burnin-risk-residual}.  Frozen-pool selection uses the
+full-sample ERM rule in \Eqref{eq:frozen-pool-erm}.  Kernel smoothness, length
+scale, and the Ivanov radius
+are fixed once before the architecture sweeps and are not retuned separately
+for each feature dimension; every method uses the same predeclared RMS-distance
+rule $\norm{z-z'}_2/\sqrt p$ for its own feature dimension $p$.
+
+\subsection{The 36-task Legendre atlas}
+\label{app:task-atlas}
+
+Every atlas target is deterministic and bounded by one, so
+$Y_t=F^\star(X_{-\infty:t})$ and $\risk^\star=0$.  Coefficients are normalized
+by the sum of their absolute values as in
+\cref{eq:empirical-target-functional}.  The atlas contains six families.
+
+\paragraph{Memory-depth family: eight tasks.}
+For every $L\in\mathcal G_L$,
+\begin{equation}
+    F^{\mathrm{mem}}_L(\vx^-):=P_2(x_{-L,1}).
+    \label{eq:atlas-memory}
+\end{equation}
+Only the oldest relevant lag changes.
+
+\paragraph{Multiscale-mode family: four tasks.}
+For $H\in\mathcal G_H$, define
+\begin{equation}
+    F^{\mathrm{multi}}_H(\vx^-)
+       :=\frac1H\sum_{\ell\in\mathcal L_H}P_2(x_{-\ell,1}),
+    \label{eq:atlas-multiscale}
+\end{equation}
+with
+\[
+\mathcal L_1=\{8\},\qquad
+\mathcal L_2=\{1,64\},\qquad
+\mathcal L_4=\{1,4,16,64\},\qquad
+\mathcal L_8=\{0,1,2,4,8,16,32,64\}.
+\]
+Thus increasing $H$ increases the number of simultaneously required temporal
+modes while keeping degree two and one active coordinate per mode.
+
+\paragraph{Spatial-load family: seven tasks.}
+For $d\in\mathcal G_d$,
+\begin{equation}
+    F^{\mathrm{sp}}_d(\vx^-)
+      :=\frac1d\sum_{j=1}^dP_2(x_{0,j}).
+    \label{eq:atlas-spatial}
+\end{equation}
+Every ambient coordinate is label-relevant, so increasing $d$ cannot be made
+trivial by placing the target in one fixed low-dimensional subspace.
+
+\paragraph{Nonlinear-degree family: six tasks.}
+For $p\in\mathcal G_p$,
+\begin{equation}
+    F^{\mathrm{deg}}_p(\vx^-):=P_p(x_{-4,1}).
+    \label{eq:atlas-degree}
+\end{equation}
+The active lag and arity remain fixed while polynomial order changes.
+
+\paragraph{Interaction-arity family: five tasks.}
+Fix ambient dimension $d=16$ and lag four.  For
+$\iota\in\mathcal G_\iota$, define
+\begin{equation}
+    F^{\mathrm{int}}_\iota(\vx^-)
+       :=\prod_{j=1}^{\iota}
+         P_{16/\iota}(x_{-4,j}).
+    \label{eq:atlas-interaction}
+\end{equation}
+Because every $\iota$ divides $16$, all five targets have total polynomial
+degree sixteen.  The ambient dimension and memory lag are fixed; what changes
+is how that degree is distributed over distinct active coordinate factors.
+
+\paragraph{Composite family: six tasks.}
+The final cases combine difficulty axes rather than changing only one:
+\begin{align}
+F^{\mathrm{C1}}(\vx^-)
+   &:=P_8(x_{-64,1}),
+   &&\text{long-memory nonlinear},
+   \label{eq:atlas-c1}\\
+F^{\mathrm{C2}}(\vx^-)
+   &:=P_{16}(x_{-32,1}),
+   &&\text{long-memory high-order},
+   \label{eq:atlas-c2}\\
+F^{\mathrm{C3}}(\vx^-)
+   &:=\frac1{16}\sum_{j=1}^{16}P_4(x_{0,j}),
+   &&\text{current high-spatial nonlinear},
+   \label{eq:atlas-c3}\\
+F^{\mathrm{C4}}(\vx^-)
+   &:=\frac1{16}\sum_{j=1}^{16}P_2(x_{-32,j}),
+   &&\text{long-memory high-spatial},
+   \label{eq:atlas-c4}\\
+F^{\mathrm{C5}}(\vx^-)
+   &:=\frac18\sum_{q=1}^{8}P_2(x_{-\ell_q,q}),
+   \quad (\ell_q)_{q=1}^8=(0,1,2,4,8,16,32,64),
+   &&\text{multiscale spatial},
+   \label{eq:atlas-c5}\\
+F^{\mathrm{C6}}(\vx^-)
+   &:=\frac14\sum_{q=1}^{4}
+       P_2(x_{-\ell_q,2q-1})P_2(x_{-\ell_q,2q}),
+   \quad (\ell_q)_{q=1}^4=(1,4,16,64),
+   &&\text{multiscale interactions}.
+   \label{eq:atlas-c6}
+\end{align}
+Together the six families contain
+$8+4+7+6+5+6=36$ targets.  The one-axis families identify mechanisms; the
+composites test whether the same resource ordering survives when several
+sources of difficulty coexist.
+
+\subsection{Mixer-mechanism controls}
+\label{app:mixer-controls}
+
+The mixer ablation in Campaign~I is deliberately narrower than a generic
+circuit search.  For every paired random seed we evaluate exactly three
+versions of the same branch: the identity mixer $W_n=I$, the sampled
+single-qubit layer only $W_n=V$, and the full cycle mixer
+$W_n=E_{\tau(J_n)}\cdots E_{\tau(1)}V$.  The latter two reuse the same sampled
+single-qubit axes and angles; the full mixer adds the sampled edge gates.  No
+variant receives a separately tuned readout or memory-rate budget.
+
+Each mixer is evaluated with both the vertex-only bank $\mathcal O_V(n)$ and
+the complete bank $\mathcal O_n$.  We use the fixed mechanism architecture
+$n=8$, $R=8$, and $\tau_+=8$; no claim depends on this being an optimal
+architecture.  For each paired repetition, first draw and freeze the shared
+$\projection_n$, write
+$\alpha_j(x)=\vartheta((\projection_nx)_j)$, and then generate the three
+bounded current-time targets
+\begin{align}
+    F_{1}^{\mathrm{mix}}(\vx^-)
+      &:=\cos\alpha_1(x_0),
+      \label{eq:app-mixer-task1}\\
+    F_{2}^{\mathrm{mix}}(\vx^-)
+      &:=\sin\alpha_1(x_0)\sin\alpha_2(x_0),
+      \label{eq:app-mixer-task2}\\
+    F_{3}^{\mathrm{mix}}(\vx^-)
+      &:=\cos\alpha_1(x_0)\sin\alpha_2(x_0)\sin\alpha_3(x_0).
+      \label{eq:app-mixer-task3}
+\end{align}
+All six mixer/bank variants share that preprocessor and label sequence.  The
+first target is a one-site control; the second is directly compatible with an
+identity edge observable and with the mixed vertex term in
+\cref{cor:mixer-direct-interactions}; the third matches the mixed edge-seed
+three-stream term.  Defining these targets after the independent preprocessor
+draw is intentional: they test the theorem in its natural projected
+coordinates without letting Gaussian preprocessing itself confound the
+interaction-order ablation.  They are therefore reported only as mechanism
+diagnostics and are kept separate from the preprocessor-independent 36-task
+atlas.
+
+To test whether the same mechanism matters beyond targets tailored to the
+encoding coordinates, we repeat the identical six mixer/bank variants on the
+three fixed atlas tasks
+\[
+    F^{\mathrm{mem}}_8,\qquad
+    F^{\mathrm{int}}_{16},\qquad
+    F^{\mathrm{C6}}.
+\]
+These labels are generated independently of the Gaussian preprocessor.  The
+first is a low-interaction negative control, while the latter two require
+higher-order spatial or spatiotemporal interactions.  No mixer-specific
+hyperparameter is changed between the theorem-aligned and atlas-aligned
+slices.
+
+The complete and vertex-only observable banks also receive one finite-shot
+cost-matched comparison using the full cycle mixer on $F^{\mathrm{C6}}$.  A
+dyadic value $M_{\mathrm E}^{\mathrm{cmp}}$ is
+frozen in the pre-run manifest.  The complete bank uses all nine global Pauli
+settings at $M_{\mathrm E}^{\mathrm{cmp}}$ repetitions per setting.  The
+vertex-only bank requires only the three all-$X$, all-$Y$, and all-$Z$ settings
+and uses $M_{\mathrm V}^{\mathrm{cmp}}=3M_{\mathrm E}^{\mathrm{cmp}}$
+repetitions per setting.  Thus both variants consume exactly
+$9M_{\mathrm E}^{\mathrm{cmp}}$ branch-circuit runs per input window.  Training
+and held-out measurement caches remain independent exactly as in Campaign~II.
+
+For exact circuit diagnostics, expand
+$W_n^\dagger O W_n=\sum_P c_{O,P}P$ in the normalized Pauli basis and report
+\begin{equation}
+    \spreadScore(W_n;\mathcal O)
+      :=\frac{1}{|\mathcal O|}
+        \sum_{O\in\mathcal O}
+        \sum_{\operatorname{supp}(P)\not\subseteq\operatorname{supp}(O)}
+          |c_{O,P}|^2.
+    \label{eq:app-pauli-spread-score}
+\end{equation}
+The score is identically zero for $W_n=I$ and for the local-only $V$ layer,
+whereas the graph-local spreading result predicts positive mass outside the
+seed support for the relevant full-mixer observables almost surely.  We also record the stable rank of the column-centered exact feature
+matrix on a common input sample, using exactly
+$r_{\mathrm{stab}}(F_c)=\norm{F_c}_{\mathrm F}^2/\norm{F_c}_2^2$ with
+$r_{\mathrm{stab}}(0)=0$, as defined in \Eqref{eq:stable-feature-rank}.  These diagnostics test the proposed
+mechanism---operator spreading and observable enrichment---without treating
+performance alone as proof that entanglement is useful.
+
+\subsection{Maximal-cache construction and paired randomness}
+\label{app:maximal-cache}
+
+The large grids are made economical by coupling conditions without changing
+any required marginal distribution.  The maximal caches are campaign-local:
+$R_{\max}$ for the architecture study, $M_{\max}$ for the $S=1$ measurement
+study, and $(S_{\max},R_{\mathrm{search},\max})$ for the exact-feature search
+study.  They are never multiplied into one unnecessary maximal Cartesian
+cache.
+
+\paragraph{Reservoir prefixes.}
+For every Campaign~I design, draw $R_{\max}=64$ independent branch seeds
+$(U_r,\omega_r)$ with $U_r\sim\operatorname{Unif}(0,1)$.  At memory endpoint
+$\lambda_+$ set
+\begin{equation}
+    \lambda_r(\lambda_+)
+      :=\lambda_0
+        \left(\frac{\lambda_+}{\lambda_0}\right)^{U_r}.
+    \label{eq:coupled-lambda-draw}
+\end{equation}
+For each fixed $\lambda_+$ this has exactly the density in
+\cref{eq:log-uniform-memory-law}, while reuse of the same $U_r$ gives a paired
+comparison across memory endpoints.  The architecture with $R$ branches uses
+only the first $R$ pairs.  Consequently all values in $\mathcal G_R$ are
+available from one $R_{\max}$ draw.
+
+\paragraph{Frozen-pool prefixes.}
+Generate $S_{\max}=256$ candidate designs once for Campaign~III, each with
+$R_{\mathrm{search},\max}=32$ exact-feature branches.  The setting with pool
+size $S$ and branch count $R$ uses candidates $1{:}S$ and branches $1{:}R$,
+then applies the identical full-sample ERM selection rule.  Oracle-best curves are computed
+on the same prefixes.  This preserves the order-statistic nesting of random
+search, yields every
+$S\in\{1,2,4,8,16,32,64,128,256\}$ and
+$R\in\{1,2,4,8,16,32\}$ from one maximal exact-feature pool, and removes
+irrelevant between-pool Monte Carlo noise.
+
+The compact selection-pressure slice uses the same $S_{\max}=256$ candidate
+ordering at fixed $(n,R,\tau_+)=(8,16,32)$, with
+$N\in\{256,1024,4096\}$ and $S\in\{1,16,64,256\}$.  Within a paired repetition,
+the $N=256$ and $N=1024$ training sets are prefixes of the $N=4096$ gapped
+training realization, so increasing $N$ changes only the amount of observed
+data.  Held-out evaluation uses one common independent test realization across
+all $(N,S)$ cells.  The slice is run only on
+$F^{\mathrm{multi}}_8$ and $F^{\mathrm{C6}}$ and uses exact features, so it
+isolates finite-pool selection from measurement noise.
+
+\paragraph{Measurement prefixes.}
+For Campaign~II, where $S=1$, generate $M_{\max}=8192$ independent outcomes
+for every input window, tested branch, and one of the nine global Pauli
+settings.  The feature estimate at repetition count $M$ uses outcomes $1{:}M$.
+Since a single global outcome supplies all compatible Pauli coordinates, this
+cache preserves the within-shot correlations of the grouped measurement
+scheme.  The total acquisition required to support an entire $M$ sweep at a
+fixed tested architecture is therefore the maximal cache once, not
+$\sum_{M\in\mathcal G_M}9NMR$ separate acquisitions.  The representative
+finite-shot pool-ranking check in Campaign~III is generated separately only up
+to $S=64$ at its chosen dyadic $M$; it does not instantiate the full
+$S_{\max}M_{\max}$ product.
+
+\paragraph{Coupled Gaussian preprocessors.}
+For a task of ambient dimension $d$, draw one matrix
+$G\in\sR^{n_{\max}\times d}$ with $n_{\max}=12$ and i.i.d. standard-normal
+entries.  For $n\in\mathcal G_n$, set
+\begin{equation}
+    \projection_n:=\frac1{\sqrt n}G_{1:n,:}.
+    \label{eq:coupled-preprocessor}
+\end{equation}
+Each $\projection_n$ has the exact marginal law in \cref{eq:gaussian-projection},
+while widths share as much preprocessing randomness as possible.  The random
+mixing circuit itself is still sampled from the correct width-specific law
+$\mathbb P_n^\omega$; width comparisons are paired by task, temporal sample,
+preprocessor seed, and random-seed stream rather than interpreted as nested
+quantum circuits.
+
+\paragraph{Finite-window causal-proxy construction.}
+For the window-fidelity experiment, the same temporal trajectory is propagated
+through each branch after a burn-in $B=1024$.  The resulting state is a
+\emph{certified causal proxy}, not an exact infinite-past state.  Contraction
+bounds its branchwise trace-distance residual by $2\lambda_+^B$, and the same
+feature/readout argument as in the finite-window theorem bounds the associated
+risk discrepancy by $\epsBurn(\arch,B)$.  At the largest planned
+$\tau_+=64$ this branch-state residual is $2e^{-16}\approx2.25\times10^{-7}$.
+The finite-$w$ state is obtained by resetting to $\rho_+$ exactly $w$ steps
+before the same label time and replaying the identical suffix.  Every reported
+window gap is accompanied by $\epsBurn(\arch,B)$ so numerical burn-in error
+cannot be mistaken for finite-window error.
+
+\subsection{Homogeneous-memory control}
+\label{app:homogeneous-control}
+
+The heterogeneous-memory comparison must preserve branch count and frozen
+mixing diversity.  For a given $R$, retain the same $\omega_1,\ldots,\omega_R$
+but replace the independently drawn rates by one common rate.  The primary
+control uses the geometric center of the log-rate interval,
+\begin{equation}
+    \lambda_{\mathrm{hom}}
+      :=\sqrt{\lambda_0\lambda_+},
+    \label{eq:homogeneous-rate}
+\end{equation}
+so no extra tuning budget is introduced.  On the representative multiscale
+slices used for the architectural claim, we additionally evaluate
+$\tau_{\mathrm{hom}}\in\mathcal G_{\tau_+}$ and choose the common rate by the same full-sample empirical-risk rule.  A heterogeneous multiplex must therefore be
+competitive not only with one fixed common memory scale but also with a
+full-sample-ERM-selected homogeneous alternative.
+
+\subsection{Baselines and matched resources}
+\label{app:empirical-baselines}
+
+\paragraph{Projection-only Mat\'ern control.}
+This control is used only in the width-versus-spatial-load study.  For the same
+shared Gaussian matrix used by QuaRK at width $n$, it receives
+\[
+    (\projection_n x_{-w_{\mathrm{ref}}+1},\ldots,\projection_n x_0)
+    \in\sR^{nw_{\mathrm{ref}}},
+\]
+flattens the projected window in time order, and fits the same fixed
+RMS-normalized Mat\'ern/Ivanov readout.  It has no reservoir dynamics, mixer,
+or observable bank.  Its purpose is not to compete as a third general
+baseline, but to expose empirically how much predictive information survives
+$\projection_n$ before the quantum representation acts.  It therefore uses the
+same projection realization, temporal sample, kernel parameters, Ivanov radius,
+and held-out windows as the corresponding QuaRK width condition.
+
+\paragraph{Direct finite-window Mat\'ern.}
+The raw baseline receives the same observed history $x_{-w_{\mathrm{ref}}+1:0}$,
+flattened in time and coordinate order, and uses the same normalized Mat\'ern
+kernel family, the same RMS-distance rule $\norm{z-z'}_2/\sqrt p$ for its own
+feature dimension $p$, and the same fixed Ivanov policy.  It tests whether the
+controlled target requires a reservoir representation at all.
+
+\paragraph{Classical multiscale reservoir.}
+The classical reservoir consists of $R$ independent frozen leaky branches
+driven by the same input and concatenated before the same Mat\'ern readout.
+Its forgetting parameters are matched branchwise to the QuaRK $\lambda_r$
+values, and its total exposed state dimension is matched to
+$m_{\arch}=12Rn$ up to integer allocation across branches.  Input and recurrent
+weights are frozen random draws; no internal parameter is trained.  The
+same RMS-distance rule is applied to its concatenated feature vector, so
+changing exposed dimension does not trigger a separate kernel retuning.  The
+comparison therefore preserves the two structural ingredients most relevant to
+the QuaRK claim---parallel frozen dynamics and heterogeneous memory---while
+changing the quantum feature generator.
+
+Neither baseline is intended to establish a quantum-advantage theorem.  The
+raw kernel can reveal that a reservoir is unnecessary, and the classical
+multiscale reservoir can reveal that any observed gain follows from generic
+multiscale reservoir structure rather than specifically quantum features.
+
+\subsection{Diagnostics and paired reporting}
+\label{app:empirical-diagnostics}
+
+Every resource curve uses paired temporal samples and paired design seeds
+where the construction above permits it.  Except for the training-risk side of
+$\widehat\Delta_{\mathrm{gen}}$, all reported predictive risks are evaluated on
+held-out windows; paired quantities use the same held-out windows and labels,
+and any measured evaluation uses measurement randomness independent of the
+training cache.  The final numerical study should use
+at least sixteen paired repetitions for architecture and fidelity curves and
+thirty-two for the $S$-selection curves, where order-statistic variability is
+larger.  A long independent test realization is used for all population-risk
+approximations.
+
+The primary metric is \cref{eq:nemse}.  Campaign~I's width study reports the
+raw-history Mat\'ern baseline, projection-only Mat\'ern control, and QuaRK on
+the same paired width conditions.  Its mixer mechanism slice additionally
+reports $\spreadScore$ from \cref{eq:app-pauli-spread-score} and exact-feature
+stable rank for the identity, local-only, and full-cycle mixers under
+vertex-only and complete observable banks.  The same mixer/bank comparison is
+reported separately on the three preprocessor-independent atlas controls, and
+the finite-shot vertex/full-bank check is compared at identical branch-circuit
+run count.  Campaign~II reports
+$\widehat\Delta_{\mathrm{shot}}$,
+$\widehat\Delta_{\mathrm{win}}$, and
+$\widehat\Delta_{\mathrm{gen}}$, always evaluating the same fitted readout on
+the two feature/risk objects being compared.  Campaign~III reports ERM-selected NEMSE, oracle-best-in-prefix NEMSE,
+selection regret, and $C_Q=9NMSR$.  Its compact $N\times S$ slice reports the
+same oracle and regret quantities as a surface or grouped curves, so the effect
+of additional data on ERM over-selection is visible directly.  The observed
+regret is the empirical check on the finite-sample selection price that is
+controlled theoretically by the uniform $\log S$ term; the certificate terms
+are not tabulated merely because they exist.
+
+Finally, because the feature dimension $12Rn$ changes with architecture, the
+release records the empirical distribution of pairwise Mat\'ern similarities
+computed with the predeclared RMS metric at each $(n,R)$ setting.  This is a
+sanity diagnostic for residual kernel saturation, not another tuned
+hyperparameter.  The kernel specification is not changed after inspecting the
+diagnostic: any residual collapse toward uniformly zero or uniformly one
+similarity is reported as a limitation of that fixed readout specification,
+not repaired by architecture-specific length-scale tuning.
+
+The final empirical release will contain the exact generator implementation,
+all task identifiers from \cref{app:task-atlas,app:mixer-controls}, temporal and quantum random
+seeds, maximal branch/pool/measurement caches, baseline implementations,
+resource configurations, train/test indices, and the scripts that map
+those objects to every reported figure and table.

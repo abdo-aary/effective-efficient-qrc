@@ -1,321 +1,653 @@
 \section{Empirical Evaluation}
 \label{sec:experiments}
+The empirical study asks a deliberately small number of scientific questions
+with broad, structured sweeps.  Minimality here refers to the number of
+experimental campaigns, not to sparse resource grids.  We use three campaigns:
+(i) a representational phase diagram for the architecture
+$\arch=(n,R,\lambda_+)$ together with a broad controlled task atlas;
+(ii) a fidelity study that isolates the dependent-sample, finite-shot, and
+finite-window terms entering \cref{thm:resource-performance}; and
+(iii) a frozen-pool study that measures both the representation opportunity and
+the ERM selection price created by additional search budget $S$.  All resource sweeps use dyadic grids except for qubit width: because $n$ is a small discrete hardware resource and the width study is intended to resolve the onset of projection-information loss finely, we use the dense interval $n\in\{3,4,\ldots,12\}$.  Whenever a resource admits nested
+reuse, the largest realization is generated once and smaller settings are
+obtained by prefixes, so a sweep is not implemented as a sum of independent
+runs.
 
-The empirical study is a predeclared behavioral characterization of
-\textsc{QuaRK}.  It is not designed to find one favorable benchmark or to
-support a quantum-advantage claim.  Instead, it asks when the method succeeds,
-when it fails, and how its behavior changes with the target functional, the
-dependence mechanism, the ambient dimension, the reservoir resources, and the
-measurement implementation.  Experiments E1--E6 use controlled stochastic
-processes; E7 deliberately moves outside the assumptions of the learning
-theory; E8 is a limited external sanity check; and E9 is a compact IBM
-hardware-feasibility study.  The exact run matrices, seed policy, readout grid,
-metrics, artifact identifiers, and failure rules are fixed in
-\cref{app:implementation-ready-protocol}.  The data generators and targets are
-defined in \cref{app:dependent-families,app:functionals}, with the out-of-scope
-and external protocols in
-\cref{app:chaotic-stress,app:real-world-sanity,app:hardware-validation}.
+The main benchmark remains entirely within the formal setting of the theory.
+In particular, the labels are noiseless deterministic functionals of the input
+history, hence $\risk^\star=0$.  Observation noise and out-of-scope chaotic stress tests are therefore not used in the core empirical program: they would
+introduce robustness questions without identifying the role of a declared
+QuaRK resource.
 
-\subsection{Empirical questions}
-\label{sec:empirical-questions}
+\subsection{Controlled dependent task family}
+\label{sec:experiments-dependent-family}
 
-\paragraph{Q1: Which temporal computations are recoverable from the final
-reservoir features?}
-E1 moves from genuine one-step prediction to distributed linear memory,
-second-order memory, delayed recall, and a sparse cross-lag interaction.  The
-regularization path and nested-sample curves diagnose interpolation,
-conditioning, and finite-sample behavior without fitting a prespecified
-asymptotic rate.
-
-\paragraph{Q2: How do process persistence, task memory, and reservoir
-contraction interact?}
-E2 varies the process persistence and the target delay separately from the
-reset rate.  It tests whether a longer-memory operating point is useful when
-history is informative and whether excessive persistence can become harmful.
-It then checks whether the resulting strengths and failures transfer from
-VARMA to latent-regime and volatility-clustering processes.
-
-\paragraph{Q3: What remains when the ambient dimension grows but encoded width
-is fixed?}
-E3 distinguishes sparse signal plus nuisance coordinates from signal spread
-across all coordinates.  It reports prediction, empirical JL distortion,
-projection cost, and width sensitivity.  This can support a fixed-encoded-width
-claim for the evaluated construction, but not end-to-end cost independence
-from the original dimension.
-
-\paragraph{Q4: How does \textsc{QuaRK} compare with classical representations
-under transparent matching rules?}
-E4 consolidates, rather than reruns, selected scenarios from E1--E3.  The
-principal controls are an echo-state representation, a matched-dimensional
-random nonlinear map, and a classical JL representation, all followed by the
-same finite Mat\'ern readout grid.  Raw-window ridge is retained as a low-cost
-reference; raw-window Mat\'ern KRR is shown only when a predeclared resource
-guardrail is satisfied.
-
-\paragraph{Q5: Which resource choices yield useful operating points?}
-E5 performs one-factor sweeps over encoded width, reservoir count, observable
-locality, and contraction.  Error is reported jointly with feature dimension,
-logical width, runtime, and memory so that non-monotonic behavior and Pareto
-frontiers remain visible.
-
-\paragraph{Q6: How do finite shadows and stochastic channel trajectories affect
-prediction?}
-E6 separates exact expectations, local-Pauli shadow sampling, reset-trajectory
-sampling, frozen-readout transfer, and noisy-feature training.  Only the
-frozen-readout comparison is interpreted through
-\cref{cor:measurement-stability}.
-
-\paragraph{Q7: Does the architecture remain empirically useful outside the
-theorem's stochastic assumptions?}
-E7 uses Lorenz--63 and Mackey--Glass as chronological forecasting stress tests.
-No stationarity or beta-mixing conclusion is inferred from them.
-
-\paragraph{Q8: Do the controlled findings survive a limited external check?}
-E8 evaluates three retained time-series regression datasets with different
-window lengths and channel counts.  The study is a transfer sanity check, not a
-broad real-world benchmark.
-
-\paragraph{Q9: Can a frozen exact-feature readout retain useful predictions
-when its inputs are replaced by IBM-QPU CSMoM features?}
-E9 decomposes the hardware gap through an explicit comparison ladder: Aer exact
-expectations, Aer shadow sampling from the exact channel, local stochastic-
-trajectory CSMoM, and IBM Runtime CSMoM.  It can establish compact operating-
-point feasibility and quantify perturbation, but not general hardware-noise
-robustness, scalability, or quantum advantage.
-
-\subsection{Common protocol}
-\label{sec:empirical-protocol}
-
-\paragraph{Outer and inner splits.}
-Unless stated otherwise, theory-aligned synthetic experiments use five
-predeclared structural replicates, window length \(w=25\), stride \(s=100\),
-\(5000\) chronological outer-training windows, and \(1000\) chronological test
-windows.  The final \(1000\) outer-training windows form the validation block;
-the first \(4000\) form the inner-training block.  After selection, the chosen
-readout is refitted on all \(5000\) outer-training windows and the test set is
-evaluated once.  Preprocessing is fitted on the relevant inner-training or
-outer-training features only.  Forecasting targets may use future observations,
-but the model input ends at the declared prediction origin.
-
-\paragraph{Reference QuaRK configuration.}
-The reference simulation uses exact NVIDIA features with
-\[
- n=5,\qquad R=3,\qquad k=2,\qquad \lambda_r=0.5\ \text{for all }r,
-\]
-a ring topology, the \(\tanh\) angle map, complex128 arithmetic, and all
-nonidentity Pauli strings of weight at most two.  Its feature dimension is
-\(p=315\).  The reference values are fixed protocol choices rather than
-claimed optima; E2 and E5 vary the relevant factors explicitly.
-
-\paragraph{Readout selection.}
-Features are standardized using the inner-training portion.  For every
-representation and task, the finite Mat\'ern KRR candidate set is
-\[
- \nu\in\{1.5,2.5,5.0\},\quad
- \xi\in\{0.25,0.5,1,2,4,8\},\quad
- \lambda_{\mathrm K}\in\{10^{-6},10^{-4},10^{-2},1,10^2\},
-\]
-for \(L=90\) candidates.  Validation MSE selects one candidate; ties within
-\(10^{-12}\) are resolved lexicographically by
-\((\nu,\xi,\lambda_{\mathrm K})\).  The corresponding objective parameter is
-\(\eta=\lambda_{\mathrm K}/N_{\mathrm{tr}}\).  Continuous optimization is not
-used in the main comparisons.
-
-\paragraph{Randomness and pairing.}
-Each structural replicate is generated from one root seed.  Named child streams
-separately control data generation, split construction, JL projection,
-reservoir parameters, observable selection, reset trajectories, shadow bases,
-measurement outcomes, classical baselines, model selection, and repetitions.
-The same data, split, and task realizations are paired across methods.  The
-complete seed bundle is stored with every artifact.
-
-\paragraph{Primary metrics and uncertainty.}
-For predictions \(\widehat y_i\) and targets \(y_i\), we report
-\[
- \mathrm{MSE}=\frac1m\sum_{i=1}^m(\widehat y_i-y_i)^2,
- \qquad
- \mathrm{NRMSE}_{\mathrm{tr}}
- =\frac{\sqrt{\mathrm{MSE}}}{\widehat\sigma_{Y,\mathrm{outer\mbox{-}train}}}.
-\]
-Seed-level values are primary.  Tables report mean and standard deviation;
-figures show paired structural replicates and a 95\% percentile bootstrap
-interval over those replicates.  With only five structural replicates, these
-intervals are descriptive and are not used as dichotomous significance tests.
-No test observation is used for selection.
-
-\paragraph{Provenance and failures.}
-Each run writes a versioned immutable artifact containing the resolved
-configuration, complete seed hierarchy, data and split checksums, program
-fingerprint, structured \((N,R,K)\) features, selected candidate, predictions,
-metrics, timings, memory measurements, and execution status.  Failed and
-incomplete runs are retained in the audit ledger.  A run is excluded from an
-aggregate only for a predeclared integrity failure, unsupported capability,
-missing target, or unrecoverable backend failure; numerical underperformance is
-never an exclusion reason.
-
-\begin{table}[t]
-\centering
-\small
-\caption{Staged empirical design.  Each stage isolates a distinct question;
-the full Cartesian product of generators, tasks, resources, and estimators is
-not run.}
-\label{tab:empirical-stages}
-\begin{tabularx}{\linewidth}{@{}lXX@{}}
-\toprule
-Stage & Retained setting & Primary evidence \\
-\midrule
-E1 & Reference VARMA; functional hierarchy & Capacity, conditioning, learning curves, memory diagnostics \\
-E2 & VARMA memory grid; VARMA/HMM/GARCH transfer & Persistence--contraction interaction and cross-family robustness \\
-E3 & Latent VARMA embedded to \(d\leq500\) & Fixed encoded width, JL distortion, sparse/distributed failure modes \\
-E4 & Seven scenarios reused from E1--E3 & Classical representation calibration under explicit matching rules \\
-E5 & Eleven one-factor QuaRK configurations & Error--resource Pareto structure \\
-E6 & Exact, shadow, and trajectory estimators & Feature and prediction degradation under finite sampling \\
-E7 & Lorenz--63 and Mackey--Glass & Out-of-scope chaotic forecasting stress tests \\
-E8 & Beijing PM2.5, live fuel moisture, hydraulic systems & Limited external transfer sanity check \\
-E9 & Two-qubit IBM CSMoM experiment & Compact hardware transfer and perturbation decomposition \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\subsection{Experiment E1: Functional hierarchy and learning behavior}
-\label{sec:exp-functional-hierarchy}
-
-E1 uses the medium-persistence \(d=3\) VARMA family and the reference exact
-featurizer.  A fixed \((\nu,\xi)=(2.5,1)\) regularization path over
-\(\lambda_{\mathrm K}\in\{10^{-8},10^{-7},\ldots,10^2\}\) records training,
-validation, and test MSE, RKHS norm, and the condition numbers of \(K\) and
-\(K+\lambda_{\mathrm K}I\) for future projection, exponential memory, and
-Volterra memory.  A nested-prefix study uses
-\(N_{\mathrm{tr}}\in\{250,500,1000,2000,5000\}\), with the last 20\% of each
-prefix used for selection and the same fixed test block.  Delayed recall at
-\(\tau\in\{1,5,10,20\}\) and the cross-lag target at
-\((\tau_1,\tau_2)=(0,15)\) complete the functional profile.
-
-\subsection{Experiment E2: Memory, persistence, and cross-family robustness}
-\label{sec:exp-memory-dependence}
-
-E2a uses low- and high-persistence VARMA realizations, delayed recall at
-\(\tau\in\{1,10,20\}\), and
-\(\lambda\in\{0.1,0.3,0.5,0.8,0.95\}\), while all other reference factors are
-fixed.  Its primary outcome is the validation-selected contraction and the
-paired test NRMSE surface.  E2b fixes the reference QuaRK configuration and
-uses low-, medium-, and high-persistence VARMA, HMM, and GARCH processes.  The
-shared targets are exponential and Volterra memory; family-specific targets
-are true future projection, filtered-regime score, and next conditional
-volatility.  QuaRK, ESN--Mat\'ern, and matched-random-feature--Mat\'ern runs from
-this stage are reused by E4 rather than recomputed.
-
-\subsection{Experiment E3: Ambient dimension and JL width control}
-\label{sec:exp-high-dimensional}
-
-E3 embeds one medium-persistence three-dimensional VARMA process into
-\(d\in\{3,30,100,300,500\}\).  In the sparse construction the first three
-coordinates contain the predictive process and the rest are bounded nuisance;
-in the distributed construction the same latent signal is spread through a
-fixed dense embedding before nuisance is added.  The main curve fixes \(n=5\);
-additional width checks use \(n\in\{3,8\}\) at \(d\in\{100,500\}\).  The
-exponential and Volterra teachers remain functions of the latent signal.
-Prediction is accompanied by projection time, feature time, peak memory, and
+\paragraph{Correlated uniform inputs.}
+Fix $d\geq1$ and $\rho_{\mathrm{in}}\in[0,1)$.  Let
+$(E_t)_{t\in\sZ}$ be i.i.d. $\gN(0,I_d)$ and define the stationary Gaussian
+AR(1) process
 \begin{equation}
- \widehat\Delta_{0.95}
- =\operatorname{quantile}_{0.95}
- \left\{
- \left|\frac{\norm{\Pi x-\Pi x'}_2^2}{\norm{x-x'}_2^2}-1\right|:
- (x,x')\in\mathcal Q
- \right\},
- \label{eq:empirical-jl-distortion}
+    G_t=\rho_{\mathrm{in}}G_{t-1}
+      +\sqrt{1-\rho_{\mathrm{in}}^2}\,E_t.
+    \label{eq:empirical-gaussian-ar}
 \end{equation}
-where \(\mathcal Q\) contains 10,000 predeclared nonidentical training-point
-pairs.  The comparison includes QuaRK, classical JL--Mat\'ern, matched random
-features, and raw ridge; raw Mat\'ern is restricted to \(d\leq30\).
+Then $G_t\sim\gN(0,I_d)$ and
+$\operatorname{Cov}(G_t,G_{t+q})=\rho_{\mathrm{in}}^qI_d$.  If
+$F_{\mathrm G}$ is the standard-normal CDF, set componentwise
+\begin{equation}
+    X_{t,j}:=2F_{\mathrm G}(G_{t,j})-1,
+    \qquad j=1,\ldots,d.
+    \label{eq:empirical-uniform-transform}
+\end{equation}
+Thus $X_t\in(-1,1)^d\subset\gX:=[-1,1]^d$ with uniform one-time marginals.
+Changing $\rho_{\mathrm{in}}$ changes temporal dependence without changing
+that marginal law; $\rho_{\mathrm{in}}=0$ recovers the i.i.d. drive.  The
+componentwise transform is bijective, so it preserves the generated
+sigma-algebras.  Stable Gaussian ARMA processes are geometrically beta mixing
+\citep{Mokkadem1988}; hence so is $(X_t)$ for every
+$\rho_{\mathrm{in}}<1$.
 
-\subsection{Experiment E4: Consolidated classical calibration}
-\label{sec:exp-matched-controls}
+For the dependence experiment it is more interpretable to parameterize
+$\rho_{\mathrm{in}}$ by its correlation half-life
+\begin{equation}
+    \tau_{\mathrm{dep}}
+    :=\frac{\log(1/2)}{\log \rho_{\mathrm{in}}},
+    \qquad
+    \rho_{\mathrm{in}}=2^{-1/\tau_{\mathrm{dep}}},
+    \label{eq:dependence-half-life}
+\end{equation}
+for $\rho_{\mathrm{in}}>0$, with $\rho_{\mathrm{in}}=0$ treated separately as
+the independent reference.  The dyadic grid
+$\tau_{\mathrm{dep}}\in\{1,2,4,8,16\}$ therefore covers progressively more
+persistent dependence without abandoning a dyadic experimental design.
 
-E4 introduces no new feature extraction.  It aggregates seven predeclared
-scenarios: the three E1 reference tasks, medium-HMM regime filtering,
-medium-GARCH volatility prediction, and the \(d=500\) sparse and distributed
-Volterra settings.  It reports QuaRK, ESN--Mat\'ern, matched random
-features--Mat\'ern, classical JL--Mat\'ern where applicable, and raw ridge.
-Feature dimension, readout family, candidate count, runtime, and memory are
-reported separately; no single ``matched budget'' label is used.
-
-\subsection{Experiment E5: Resource and memory trade-offs}
-\label{sec:exp-resource-tradeoffs}
-
-E5 uses medium-persistence VARMA with the Volterra and \(\tau=20\) recall
-targets.  One-factor exact-feature sweeps around the reference configuration use
+\paragraph{Legendre spatiotemporal targets.}
+Let $P_k$ be the ordinary Legendre polynomial of degree $k$, with
+$P_0\equiv1$ and $|P_k(u)|\leq1$ on $[-1,1]$.  Fix a maximum task lag
+$L\geq0$.  For a nonzero multi-index
+$A=(a_{\ell j})\in\mathbb N_0^{(L+1)\times d}$, define
+\begin{equation}
+    \Psi_A(x_{-L:0})
+    :=\prod_{\ell=0}^{L}\prod_{j=1}^{d}
+      P_{a_{\ell j}}(x_{-\ell,j}).
+    \label{eq:empirical-legendre-mode}
+\end{equation}
+We summarize the mode by its total degree, oldest active lag, and interaction
+arity,
 \[
- n\in\{3,5,8\},\qquad R\in\{1,3,5\},\qquad k\in\{1,2,3\},\qquad
- \lambda\in\{0.1,0.3,0.5,0.8,0.95\}.
+    p(A):=\sum_{\ell,j}a_{\ell j},
+    \qquad
+    \ell(A):=\max\{\ell:\exists j,\ a_{\ell j}>0\},
+    \qquad
+    \iota(A):=|\{(\ell,j):a_{\ell j}>0\}|.
 \]
-After deduplicating the shared reference point, this gives eleven
-configurations per task and replicate.  The report includes NRMSE, feature
-dimension, encoded width, exact-feature runtime, peak GPU memory, and the
-analytical channel-update count \(NRw\).  Pareto membership is computed with
-respect to test NRMSE and measured feature-extraction runtime; it is reported
-descriptively, not used to select a test result.
+These quantities let the same generator vary nonlinear order, memory depth,
+and the number of coordinate--lag interactions.
 
-\subsection{Experiment E6: Finite-shadow and trajectory degradation}
-\label{sec:exp-finite-shot}
+Choose $\mathcal A=\{A^{(1)},\ldots,A^{(H)}\}$ and nonzero coefficients
+$c_1,\ldots,c_H$, and let $C_c:=\sum_h|c_h|$.  The normalized target is
+\begin{equation}
+    F_{\mathcal A,c}^\star(\vx^-)
+    :=\frac1{C_c}\sum_{h=1}^{H}c_h\Psi_{A^{(h)}}(x_{-L:0}),
+    \qquad |F^\star(\vx^-)|\leq1,
+    \label{eq:empirical-target-functional}
+\end{equation}
+and the response is exactly
+\begin{equation}
+    Y_t=F^\star_{\mathcal A,c}(X_{-\infty:t}).
+    \label{eq:empirical-response}
+\end{equation}
+There is no observation-noise term.  The target depends only on the final
+$L+1$ inputs and is a continuous fading-memory functional with
+$\risk^\star=0$.  For $q>L$, the past of $Z_t=(X_t,Y_t)$ depends on input
+variables no later than time zero, whereas its future uses inputs no earlier
+than $q-L$.  Monotonicity of absolute regularity therefore gives
+\begin{equation}
+    \beta_{\processZ}(q)\leq\beta_X(q-L),
+    \qquad q>L.
+    \label{eq:empirical-beta-shift}
+\end{equation}
+The construction remains close to the information-processing framework of
+\citet{DambreEtAl2012}, but we use the Legendre modes only as controlled task
+generators.  We do not report Dambre capacities because the original capacity
+interpretation assumes a linear readout and an orthogonal task basis, whereas
+QuaRK uses a Mat\'ern readout and may use temporally correlated drives
+\citep{HulserEtAl2023}.
 
-The principal E6 protocol trains one readout on exact reference features and
-evaluates it on CSMoM features for 256 predeclared test windows.  It uses the
-exponential, Volterra, and \(\tau=10\) recall targets,
-\(S\in\{100,300,1000,3000,10000\}\), ten MoM blocks, three structural
-replicates, and five independent shadow replicates.  A 16-window Aer diagnostic
-at the same snapshot counts isolates shadow sampling from reset-trajectory
-sampling.  A secondary noisy-feature-training study uses 512/128/256
-train/validation/test windows, \(S\in\{300,1000,3000\}\), three structural
-replicates, and three measurement replicates.  Metrics include coordinate RMSE,
-per-example Euclidean feature error divided by \(\sqrt p\), frozen-readout
-prediction perturbation, NRMSE, relative degradation from exact features,
-\(NRS\) state preparations, and \(NRSw\) temporal channel applications.
+\subsection{Common protocol, metrics, and structured reuse}
+\label{sec:empirical-common-protocol}
 
-\subsection{Experiment E7: Out-of-scope chaotic stress tests}
-\label{sec:exp-chaotic}
+The architecture experiments use exact quantum features, $S=1$, and an i.i.d.
+drive unless dependence itself is the controlled variable.  This isolates
+representation from measurement and frozen-pool selection.  Unless an axis is
+explicitly varied, the reference architecture and sampling gap are
+\begin{equation}
+    \arch_{\mathrm{ref}}:=(8,16,e^{-1/32}),
+    \qquad g_{\mathrm{ref}}:=0.
+    \label{eq:empirical-reference-architecture}
+\end{equation}
+Thus a sweep changes only the resource named on that axis.  We use a common
+reference window $w_{\mathrm{ref}}=512$ and a causal-reference burn-in
+$B=1024$.  This burned-in trajectory is treated as a certified numerical
+proxy, not as an exact causal state.  By \cref{lem:exact-contraction}, at the
+largest planned memory horizon $\tau_+=64$ its branch-state discrepancy is at
+most
+\[
+    2\lambda_+^B=2e^{-16}\approx2.25\times10^{-7}.
+\]
+At readout-risk level the remaining proxy error is bounded by the same
+finite-window argument,
+\begin{equation}
+    \epsBurn(\arch,B)
+    :=4\Lambda(\Lambda+\Upsilon)\kLip\lambda_+^B.
+    \label{eq:burnin-risk-residual}
+\end{equation}
+Every window-fidelity result records this residual, so an observed gap is not
+silently attributed to finite-window initialization below the numerical causal
+reference precision.  The finite-window campaign below verifies directly when
+$w_{\mathrm{ref}}$ is already indistinguishable from this certified proxy.
+Every readout uses the RMS feature metric of \Eqref{eq:rms-feature-metric}, so
+the fixed Mat\'ern length scale has the same interpretation as feature
+dimension changes.  One Mat\'ern specification and Ivanov radius are fixed
+before the resource sweeps and are never retuned separately for different
+$(n,R)$.  This prevents either dimension-induced distance inflation or readout
+retuning from being misinterpreted as an architectural gain.
 
-E7 follows the reduced matrix in \cref{app:chaotic-protocol}.  Lorenz--63 uses
-forecast horizons \(\{1,5,20\}\); Mackey--Glass uses delay parameters
-\(\{17,30\}\) and horizons \(\{1,10,20\}\).  Both use observation-noise levels
-\(\{0,0.02\}\), three trajectory replicates, chronological
-3000/1000/1000 train/validation/test blocks, and a guard interval equal to the
-largest horizon.  QuaRK is compared only with ESN--Mat\'ern and matched random
-features--Mat\'ern.  We report NRMSE, persistence skill
-\(1-\mathrm{MSE}_{\mathrm{model}}/\mathrm{MSE}_{\mathrm{persistence}}\), and
-the first evaluated horizon at which skill is nonpositive.
+Because all targets are noiseless, the primary predictive metric is normalized
+excess mean-squared error
+\begin{equation}
+    \operatorname{NEMSE}
+    :=\frac{\widehat \risk_{\mathrm{test}}-\risk^\star}
+            {\widehat{\operatorname{Var}}(Y)}
+     =\frac{\widehat \risk_{\mathrm{test}}}
+            {\widehat{\operatorname{Var}}(Y)}.
+    \label{eq:nemse}
+\end{equation}
+The normalization makes tasks with different Legendre compositions directly
+comparable.  Theory-facing experiments additionally report the empirical
+shot, window, and generalization gaps defined below, while the frozen-search
+study reports full-sample ERM selection regret and the declared quantum
+acquisition run count $9NMSR$.
 
-\subsection{Experiment E8: Limited real-world sanity checks}
-\label{sec:exp-real-world-sanity}
+All predictive risks other than the explicit training-risk term in
+$\widehat\Delta_{\mathrm{gen}}$ are evaluated on held-out windows whose labels
+are never used for fitting or frozen-design selection.  Within a paired
+comparison the same held-out windows and labels are reused on both sides of a
+gap; ``fresh measurements'' means measurement randomness independent of the
+training cache and of the exact-feature evaluation.  The independent test
+trajectory is also shared across competing methods within a paired repetition.
 
-E8 uses the retained official splits for Beijing PM2.5, live fuel moisture, and
-hydraulic systems, specified in \cref{app:real-world-protocol}.  The final 20\%
-of each official training split is used for inner validation.  Five paired
-representation seeds are used for QuaRK, ESN, matched random features, and raw
-ridge.  Raw Mat\'ern is attempted only when its estimated Gram storage is below
-2 GiB and a predeclared pilot completes within 30 minutes.  Dataset-level MSE,
-training-normalized NRMSE, feature dimension, feature time, readout time, and
-peak memory are reported without average-rank or general-superiority claims.
+The full resource grids and task definitions are recorded in
+\cref{app:empirical-materials}.  Maximal reuse is campaign-local rather than a
+Cartesian cache.  In Campaign~I a design is drawn at $R_{\max}=64$ and the
+setting $R\leq R_{\max}$ uses the first $R$ branches.  Campaign~III draws one
+exact-feature pool at $S_{\max}=256$ with search-branch maximum
+$R_{\mathrm{search},\max}=32$ and uses prefixes in both $S$ and $R$.
+Campaign~II, which has $S=1$, generates each of the nine Pauli settings at
+$M_{\max}=8192$ repetitions and a smaller $M$ uses the first $M$ outcomes.
+The maxima are therefore never crossed into an unnecessary
+$R_{\max}S_{\max}M_{\max}$ product.  The same pairing principle is used for
+the memory endpoint: common uniforms generate the branch rates at every
+$\lambda_+$ while preserving the required log-uniform marginal law.  The
+Gaussian preprocessors for the dense width sweep $n\in\{3,4,\ldots,12\}$ are likewise
+coupled through prefixes of one $n_{\max}=12$ Gaussian matrix, with the
+$1/\sqrt n$ normalization restored at each width.  Width-specific random mixing circuits are still drawn from their correct $n$-dependent laws, so this coupling pairs preprocessing randomness without treating the quantum circuits themselves as nested.
 
-\subsection{Experiment E9: Compact IBM hardware validation}
-\label{sec:exp-hardware}
+\subsection{Campaign I: representational phase diagram and task atlas}
+\label{sec:empirical-representation}
 
-E9 uses a medium-persistence \(d=2\) VARMA process with \(w=4\), one two-qubit
-reservoir, \(\lambda=0.8\), and seven local observables.  Exact NVIDIA features
-train two frozen readouts for \(\tau=1\) and \(\tau=3\) recall.  The hardware
-subset contains eight predeclared test windows.  CSMoM uses \(S=192\) snapshots
-and six MoM blocks.  The same shadow bases and reset trajectories are reused in
-Aer and IBM-local comparisons and across two hardware executions separated by
-calibration time.  The backend-selection, layout, job-chunking, failure, and
-provenance rules are fixed in \cref{app:hardware-validation}.  The principal
-outcomes are feature RMSE relative to Aer exact, feature RMSE relative to the
-matched IBM-local realization, frozen-readout prediction perturbation and
-NRMSE, transpiled depth, two-qubit gate count, circuit and shot counts, and job
-completion.  Measurement mitigation is not part of the primary protocol unless
-it is implemented and predeclared before the first hardware result is viewed.
+This campaign tests the three representational coordinates of
+$\arch=(n,R,\lambda_+)$ without finite-shot or pool-selection confounding.  It
+contains four controlled mechanism studies and one broad generality atlas.
+The first three match memory, multiplexing, and width to the task difficulty
+they are intended to address.  The fourth isolates the new mixer/observable
+mechanism in \cref{sec:mixer-expressivity}; the atlas then asks whether the
+resulting resource ordering survives across a wider variety of targets.
 
-\paragraph{Numerical-result status.}
-This manuscript version fixes the protocol but does not state numerical
-conclusions for runs that have not yet produced checksum-validated artifacts.
-Every later result sentence, table entry, and figure will be generated from the
-versioned artifacts identified in \cref{app:implementation-ready-protocol}.
+\paragraph{Memory endpoint versus required lag.}
+We parameterize the upper endpoint through its longest available e-folding
+scale
+\begin{equation}
+    \tau_+:=(-\log\lambda_+)^{-1},
+    \qquad \lambda_+=e^{-1/\tau_+}.
+    \label{eq:memory-horizon-param}
+\end{equation}
+The architecture grid is
+$\tau_+\in\{2,4,8,16,32,64\}$ and the task grid is
+$L\in\{0,1,2,4,8,16,32,64\}$, using the single-mode targets
+\begin{equation}
+    F_L^\star(\vx^-):=P_2(x_{-L,1}).
+    \label{eq:single-memory-task}
+\end{equation}
+At the reference values $(n,R)=(8,16)$, the resulting $\tau_+\times L$ surface should reveal whether
+longer target lags systematically require a longer reservoir-memory endpoint.
+The paper's intended interpretation is challenged if the predictive optimum
+is essentially insensitive to $L$, or if larger $\tau_+$ never helps on long
+lags despite the finite-window cost it incurs.
+
+\paragraph{Multiplexing versus simultaneous temporal modes.}
+To separate branch multiplicity from mere task lag, we fix
+$n=8$ and $\tau_+=32$ and sweep
+\begin{equation}
+    R\in\{1,2,4,8,16,32,64\},
+    \qquad
+    H\in\{1,2,4,8\}.
+    \label{eq:R-H-grid}
+\end{equation}
+For each $H$, the target averages $H$ degree-two temporal modes whose lags span
+the dyadic memory range; the exact lag sets are specified in
+\cref{app:task-atlas}.  The normal QuaRK design, with independently drawn
+$\lambda_r$, is compared with a homogeneous-memory multiplex in which all
+branches share one $\lambda$.  The main homogeneous control uses the geometric
+center of the admissible log-rate interval.  On representative slices we also
+scan the same dyadic $\tau_+$ grid and select the common rate by the same
+full-sample empirical-risk rule used for the frozen pool, so heterogeneous
+memory is not compared only with an arbitrarily chosen common rate.
+
+The central question is whether increasing $R$ helps substantially more as
+$H$ grows, and whether heterogeneous rates improve over a feature-dimension-
+matched homogeneous multiplex on genuinely multiscale targets.  If
+heterogeneous and homogeneous multiplexes improve equally, the evidence
+supports frozen-mixing diversity but not the stronger multiscale-memory
+motivation.  If neither improves materially beyond $R=1$, then finite spatial
+multiplexing remains an approximation-feasibility mechanism but is unnecessary
+in the tested finite-resource regimes.
+
+\paragraph{Width versus spatial information load.}
+The width experiment fixes $R=16$ and $\tau_+=32$ and uses
+\begin{equation}
+    n\in\{3,4,5,6,7,8,9,10,11,12\},
+    \qquad
+    d_{\mathrm{act}}\in\{1,2,4,8,16,32,64\},
+    \label{eq:n-d-grid}
+\end{equation}
+with ambient dimension $d=d_{\mathrm{act}}$ and target
+\begin{equation}
+    F_{d_{\mathrm{act}}}^\star(\vx^-)
+    :=\frac1{d_{\mathrm{act}}}
+      \sum_{j=1}^{d_{\mathrm{act}}}P_2(x_{0,j}).
+    \label{eq:spatial-load-task}
+\end{equation}
+Every additional coordinate is therefore relevant to the label.  This tests whether the monotone information ordering of
+\cref{cor:width-information-monotonicity} becomes predictive precisely when more
+input coordinates matter to the target.  No strict gain is expected at every
+width, and the experiment is not framed as a threshold at the finite-data JL
+width of \cref{prop:finite-data-jl}; that proposition certifies observed
+geometry rather than population approximation.
+
+A complementary constant-feature-budget control exploits
+$m_{\arch}=12Rn$.  We compare the allocations
+$(n,R)\in\{(3,16),(6,8),(12,4)\}$,
+$(n,R)\in\{(3,32),(6,16),(12,8)\}$, and
+$(n,R)\in\{(3,64),(6,32),(12,16)\}$, corresponding respectively to fixed
+products $Rn\in\{48,96,192\}$.  On high-spatial-load tasks, extra branches
+should not fully compensate for information lost by an excessively narrow
+shared projection.  This is the empirical counterpart of the limitation in
+\cref{sec:discussion} that increasing $R$ cannot recover information removed
+by a noninjective preprocessor.
+
+To identify whether an observed width effect is actually caused by information
+lost in $\projection_n$, the same width surface includes a
+\emph{projection-only control}.  It receives the projected history
+$(\projection_n x_{-w_{\mathrm{ref}}+1},\ldots,\projection_n x_0)$ directly,
+flattens it, and applies exactly the same RMS-normalized Mat\'ern/Ivanov
+readout, with no quantum reservoir.  The raw-history Mat\'ern baseline,
+projection-only control, and QuaRK therefore form the ordered comparison
+\[
+    \text{raw history}
+    \;\longrightarrow\;
+    \text{projected history}
+    \;\longrightarrow\;
+    \text{QuaRK reservoir features}.
+\]
+If performance is lost already by the projection-only control at small $n$ and
+recovers with width, while QuaRK exhibits the same obstruction, the observed
+$n$-dependence is consistent with the projection-information floor rather than
+with a generic benefit of adding qubits.  Conversely, a gap between the
+projection-only control and QuaRK at the same $n$ isolates the additional
+finite-resource effect of the reservoir representation after preprocessing.
+
+\paragraph{Mixer and observable-bank interaction order.}
+The theoretical statement in \cref{thm:graph-local-operator-spreading} is
+about what the frozen representation exposes before the Mat\'ern readout.  We
+therefore compare three dynamics at fixed $(n,R,\lambda_+)$ and with paired
+input/preprocessor seeds:
+\begin{equation}
+    \reservoirUnitary_n=\identity,
+    \qquad
+    \reservoirUnitary_n=\blockV,
+    \qquad
+    \reservoirUnitary_n=\blockE_{\tau(J_n)}\cdots
+       \blockE_{\tau(1)}\blockV.
+    \label{eq:mixer-ablation-family}
+\end{equation}
+The middle control keeps random local rotations but suppresses every
+entangling edge angle, so any difference between it and the full block is
+attributable to graph-local operator spreading rather than to generic random
+single-qubit mixing.  Each dynamics is evaluated once with the vertex bank
+$\gO_V(n)$ and once with the complete bank $\gO_n$.  To test exactly the interaction mechanism in
+\cref{cor:mixer-direct-interactions}, this ablation uses a small set of
+\emph{preprocessor-conditioned diagnostic targets} rather than raw-coordinate
+atlas tasks.  After drawing the shared $\projection_n$ for a paired repetition,
+set $\alpha_j(x):=\vartheta((\projection_nx)_j)$ and generate
+\begin{align}
+    F_{1}^{\mathrm{mix}}(\vx^-)
+      &:=\cos\alpha_1(x_0),
+      \label{eq:mixer-interaction-task1}\\
+    F_{2}^{\mathrm{mix}}(\vx^-)
+      &:=\sin\alpha_1(x_0)\sin\alpha_2(x_0),
+      \label{eq:mixer-interaction-task2}\\
+    F_{3}^{\mathrm{mix}}(\vx^-)
+      &:=\cos\alpha_1(x_0)\sin\alpha_2(x_0)\sin\alpha_3(x_0).
+      \label{eq:mixer-interaction-task3}
+\end{align}
+All mixer/observable variants in that repetition share the same preprocessor
+and therefore the same labels.  The hierarchy is deliberately diagnostic:
+$F_1^{\mathrm{mix}}$ is directly one-site, $F_2^{\mathrm{mix}}$ is directly
+available to an identity mixer only through a two-site observable but is also
+activated from a vertex seed by generic mixing, and $F_3^{\mathrm{mix}}$
+matches the first three-stream term proved for a mixed edge seed.  Because the
+general 36-task atlas is generated independently of $\projection_n$, these
+conditional targets are not used for broad performance claims.
+
+Alongside NEMSE, we report a task-independent Pauli-spreading diagnostic.  If
+$\reservoirUnitary_n^\dagger O\reservoirUnitary_n=\sum_Pc_{O,P}P$, define
+\begin{equation}
+    \spreadScore(\reservoirUnitary_n;\mathcal O)
+    :=\frac1{|\mathcal O|}\sum_{O\in\mathcal O}
+      \sum_{\operatorname{supp}(P)\not\subseteq\operatorname{supp}(O)}
+      |c_{O,P}|^2.
+    \label{eq:pauli-spread-score}
+\end{equation}
+Pauli orthonormality makes this a normalized fraction of operator weight that
+has left the seed support.  It is exactly zero for the identity and local-only
+controls and positive almost surely for the relevant seeds of the full mixer
+by \cref{thm:graph-local-operator-spreading}.  We additionally record one fixed effective-dimension diagnostic.  If
+$F_c$ denotes the column-centered exact feature matrix on the common diagnostic
+sample, we use its stable rank
+\begin{equation}
+    r_{\mathrm{stab}}(F_c)
+      :=\frac{\norm{F_c}_{\mathrm F}^2}{\norm{F_c}_2^2},
+    \label{eq:stable-feature-rank}
+\end{equation}
+with the convention $r_{\mathrm{stab}}(0)=0$.  These diagnostics are motivated
+by recent REC/eigentask and Krylov-observability analyses, which distinguish
+the potential function space of an encoding from the independent information
+actually exposed by a physical reservoir
+\citep{HuEtAl2023Eigentasks,CindrakLudgeJaurigue2025,CindrakJaurigueLudge2025}.
+They are diagnostics, not tuned hyperparameters.  If the full mixer increases
+operator spreading but neither feature rank nor interaction-task performance,
+the paper will report the important negative conclusion that spreading alone
+does not make the additional representation useful.
+
+The theorem-aligned targets above deliberately favor interpretability over
+generality.  To prevent the mixer claim from resting only on targets constructed
+from the realized encoding angles, we repeat the identical
+identity/local-only/full-mixer $\times$ vertex/complete-bank ablation on three
+\emph{preprocessor-independent} atlas tasks:
+$F^{\mathrm{mem}}_{8}$ as a low-interaction control,
+$F^{\mathrm{int}}_{16}$ as a high-arity spatial interaction, and
+$F^{\mathrm{C6}}$ as a multiscale interaction task.  These labels are generated
+before and independently of $\projection_n$.  The desired conclusion is not
+that mixing wins uniformly: comparable performance on
+$F^{\mathrm{mem}}_{8}$ together with a benefit on one or both interaction-heavy
+tasks would be stronger evidence that the provable operator enrichment becomes
+useful specifically when the target requires it.
+
+Finally, the vertex-versus-edge comparison receives one finite-shot
+\emph{cost-matched} check using the full cycle mixer on the
+preprocessor-independent interaction task $F^{\mathrm{C6}}$.  Let
+$M_{\mathrm E}^{\mathrm{cmp}}$ be a dyadic
+per-setting repetition count frozen before the runs.  The complete bank uses
+its nine settings with $M_{\mathrm E}^{\mathrm{cmp}}$ repetitions each, while
+the vertex bank uses the three global $X/Y/Z$ settings with
+$M_{\mathrm V}^{\mathrm{cmp}}=3M_{\mathrm E}^{\mathrm{cmp}}$ repetitions each.
+Both therefore use exactly $9M_{\mathrm E}^{\mathrm{cmp}}$ branch-circuit runs
+per input window.  This separates the question ``do edge observables expose
+useful interactions?'' from the trivial fact that the complete bank normally
+spends more state preparations.
+
+\paragraph{Broad task atlas and scientific baselines.}
+The controlled surfaces above isolate mechanisms.  To test generality without
+forming a Cartesian product, we additionally evaluate a fixed 36-task atlas
+covering dyadic memory depth, simultaneous temporal modes, active spatial
+dimension, nonlinear degree, interaction arity at fixed total degree, and six
+composite spatiotemporal targets.  The explicit formulas are given in
+\cref{app:task-atlas}.  The atlas is evaluated at three predeclared
+architecture tiers,
+\begin{equation}
+    \arch_{\mathrm{small}}=(4,4,e^{-1/8}),\qquad
+    \arch_{\mathrm{medium}}=(8,16,e^{-1/32}),\qquad
+    \arch_{\mathrm{large}}=(16,64,e^{-1/64}),
+    \label{eq:architecture-tiers}
+\end{equation}
+rather than by tuning an architecture separately for every task.
+
+Only two external baselines are required.  A direct finite-window Mat\'ern
+regressor receives the same observed raw history and asks whether any reservoir
+representation is needed.  A frozen classical multiscale reservoir uses the
+same number of branches, matched heterogeneous forgetting scales, an exposed
+feature dimension matched to $12Rn$, and the same Mat\'ern/Ivanov readout; it
+asks whether the useful temporal behavior requires the quantum representation
+rather than the multiscale reservoir structure alone.  The purpose is not a
+leaderboard.  In particular, simple tasks on which the direct kernel dominates
+are informative negative results: they identify regimes in which QuaRK's
+resource expenditure is unnecessary.
+
+\subsection{Campaign II: empirical fidelity decomposition}
+\label{sec:empirical-fidelity}
+
+The second campaign examines the three fidelity terms entering
+\cref{thm:resource-performance}.  Exact simulation and the certified burned-in
+causal proxies of \cref{sec:empirical-common-protocol} let us isolate the
+discrepancies rather than infer them from one aggregate test error.  The theoretical quantities remain sufficient upper
+bounds; the empirical objective is to test their qualitative resource
+scalings and expose their conservatism.
+
+\paragraph{Finite-shot scaling.}
+For
+\begin{equation}
+    M\in\{1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192\},
+    \label{eq:M-grid}
+\end{equation}
+we use the dyadic architecture sequence
+\[
+(n,R)\in\{(4,1),(4,2),(4,4),(4,8),(8,8),(8,16),
+(16,16),(16,32),(16,64)\},
+\]
+which spans $Rn\in\{4,8,16,32,64,128,256,512,1024\}$; the
+memory endpoint is fixed at $\tau_+=32$.  For every $M$,
+the readout $h_M$ is trained on the corresponding
+measured training features and then evaluated on one common held-out set both
+with fresh grouped measurements and with exact finite-window features.  The empirical risk discrepancy is
+\begin{equation}
+    \widehat\Delta_{\mathrm{shot}}(M)
+    :=\left|
+        \widehat\risk^{\mathrm{op}}_{D,w}(h_M)
+        -\widehat\risk_{D,w}(h_M)
+      \right|.
+    \label{eq:empirical-shot-gap}
+\end{equation}
+The nine-setting measurement simulator samples complete global Pauli outcomes;
+all compatible observables are computed from the same shot record.  It does
+not add independent coordinatewise noise.  We plot the gap against both $M$
+and $M^{-1/2}$, stratified by the architecture sequence above.  Under the RMS
+Mat\'ern geometry, \cref{prop:shot-certificate} predicts that the worst-case
+risk sensitivity no longer grows merely because $Rn$ increases.  Approximate
+collapse of the architecture curves at common $M$ would support this
+dimension-normalized prediction; systematic separation would quantify how
+state-dependent variances and representation geometry make the sufficient
+bound conservative in practice.
+
+\paragraph{Finite-window scaling.}
+We use
+\begin{equation}
+    w\in\{1,2,4,8,16,32,64,128,256,512\},
+    \qquad
+    \tau_+\in\{2,4,8,16,32,64\},
+    \label{eq:w-memory-grid}
+\end{equation}
+and fix $(n,R)=(8,16)$.  We construct the burned-in causal proxy
+after the common $B=1024$ steps.  For a readout fitted at each finite $w$, we
+compare the same function on the same held-out windows using finite-window and
+proxy-causal exact features,
+\begin{equation}
+    \widehat\Delta_{\mathrm{win}}(w)
+    :=\left|
+        \widehat\risk_{D,\infty}(h_w)
+        -\widehat\risk_{D,w}(h_w)
+      \right|.
+    \label{eq:empirical-window-gap}
+\end{equation}
+Here the symbol $\infty$ denotes the causal quantity being approximated; the
+implemented proxy differs from it in risk by at most
+$\epsBurn(\arch,B)$ from \Eqref{eq:burnin-risk-residual}.  That residual is
+reported beside the observed gap and is therefore part of the numerical error
+budget rather than an unquantified burn-in assumption.
+The desired pattern is exponential decay in $w$, with visibly slower decay for
+larger $\tau_+$.  This demonstrates the central memory tradeoff: longer memory
+can improve representation on long-lag tasks while simultaneously requiring a
+longer implementation window to approximate the causal reservoir.
+
+\paragraph{Dependence, raw-time gap, and sample size.}
+The dependence map uses the independent reference together with
+$\tau_{\mathrm{dep}}\in\{1,2,4,8,16\}$ and
+\begin{equation}
+    g\in\{0,1,2,4,8,16,32,64\}.
+    \label{eq:g-grid}
+\end{equation}
+At a fixed dyadic training size $N_0=1024$, this yields a dependence-by-gap
+surface.  We then fix the strongest dependence level
+$\tau_{\mathrm{dep}}=16$ and repeat the gap sweep for
+\begin{equation}
+    N\in\{128,256,512,1024,2048,4096\}.
+    \label{eq:N-grid}
+\end{equation}
+The reference architecture $\arch_{\mathrm{ref}}$, a short-memory target,
+and exact features are used so that the experiment isolates dependent-data
+sampling.  A long independent test realization
+approximates operational population risk, giving
+\begin{equation}
+    \widehat\Delta_{\mathrm{gen}}
+    :=\left|
+       \widehat\risk_{D,w}(h)-
+       \widehat\risk_{D,w}^{\mathrm{test}}(h)
+      \right|.
+    \label{eq:empirical-generalization-gap}
+\end{equation}
+The expected qualitative behavior is smaller discrepancy with larger $N$ and,
+under correlated inputs, with larger raw-time gap $g$.  We do not treat a
+numerical evaluation of the conservative uniform bound in
+\cref{prop:gapped-deviation} as a separate experiment.  The plots nevertheless
+mark the logarithmic-in-$N$ gap scaling suggested by
+\cref{cor:geometric-mixing-gap}; this tests whether the theorem's explicit
+sampling prescription has the correct qualitative dependence even when its
+worst-case constants are conservative.
+
+\subsection{Campaign III: frozen-pool search and resource economics}
+\label{sec:empirical-frozen-search}
+
+The third campaign directly stress-tests the finite-pool mechanism in
+\cref{prop:finite-pool-coverage,thm:finite-pool-erm-oracle}: whether larger
+random pools actually contain better designs, and whether the full-sample ERM
+rule can exploit that opportunity without its finite-sample selection price
+dominating.  We generate one maximal pool with
+\begin{equation}
+    S_{\max}=256,
+    \qquad
+    S\in\{1,2,4,8,16,32,64,128,256\},
+    \label{eq:S-grid}
+\end{equation}
+and evaluate nested prefixes.  The main search curves use exact features so
+that $S$ is not confounded with finite-shot noise.  Six representative atlas
+tasks are used: short single-scale memory, long single-scale memory,
+multiscale memory, high spatial load, high nonlinear degree, and one composite
+target.  We fix $n=8$ and $\tau_+=32$ and repeat the nested search curve at
+$R\in\{1,2,4,8,16,32\}$, all obtained from the same
+$R_{\mathrm{search},\max}=32$ candidate realizations, to test whether spatial
+multiplexing and external random search partially substitute for one another.
+
+For every prefix, the manuscript's full-sample ERM rule in
+\Eqref{eq:frozen-pool-erm} selects $D_S^\star$.  Each candidate's readout is
+fitted on the training sample only and then frozen; no readout is refit on test
+data.  We report the selected predictor's independent-test risk together with
+the oracle-best of those already-fitted candidate predictors in the same
+prefix,
+\begin{equation}
+    \widehat\risk_{\mathrm{oracle}}(S)
+      :=\min_{s\leq S}\widehat\risk_{\mathrm{test}}(D_s),
+    \qquad
+    \widehat\Delta_{\mathrm{sel}}(S)
+      :=\widehat\risk_{\mathrm{test}}(D_S^\star)
+       -\widehat\risk_{\mathrm{oracle}}(S).
+    \label{eq:selection-regret}
+\end{equation}
+The oracle curve asks whether larger pools contain genuinely better frozen
+representations; the regret asks how much of that opportunity is lost to
+finite-sample ERM selection.  A
+representative finite-shot ranking check, using dyadic prefixes up to $S=64$
+and a predeclared $M$ fixed before inspecting the search results, verifies that
+the exact-feature conclusion is not an artifact of noiseless feature access.
+
+The main $S$ curves use the reference sample size, so we additionally include
+one compact sample-size-by-search slice to test the finite-sample selection
+price itself.  At fixed $(n,R,\tau_+)=(8,16,32)$ and exact features, we evaluate
+\begin{equation}
+    N\in\{256,1024,4096\},
+    \qquad
+    S\in\{1,16,64,256\},
+    \label{eq:N-S-selection-grid}
+\end{equation}
+on two predeclared difficult tasks,
+$F^{\mathrm{multi}}_{8}$ and $F^{\mathrm{C6}}$.  The same nested candidate pool
+is reused within each repetition.  We report both oracle improvement and ERM
+selection regret.  Increasing $S$ should continue to improve the oracle
+opportunity, while any over-selection effect should weaken as $N$ grows; this
+is the direct empirical counterpart of the theorem's logarithmic $S$ price
+inside the uniform finite-sample term.  Failure of regret to decrease with $N$
+would be evidence that the practical selector behaves more poorly than the
+available uniform theory suggests.
+
+The quantum acquisition cost corresponding to any operational setting is
+reported under the reusable-$n$-qubit hardware convention as the number of
+independent branch-circuit executions/state preparations,
+\begin{equation}
+    C_Q(N,M,S,R)=9NMSR.
+    \label{eq:empirical-quantum-cost}
+\end{equation}
+This is intentionally distinct from the resources of one execution: processing
+one length-$w$ input window has logical trajectory depth $O(w)$ and uses
+$O(n)$ qubits under the declared hardware-reuse schedule.  Fully parallel
+branch instantiation could trade up to the factor $R$ in wall-clock executions
+for $O(Rn)$ physical width; $C_Q$ deliberately keeps the reusable-hardware
+convention fixed so performance curves have one acquisition-cost definition.
+Because the sweep itself uses nested caches, producing all $S$ values up to a
+fixed $S_{\max}$ costs the maximal pool once rather than the sum of all prefix
+costs.  Performance is therefore shown both against $S$ and against the
+state-preparation budget.  If the oracle improves but ERM-selected test performance does not, the frozen
+design law supplies useful diversity but the finite-sample selection price is
+dominating.  If
+neither curve improves beyond small $S$, then pool search should be presented
+as optional rather than as a necessary source of predictive performance.
+
+\subsection{Reporting plan}
+\label{sec:empirical-reporting}
+
+The study is summarized by four information-dense figures and one compact
+baseline table.  Figure~1 contains the three resource response surfaces
+$(\tau_+,L)$, $(R,H)$, and $(n,d_{\mathrm{act}})$ together with the compact
+mixer/observable ablation, including the homogeneous-memory and constant-$Rn$
+controls.  The width panel overlays the raw-history, projection-only, and
+QuaRK curves needed to identify the preprocessing bottleneck.  The mixer panel
+reports NEMSE, $\spreadScore$, and feature stable rank for the paired controls,
+with the preprocessor-independent mixer tasks shown as a small generalization
+slice; the finite-shot vertex/edge result is reported at matched branch-circuit
+run count.  Figure~2 is the 36-task atlas, showing the three fixed QuaRK tiers
+and the two scientific baselines.  Figure~3 reports the empirical shot, window,
+and dependent-sample gaps from Campaign~II with the corresponding theoretical
+scalings as reference, not as fitted targets.  Figure~4 reports ERM-selected
+and oracle pool performance against both $S$ and $9NMSR$, together with the
+compact $N\times S$ selection-regret slice.  The baseline table gives numerical
+NEMSE and uncertainty for representative short-memory, multiscale, and
+high-spatial-load regimes.  No additional hyperparameter leaderboard is
+required.

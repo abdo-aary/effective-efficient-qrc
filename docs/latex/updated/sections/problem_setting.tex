@@ -1,156 +1,97 @@
 \section{Problem Setting}
 \label{sec:problem-setting}
 
-The analysis distinguishes three objects that coincide only in idealized
-settings: the causal feature of an infinite input history, the implementable
-feature obtained from a finite window, and the empirical sample of dependent
-windows used to train the readout. This section fixes these objects before the
-quantum architecture is specified.
+We first fix the causal prediction target and the dependent sample.  Keeping
+these objects separate from the quantum model makes the later risk statements
+unambiguous: there is one population target, one gapped finite-window sample,
+and one dependence coefficient inherited from the original process.
 
-\subsection{Temporal data and windowed observations}
+\subsection{Causal fading-memory regression}
 
-Let \(Z=(Z_t)_{t\in\Z}\), with \(Z_t=(X_t,Y_t)\), be a stationary stochastic
-process on \(\R^d\times\R\). We write
-\(x_{-\infty:0}=(\ldots,x_{-1},x_0)\) for a semi-infinite input history and
-\[
-    x_{-w+1:0}=(x_{-w+1},\ldots,x_0)\in(\R^d)^w
-\]
-for its most recent \(w\) inputs. A temporal predictor maps a history to a
-scalar. The target need not have finite memory; a finite window is instead an
-implementable approximation whose error will later be controlled by reservoir
-contraction.
+Let $\processZ=(\processZ_t)_{t\in\sZ}$ be stationary, with
+$\processZ_t=(X_t,Y_t)$, $X_t\in\gX\subset\sR^d$, and
+$Y_t\in[-\Upsilon,\Upsilon]$.  The input set $\gX$ is compact and
+$\sZ_-:=\{\ldots,-2,-1,0\}$.  We write
+$\vx^-=(\ldots,x_{-1},x_0)\in\HistorySpace$ for an input history.
 
-For a window length \(w\geq1\) and stride \(s=w+g\), with \(g\geq0\), define
+The target is a measurable version $F^\star:\HistorySpace\to\sR$ of the
+causal conditional mean,
 \begin{equation}
-    W_j
-    :=
-    \bigl(X_{js-w+1:js},Y_{js}\bigr),
-    \qquad j\in\Z.
-    \label{eq:window-process}
+    F^\star(X_{-\infty:0})
+    =\E\!\left[Y_0\mid\sigma(X_t:t\leq0)\right]
+    \quad\text{a.s.},
+    \label{eq:causal-regression}
 \end{equation}
-The observed sample is \(\cD_N=(W_1,\ldots,W_N)\). The gap \(g\) controls the
-raw-time separation between consecutive windows, but nonoverlap alone does not
-make them independent.
+with Bayes risk
+$\risk^\star:=\E[(F^\star(X_{-\infty:0})-Y_0)^2]$.
 
-\subsection{Causal and finite-window reservoir features}
+Let $\vvarpi=(\varpi_\ell)_{\ell\geq0}$ be positive, nonincreasing, and satisfy
+$\varpi_\ell\to0$.  The associated fading-memory metric is
+\begin{equation}
+    d_{\vvarpi}(\vu^-,\vv^-)
+    :=\sup_{\ell\geq0}\varpi_\ell\norm{u_{-\ell}-v_{-\ell}}_2.
+    \label{eq:fading-memory-metric}
+\end{equation}
+A functional has the fading-memory property (FMP) when it is continuous for
+such a metric.  More generally, for any compact $\gA\subset\sR^k$, write
+$\gFFMP(\gA)$ for the continuous fading-memory functionals on
+$\gA^{\sZ_-}$ under the analogous weighted metric.  Because the weights tend
+to zero, this is exactly continuity for the product topology, and
+$\gA^{\sZ_-}$ is compact.  We abbreviate $\gFFMP:=\gFFMP(\gX)$ and equip it
+with the uniform norm
+\begin{equation}
+    \normop{F}:=\sup_{\vx^-\in\HistorySpace}|F(\vx^-)|,
+    \qquad F\in\gFFMP.
+    \label{eq:uniform-norm}
+\end{equation}
+Throughout the paper, $F^\star\in\gFFMP$.  In particular, continuity on the
+compact history space implies that sufficiently long terminal windows
+approximate $F^\star$ uniformly.
 
-There are \(R\) independently parameterized sub-reservoirs. Sub-reservoir
-\(r\) has an \(n\)-qubit state \(\rho_t^{(r)}\) and an input-dependent channel
-\(T_{r,x}\). For a semi-infinite history, its causal state at time zero is
-written \(\rho_{\infty,0}^{(r)}(x_{-\infty:0})\). For a finite window, the
-recursion starts at time \(-w\) from a fixed state
-\(\rho_{\mathrm{init}}^{(r)}\), producing
-\(\rho_{w,0}^{(r)}(x_{-w+1:0})\) after the last input is consumed.
+\subsection{Gapped finite windows}
 
-Let \(\cO\) be a finite family of Hermitian observables with
-\(\opNorm{O}\leq1\). The exact infinite-history and finite-window feature maps
+Only one finite realization of $\processZ$ is observed.  Following the
+finite-window viewpoint used in reservoir risk analysis
+\citep{GononGrigoryevaOrtega2020}, fix a window length $w\geq1$ and a raw-time
+gap $g\geq0$, and set the stride $\Delta:=w+g$.  The labeled window process is
+\begin{equation}
+    \processW_j:=\bigl(X_{j\Delta-w+1:j\Delta},Y_{j\Delta}\bigr),
+    \qquad j\in\sN.
+    \label{eq:gapped-window-process}
+\end{equation}
+For the dependent-data argument we take an even sample size $N=2\mu$ and
+write
+\begin{equation}
+    \Data_N:=(\processW_1,\ldots,\processW_N).
+    \label{eq:even-window-sample}
+\end{equation}
+The parity split therefore contains $\mu$ windows on each side.  This evenness
+is only a proof device; empirical fitting need not otherwise privilege even
+sample sizes.  A realized sample is denoted by
+$\widetilde\Data_N=(\widetilde\processW_1,\ldots,\widetilde\processW_N)$ with
+$\widetilde\processW_j=(\vx_{j\Delta-w+1:j\Delta},y_{j\Delta})$.
+
+\subsection{Absolute regularity}
+
+For sigma-algebras $\gA$ and $\gB$, let $\beta(\gA,\gB)$ denote their
+absolute-regularity coefficient.  The coefficients of the original process
 are
-\begin{align}
-    \PhiInf(x_{-\infty:0})
-    &:=
-    \bigl(
-      \Tr[O\rho_{\infty,0}^{(r)}]
-    \bigr)_{r\in[R],\,O\in\cO},
-    \label{eq:infinite-feature}\\
-    \PhiWin(x_{-w+1:0})
-    &:=
-    \bigl(
-      \Tr[O\rho_{w,0}^{(r)}]
-    \bigr)_{r\in[R],\,O\in\cO}
-    \in\R^{p},
-    \qquad p=R|\cO|.
-    \label{eq:window-feature}
-\end{align}
-These vectors concatenate expectations from a tuple of independently evolved
-states; no tensor-product state is introduced for multiplexing. A finite-shot
-estimate \(\widehat\Phi_w\) is a distinct random object and will be treated
-separately from the exact feature map.
-
-\subsection{Kernel readout and the three risks}
-
-Let \(\kappa:\R^p\times\R^p\to\R\) be a normalized Mat\'ern kernel and
-\(\cH_\kappa\) its RKHS. For a radius \(\Lambda>0\), define
-\[
-    \Hball
-    :=
-    \set{h\in\cH_\kappa:\norm{h}_{\cH_\kappa}\leq\Lambda}.
-\]
-Normalization gives \(\kappa(z,z)=1\), and hence
 \begin{equation}
-    \abs{h(z)}
-    \leq\norm{h}_{\cH_\kappa}\sqrt{\kappa(z,z)}
-    \leq\Lambda,
-    \qquad h\in\Hball.
-    \label{eq:prediction-bound}
+    \beta_{\processZ}(q)
+    :=\sup_{t\in\sZ}
+      \beta\!\left(\sigma(\processZ_u:u\leq t),
+                   \sigma(\processZ_u:u\geq t+q)\right),
+    \qquad q\geq0.
+    \label{eq:beta-original-process}
 \end{equation}
-
-For squared loss \(\ell(\widehat y,y)=(\widehat y-y)^2\), the causal target is
-the infinite-history risk
+We call $\processZ$ beta mixing if $\beta_{\processZ}(q)\to0$.  Since adjacent
+windows are separated by the raw-time gap $g$, monotonicity of absolute
+regularity under sigma-algebra inclusion gives the only window-mixing relation
+used later,
 \begin{equation}
-    \risk_\infty(h)
-    :=
-    \E\!\left[
-      \ell\bigl(h(\PhiInf(X_{-\infty:0})),Y_0\bigr)
-    \right].
-    \label{eq:infinite-risk}
+    \beta_{\processW}(1)\leq\beta_{\processZ}(g).
+    \label{eq:adjacent-window-mixing}
 \end{equation}
-The finite-window approximation is
-\begin{equation}
-    \risk_w(h)
-    :=
-    \E\!\left[
-      \ell\bigl(h(\PhiWin(X_{-w+1:0})),Y_0\bigr)
-    \right],
-    \label{eq:window-risk}
-\end{equation}
-and the quantity optimized from the observed windows is
-\begin{equation}
-    \erisk_{N,w}(h)
-    :=
-    \frac1N\sum_{j=1}^N
-    \ell\bigl(h(\PhiWin(X_{js-w+1:js})),Y_{js}\bigr).
-    \label{eq:empirical-risk}
-\end{equation}
-The learning analysis will therefore have two parts: a statistical comparison
-between \(\risk_w\) and \(\erisk_{N,w}\), and a deterministic comparison between
-\(\risk_\infty\) and \(\risk_w\).
-
-\subsection{Dependence and analytical scope}
-\label{sec:analytical-scope}
-
-For sub-sigma-algebras \(\mathcal A\) and \(\mathcal B\), let
-\(\beta(\mathcal A,\mathcal B)\) denote their absolute-regularity coefficient.
-We use
-\begin{equation}
-    \beta_Z(q)
-    :=
-    \sup_{t\in\Z}
-    \beta\!\left(
-      \sigma(Z_u:u\leq t),
-      \sigma(Z_u:u\geq t+q)
-    \right),
-    \qquad q\geq0,
-    \label{eq:beta-definition}
-\end{equation}
-and call the process beta mixing when \(\beta_Z(q)\to0\).
-
-The primary learning result is first stated for a fixed design. The
-projection, reservoir parameters, initialization states, observable family,
-window scheme, and Mat\'ern parameters are chosen independently of the sample
-on which that result is evaluated; when specialized to kernel ridge regression,
-its regularization parameter is fixed on the same basis. Random design elements,
-such as the JL matrix or reservoir seed, may be drawn independently and then
-conditioned upon. We assume that \(x\mapsto V_r(x)\), equivalently
-\(x\mapsto T_{r,x}\), is measurable, that the resulting loss classes are
-measurable (or admit the usual separable versions), that
-\(\abs{Y_t}\leq\Upsilon\) almost surely for some \(\Upsilon>0\), and that the
-Mat\'ern kernel is normalized. Results using its spectral second moment require
-\(\nu>1\). The main risk bound concerns exact observable expectations and is
-uniform over \(\Hball\). \Cref{cor:finite-family-selection} later extends this
-uniformity to sample-dependent selection from a finite family of configurations
-that is fully declared before the sample is examined, including all random
-seeds and preprocessing maps. Continuous or adaptively generated
-hyperparameter families remain outside that extension.
-
-With the data, feature maps, risks, and dependence structure in place, we next
-specify the concrete \textsc{QuaRK} pipeline that produces \(\PhiWin\).
+Thus the sampling protocol exposes the dependence penalty directly through
+$g$ and $\beta_{\processZ}(g)$ rather than hiding it in an effective sample
+size.

@@ -1,0 +1,390 @@
+\section{The Topology-Aware QuaRK Family}
+\label{sec:quark-family}
+
+A QuaRK run separates representational choices from learning budgets.  The
+\emph{architecture}
+\[
+    \arch:=(n,R,\lambda_+),
+\]
+collects the qubit width, number of parallel reservoir branches, and upper
+memory endpoint.  The measurement repetitions $M$, frozen-pool size $S$, and
+Ivanov radius $\Lambda$ remain external budgets: they control estimation,
+random search, and classical readout capacity rather than the frozen quantum
+representation itself.  This distinction will keep the resource dependence of
+the later guarantees explicit without repeatedly expanding its components.
+
+\subsection{Gaussian preprocessing and interaction graph}
+
+To compare widths without changing the marginal model at any fixed $n$, draw
+an i.i.d. sequence $\vg_1,\vg_2,\ldots\sim\gN(0,I_d)$, independently of the
+temporal process, and use the canonical Gaussian prefixes
+\begin{equation}
+    \projection_n
+    :=\frac1{\sqrt n}
+      \begin{bmatrix}
+        \vg_1^\top\\[-1mm]
+        \vdots\\[-1mm]
+        \vg_n^\top
+      \end{bmatrix}
+      \in\sR^{n\times d},
+    \qquad n\geq3.
+    \label{eq:gaussian-projection}
+\end{equation}
+For every fixed width, the entries are i.i.d. $\gN(0,1/n)$, exactly as in a
+direct Gaussian draw.  The coupling only gives a coherent meaning to
+increasing width: the narrower representation is recoverable from the wider
+one through
+\begin{equation}
+    \projection_n x
+      =\sqrt{\frac{n+1}{n}}\,
+        [\projection_{n+1}x]_{1:n}.
+    \label{eq:projection-prefix-recovery}
+\end{equation}
+A run freezes the prefix required by its chosen width.  With the injective
+bounded angle map $\vartheta(u):=\pi\tanh u$ and
+$\mR_y(\theta):=\exp(-\ii\theta\pauliY/2)$, encode $x\in\gX$ by
+\begin{equation}
+    \inputUnitary_n(x)
+    :=\bigotimes_{j=1}^n
+      \mR_y\!\left(\vartheta((\projection_nx)_j)\right).
+    \label{eq:input-encoding}
+\end{equation}
+
+The interaction graph is the cycle $\gG_n=(\gV_n,\gE_n)=C_n$, with
+$\gV_n=\{1,\ldots,n\}$.  A minimum edge colouring writes
+\[
+    \gE_n=\bigsqcup_{j=1}^{J_n}\gM_{n,j},
+    \qquad
+    J_n=\chi'(C_n)=
+    \begin{cases}
+        2,&n\text{ even},\\
+        3,&n\text{ odd},
+    \end{cases}
+\]
+where each $\gM_{n,j}$ is a matching.  The same cycle determines both the
+entangling layers and the two-qubit observable bank.
+
+\subsection{One balanced random mixing block}
+\label{sec:single-balanced-circuit}
+
+Let $\pauliVec=(\pauliX,\pauliY,\pauliZ)$ and
+$\sS^2:=\{\vu\in\sR^3:\norm{\vu}_2=1\}$.  For a vertex $v$ and edge
+$e=\{v,v'\}$, use the local generators
+$\mG_v(\va):=\va\cdot\pauliVec_v$ and
+$\mG_e(\va,\va'):=(\va\cdot\pauliVec_v)\otimes
+(\va'\cdot\pauliVec_{v'})$.
+
+Fix $\gamma\in(0,\pi]$.  Draw the generator axes independently and uniformly
+on $\sS^2$, the gate angles from an absolutely continuous law supported on
+$[-\gamma,\gamma]$ with positive density on its interior, and an independent
+uniform permutation $\tau$ of the $J_n$ matching layers.  Writing
+\[
+    \blockV:=\prod_{v\in\gV_n}
+      \exp\!\left(-\frac{\ii}{2}\theta_v\mG_v(\va_v)\right),
+    \qquad
+    \blockE_j:=\prod_{e\in\gM_{n,j}}
+      \exp\!\left(-\frac{\ii}{2}\theta_e\mG_e(\va_e,\va'_e)\right),
+\]
+the mixing unitary is
+\begin{equation}
+    \reservoirUnitary_n(\rpar)
+    :=\blockE_{\tau(J_n)}\cdots\blockE_{\tau(1)}\blockV,
+    \qquad \rpar=(\skeleton,\gateangles)\sim\mathbb P_n^\omega.
+    \label{eq:balanced-circuit-definition}
+\end{equation}
+For every fixed skeleton, the zero-angle point gives
+$\reservoirUnitary_n=\identity$, and the unitary is real analytic in the gate
+angles.  Its logical depth is $1+J_n\leq4$, so circuit depth is fixed by the
+family rather than treated as another model hyperparameter.
+
+\subsection{Contractive memory branches and frozen designs}
+\label{sec:memory-channels}
+
+Set $\lambda_0:=e^{-1}$.  The architecture chooses
+$\lambda_+\in(\lambda_0,1)$, and each branch draws its contraction rate from
+\begin{equation}
+    \frac{d\nu_{\lambda_+}}{d\lambda}(\lambda)
+    =\frac{\1_{(\lambda_0,\lambda_+)}(\lambda)}
+      {\lambda\log(\lambda_+/\lambda_0)}.
+    \label{eq:log-uniform-memory-law}
+\end{equation}
+Thus equal multiplicative rate intervals receive equal probability mass and
+$\lambda_+$ alone sets the longest available memory scale.  The branchwise
+randomization has a representational purpose beyond enforcing contraction:
+a state difference propagated through branch $r$ for $\ell$ additional steps
+is attenuated by $\lambda_r^\ell$, so the natural e-folding horizon is
+$(-\log\lambda_r)^{-1}$.  Drawing distinct rates across the $R$ parallel
+branches therefore creates a multiscale memory bank, from rapidly forgetting
+to more persistent dynamics.  This heterogeneity increases the chance that a
+frozen multiplex contains temporal responses compatible with the fading-memory
+profile of the target functional; it is a design motivation rather than a
+finite-pool performance guarantee.
+
+Let $\rhoreset:=\lvert+\rangle\!\langle+\rvert^{\otimes n}$, with
+$\lvert+\rangle=(\lvert0\rangle+\lvert1\rangle)/\sqrt2$, and define the
+replacement channel $\replacementChannel(\mQ):=\Tr[\mQ]\rhoreset$.  For
+$r=1,\ldots,R$, draw independently
+$(\lambda_r,\rpar_r)\sim\nu_{\lambda_+}\otimes\mathbb P_n^\omega$ and set
+\[
+    \unitaryChannel_{r,x}(\mQ)
+    :=\reservoirUnitary_n(\rpar_r)\inputUnitary_n(x)\mQ
+      \inputUnitary_n(x)^\dagger\reservoirUnitary_n(\rpar_r)^\dagger.
+\]
+The driven reservoir channel is
+\begin{equation}
+    \reservoirChannel_{r,x}(\mQ)
+    :=\lambda_r\unitaryChannel_{r,x}(\mQ)
+      +(1-\lambda_r)\replacementChannel(\mQ),
+    \label{eq:reservoir-channel}
+\end{equation}
+and is strictly contractive because $\lambda_r<1$.  Equivalently, this is an
+input-encoding channel followed by the fixed contraction
+$\mQ\mapsto\lambda_r\reservoirUnitary_n(\rpar_r)\mQ
+\reservoirUnitary_n(\rpar_r)^\dagger+(1-\lambda_r)\replacementChannel(\mQ)$.
+This follows the contracted-encoded QRC design principle studied by
+\citet{MartinezPenaOrtega2025}, where strict contraction supplies the echo-state
+and fading-memory mechanism while input dependence is carried by the encoding;
+their work further analyzes when such filters distinguish input sequences.
+QuaRK uses this mechanism branchwise and adds topology-aware random mixing and
+the multiscale spatial multiplex described above.
+
+For the architecture $\arch$, the frozen-design law is
+\begin{equation}
+    \designLaw_{\arch}
+    :=\left(\nu_{\lambda_+}\otimes\mathbb P_n^\omega\right)^{\otimes R},
+    \qquad \design\sim\designLaw_{\arch}.
+    \label{eq:design-law}
+\end{equation}
+Here $\design=((\lambda_r,\rpar_r))_{r=1}^R$ records the branch-specific
+parameters; the already-drawn $\projection_n$ is shared across all branches.
+Once sampled, no quantum parameter is trained.
+
+\subsection{Topology-local observables and grouped measurements}
+\label{sec:topology-observables}
+
+The complete observable bank contains all one-qubit Paulis and all two-qubit
+Pauli products on graph edges:
+\begin{equation}
+\begin{aligned}
+    \gO_V(n)&:=\{\pauliX_v,\pauliY_v,\pauliZ_v:v\in\gV_n\},\\
+    \gO_E(n)&:=\{\mP_u\mP'_v:\{u,v\}\in\gE_n,
+       \ \mP,\mP'\in\{\pauliX,\pauliY,\pauliZ\}\},\\
+    \gO_n&:=\gO_V(n)\cup\gO_E(n),
+    \qquad q_n:=|\gO_n|=12n.
+\end{aligned}
+    \label{eq:topology-observable-bank}
+\end{equation}
+
+Let $\gS_n=\{s_k:k=1,\ldots,K_n\}$ be a Pauli-setting cover and let
+$a_n(O)$ count the settings compatible with $O$.  For the cycle, the
+nine-setting construction of \cref{app:grouped-pauli-measurements} gives
+$K_n=9$, with $a_n(O)=3$ for $O\in\gO_V(n)$ and $a_n(O)=1$ for
+$O\in\gO_E(n)$.  We use a reusable-$n$-qubit hardware convention for the
+acquisition count: repeating every setting $M$ times for each branch estimates
+the entire bank and costs $RK_nM=9RM$ branch-circuit executions/state
+preparations per input window.
+
+This count measures independent circuit executions/state preparations, not
+the depth or width of one execution.  Each execution propagates one $n$-qubit
+branch through the $w$ inputs in the window.  Under the declared parallel gate
+schedule, the per-step input injection, contraction/reset operation, and
+balanced mixer have constant logical depth, so the full trajectory depth is
+$O(w)$ and the quantum width is $O(n)$ under this branch-by-branch convention.
+If all $R$ branches are instead physically instantiated at once, the width is
+$O(Rn)$ and up to the factor $R$ can be traded from wall-clock circuit
+executions into parallel hardware.  The paper reports the reusable-hardware
+run count so that $R$ has one unambiguous acquisition interpretation.
+
+\subsection{What the mixer contributes: operator spreading and direct interactions}
+\label{sec:mixer-expressivity}
+
+The universality argument later in the paper deliberately uses the identity
+support point of the random circuit law.  That certificate is useful for
+showing that the family has no asymptotic approximation floor, but by itself it
+does not explain why the nontrivial mixer in \Eqref{eq:balanced-circuit-definition}
+should be retained.  The finite-resource role of the mixer is different: it
+spreads local observables across the interaction graph before measurement and
+thereby exposes multiqubit functions of the encoded input directly in the
+frozen feature vector.
+
+For a Pauli string $P$, write $\operatorname{supp}(P)$ for its nonidentity
+sites and $\wt(P):=|\operatorname{supp}(P)|$.  If a Hermitian operator
+$A=\sum_P a_PP$ is expanded in the $n$-qubit Pauli basis, define its Pauli
+interaction order by
+\begin{equation}
+    \pauliOrder(A):=\max\{\wt(P):a_P\neq0\}.
+    \label{eq:pauli-interaction-order}
+\end{equation}
+For $A\subseteq\gV_n$, let
+$\mathcal N_{C_n}^{\ell}(A):=\{v:\operatorname{dist}_{C_n}(v,A)\leq\ell\}$.
+
+\begin{proposition}[Mixer-free locality]
+\label{prop:identity-mixer-locality}
+Set $\reservoirUnitary_n=\identity$.  If a measured Pauli observable $O$ is
+supported on $A\subseteq\gV_n$, then its finite-window and causal reservoir
+coordinates depend on the input history only through the projected scalar
+streams
+\[
+    \bigl((\projection_nx_t)_j:t\leq0,\ j\in A\bigr).
+\]
+Consequently, vertex observables expose only one projected stream directly,
+and the full bank $\gO_n$ exposes at most two projected streams directly in any
+single raw feature coordinate.
+\end{proposition}
+
+\begin{theorem}[Graph-local operator spreading]
+\label{thm:graph-local-operator-spreading}
+Let $O$ be a Pauli string supported on $A$.  For every realization of the
+balanced circuit, every Pauli component of
+$\reservoirUnitary_n(\rpar)^\dagger O\reservoirUnitary_n(\rpar)$ is supported
+inside $\mathcal N_{C_n}^{J_n}(A)$.  After $s$ repetitions of the same mixing
+block, the support is contained in $\mathcal N_{C_n}^{sJ_n}(A)$.
+
+Moreover, the declared continuous random-circuit law activates nonlocal
+components generically.  For every oriented cycle edge $u\to v$, the
+coefficient of $\pauliZ_u\pauliZ_v$ in
+$\reservoirUnitary_n^\dagger\pauliX_u\reservoirUnitary_n$ is nonzero with
+probability one.  For every length-two path $u-v-w$ with distinct vertices,
+the coefficient of $\pauliX_u\pauliZ_v\pauliZ_w$ in
+$\reservoirUnitary_n^\dagger(\pauliX_u\pauliX_v)\reservoirUnitary_n$ is
+nonzero with probability one.
+\end{theorem}
+
+\begin{corollary}[Direct interaction enrichment]
+\label{cor:mixer-direct-interactions}
+Let
+$\alpha_j(x):=\vartheta((\projection_nx)_j)$.  For a one-step branch started
+from $\rhoreset$, a generic QuaRK mixer gives the $\pauliX_u$ feature a
+nonzero term proportional to
+$\sin\alpha_u(x)\sin\alpha_v(x)$ for every neighbor $v$ of $u$.  Likewise,
+an edge feature $\pauliX_u\pauliX_v$ has, for either neighboring site $w$
+outside that edge, a nonzero term proportional to
+$\cos\alpha_u(x)\sin\alpha_v(x)\sin\alpha_w(x)$.
+Thus the edge bank seeds genuine three-stream interactions after one mixing
+block, whereas the identity mixer is restricted to direct interaction order at
+most two.
+\end{corollary}
+
+\paragraph{Interpretation.}
+The theorem does not claim that entanglement automatically lowers prediction
+risk, nor that mixing creates frequencies absent from the encoding.  Rather,
+the local encoding fixes the elementary one-coordinate trigonometric factors,
+while the mixer changes which multivariate coefficient directions are exposed
+to the readout.  This distinction is consistent with Fourier-based QML and QRC
+expressivity analyses, where the encoding determines the accessible frequency
+structure while the reservoir dynamics and readouts determine how much of that
+structure is realized \citep{SchuldSwekeMeyer2021,SchuetteEtAl2026}.  It is
+also aligned with recent Krylov-observability work, which relates the span of
+time-evolved observables and the choice of measured operators to information
+processing capacity \citep{CindrakLudgeJaurigue2025,CindrakJaurigueLudge2025}.
+
+The cycle now has a precise resource role.  It is connected, so it imposes no
+permanent decomposition into isolated components, while its bounded degree
+permits every entangling block to be scheduled in $J_n\leq3$ matching layers.
+The graph controls the light cone in which interactions can be generated; the
+edge observables provide two-site seeds and therefore expose one higher direct
+interaction order than vertex observables after a generic block.  These are
+finite-resource representation statements.  They do not contradict the later
+identity-support universality proof, whose universal nonlinear readout can
+compose simpler coordinates given sufficiently many resources.
+
+\subsection{Exact and measured feature maps}
+
+For a finite window $\vx=x_{-w+1:0}$, the state of branch $r$ is
+\[
+    \rho_r^{\design}(\vx)
+    :=\reservoirChannel_{r,x_0}\circ\cdots\circ
+      \reservoirChannel_{r,x_{-w+1}}(\rhoreset).
+\]
+Strict contraction gives the corresponding causal state
+$\rho_{r,\infty}^{\design}(\vx^-)$ by moving the initialization to the remote
+past.  The branch feature block is
+$\phi_r^{\design}(\vx):=(\Tr[O\rho_r^{\design}(\vx)])_{O\in\gO_n}$.
+With $m_{\arch}:=Rq_n$, the exact finite-window feature map is
+\begin{equation}
+    \featureMap_{\design}(\vx)
+    :=\bigl(\phi_1^{\design}(\vx),\ldots,\phi_R^{\design}(\vx)\bigr)
+    \in[-1,1]^{m_{\arch}},
+    \label{eq:exact-window-features}
+\end{equation}
+and $\featureMap_{\design,\infty}$ is defined analogously from the causal
+states.  We write $\measuredFeatureMap_{\design}(\vx;\chi)$ for the estimator
+obtained from the grouped measurement record $\chi$.  Exact and measured
+features remain distinct throughout the analysis.
+
+\subsection{Mat\'ern readout and risks}
+\label{sec:readout-risks}
+
+Feature dimension changes with the architecture, so an unnormalized Euclidean
+kernel distance would mechanically grow when more bounded coordinates are
+concatenated.  QuaRK removes that nuisance at the model-definition level.  For
+$z,z'\in\sR^p$, define the root-mean-square feature distance
+\begin{equation}
+    \rmsMetric_p(z,z')
+    :=\frac{\norm{z-z'}_2}{\sqrt p}.
+    \label{eq:rms-feature-metric}
+\end{equation}
+Let $\kernel_p$ be the normalized Mat\'ern kernel with smoothness $\nu>1$ and
+length scale $\xi>0$ evaluated at $\rmsMetric_p(z,z')$.  To remove any
+implementation ambiguity, throughout the paper ``Mat\'ern$(\nu,\xi)$'' means
+\begin{equation}
+    \kernel_p(z,z')
+    :=\frac{2^{1-\nu}}{\Gamma(\nu)}
+      \left(\frac{\sqrt{2\nu}\,\rmsMetric_p(z,z')}{\xi}\right)^{\nu}
+      K_{\nu}\!\left(\frac{\sqrt{2\nu}\,\rmsMetric_p(z,z')}{\xi}\right),
+    \qquad \kernel_p(z,z):=1,
+    \label{eq:matern-kernel-definition}
+\end{equation}
+where $K_{\nu}$ is the modified Bessel function of the second kind, and let
+$\RKHS_p$ be its RKHS.  Equivalently, this is the ordinary fixed-$(\nu,\xi)$
+Mat\'ern kernel applied to $z/\sqrt p$.  The $1/\sqrt p$ factor is fixed once
+by the method, is label independent, and is never retuned across
+architectures.  For every finite $p$ the rescaling is invertible, so it does
+not remove information or alter Mat\'ern universality on compact feature
+images.
+
+The Ivanov ball is
+$\RKHS_p^\Lambda:=\{h\in\RKHS_p:\norm{h}_{\RKHS_p}\leq\Lambda\}$.  Kernel
+normalization gives $|h(z)|\leq\Lambda$, while the section map is Lipschitz
+in the RMS metric with the dimension-free constant
+\[
+    \kLip:=\frac1\xi\sqrt{\frac\nu{\nu-1}}.
+\]
+Equivalently, its Lipschitz constant with respect to the raw Euclidean feature
+vector is $\kLip/\sqrt p$.  This normalization prevents feature count alone
+from being interpreted as either architectural improvement or degradation;
+the empirical protocol keeps one fixed Mat\'ern specification and checks the
+resulting similarity geometry directly.
+The radius $\Lambda$ is fixed before fitting; \Secref{sec:dependent-generalization}
+provides a direct calibration from a requested generalization tolerance.
+
+For a frozen design $\design$, define the causal, finite-window, and
+operational risks together by
+\begin{align*}
+    \risk_{\design,\infty}(h)
+    &:=\E\!\left[(h(\featureMap_{\design,\infty}(X_{-\infty:0}))-Y_0)^2\right],\\
+    \risk_{\design,w}(h)
+    &:=\E\!\left[(h(\featureMap_{\design}(X_{-w+1:0}))-Y_0)^2\right],\\
+    \oprisk_{\design,w}(h)
+    &:=\E\!\left[(h(\measuredFeatureMap_{\design}(X_{-w+1:0}))-Y_0)^2\right],
+\end{align*}
+where the last expectation also averages over fresh measurement outcomes.
+For nonempty $\mathcal I\subseteq[N]$, the measured empirical risk is
+\[
+    \erisk_{\design,w}^{\mathcal I}(h)
+    :=\frac1{|\mathcal I|}\sum_{j\in\mathcal I}
+      \bigl(h(\measuredFeatureMap_{\design}(X_{j\Delta-w+1:j\Delta}))
+      -Y_{j\Delta}\bigr)^2,
+    \qquad
+    \erisk_{\design,w}:=\erisk_{\design,w}^{[N]}.
+\]
+Finally, make the readout-radius dependence of the causal approximation error
+explicit:
+\begin{equation}
+    \epsApp(\design;\Lambda)
+    :=\inf_{h\in\RKHS_{m_{\arch}}^\Lambda}
+      \bigl\{\risk_{\design,\infty}(h)-\risk^\star\bigr\}.
+    \label{eq:design-approximation-error}
+\end{equation}
+This quantity links the width-resolved representation analysis in
+\Secref{sec:width-resolved-approximation} to the finite-pool performance theorem.
