@@ -1,0 +1,29 @@
+schema_version: quark.empirical-evaluation-manifest/v1
+suite: empirical_evaluation
+mode: production
+contract_version: quark-tmlr-2026-08-13
+campaigns: [campaign_i, campaign_ii, campaign_iii]
+artifact_root: storage/artifacts/empirical_evaluation
+
+# Every REQUIRED value must be frozen and versioned before production planning.
+pre_run:
+  mixer_gamma: REQUIRED
+  mixer_angle_distribution: REQUIRED
+  matern_nu: REQUIRED
+  matern_xi: REQUIRED
+  ivanov_Lambda: REQUIRED
+  master_seed_list: REQUIRED
+  heldout_test_size: REQUIRED
+  repetitions_architecture_fidelity: REQUIRED
+  repetitions_pool: REQUIRED
+  campaign_III_finite_shot_M: REQUIRED
+  mixer_cost_match_M_edge: REQUIRED
+  classical_baseline_definition: REQUIRED
+  kernel_solver_tolerance: REQUIRED
+  floating_precision: REQUIRED
+  numerical_jitter_policy: REQUIRED
+  frozen_pool_tasks: REQUIRED
+  homogeneous_memory_slices: REQUIRED
+  fidelity_tasks: REQUIRED
+  dependence_task: REQUIRED
+

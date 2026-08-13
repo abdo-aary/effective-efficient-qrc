@@ -1,0 +1,28 @@
+schema_version: quark.empirical-evaluation-manifest/v1
+suite: empirical_evaluation
+mode: smoke
+contract_version: quark-tmlr-2026-08-13
+campaigns: [campaign_i, campaign_ii, campaign_iii]
+artifact_root: storage/artifacts/empirical_evaluation
+
+pre_run:
+  mixer_gamma: 0.5
+  mixer_angle_distribution: uniform_symmetric
+  matern_nu: 2.5
+  matern_xi: 1.0
+  ivanov_Lambda: 4.0
+  master_seed_list: [91001]
+  heldout_test_size: 32
+  repetitions_architecture_fidelity: 1
+  repetitions_pool: 1
+  campaign_III_finite_shot_M: 8
+  mixer_cost_match_M_edge: 8
+  classical_baseline_definition: smoke_frozen_leaky_reservoir_v1
+  kernel_solver_tolerance: 1.0e-10
+  floating_precision: float64_complex128
+  numerical_jitter_policy: fixed_1e-12
+  frozen_pool_tasks: [F_mem_1, F_mem_64, F_multi_8, F_sp_64, F_deg_16, F_C6]
+  homogeneous_memory_slices: [F_multi_4, F_multi_8]
+  fidelity_tasks: [F_multi_8]
+  dependence_task: F_mem_1
+

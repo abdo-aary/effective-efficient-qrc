@@ -73,6 +73,15 @@ Aer, NVIDIA, and IBM Runtime. IBM exact requests fail before job submission.
 Install optional adapters with `pip install -e '.[gpu]'`,
 `pip install -e '.[qiskit]'`, or `pip install -e '.[ibm]'`.
 
+## Empirical Evaluation Framework
+
+The new paper campaigns use immutable paired-repetition plans documented
+under `docs/architecture/` and configured under `experiments/empirical_evaluation/`.
+
+```bash
+quark-experiment validate experiments/empirical_evaluation/manifests/smoke.yaml
+```
+
 ## Minimal Reproduction
 
 Prepare the retained real datasets:
@@ -114,6 +123,8 @@ The retained real-world temporal benchmark uses:
 
 ## Where To Look Next
 
+- `docs/paper/main.pdf`
+- `docs/architecture/README.md`
 - `docs/reproduction.md`
 - `docs/codebase.md`
 
