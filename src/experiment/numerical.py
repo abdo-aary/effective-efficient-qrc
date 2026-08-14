@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass, replace
+from multiprocessing import get_context
 import re
+from time import perf_counter
 from typing import Any, Sequence
 
 import numpy as np
@@ -64,6 +67,107 @@ def _memory_lags(task_ids: Sequence[str]) -> tuple[int, ...]:
             raise ValueError(f"Unsupported numerical task {task!r}; expected F_mem_L.")
         lags.append(int(match.group(1)))
     return tuple(lags)
+
+
+def _execute_rate_sweep_worker(
+    gpu_id: int,
+    chunk_size: int,
+    program: QuaRKProgram,
+    windows: np.ndarray,
+    reset_rate_matrix: np.ndarray,
+    execution: ExecutionSpec,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    backend = NvidiaBackend(gpu_id=gpu_id, chunk_size=chunk_size)
+    result = backend.execute_exact_rate_sweep(
+        program,
+        windows,
+        reset_rate_matrix,
+        execution,
+    ).as_numpy()
+    return (
+        np.asarray(result.values, dtype=np.float64),
+        dict(result.execution_metadata.details),
+    )
+
+
+def execute_nvidia_rate_sweep_sharded(
+    *,
+    backends: Sequence[NvidiaBackend],
+    program: QuaRKProgram,
+    windows: np.ndarray,
+    reset_rate_matrix: np.ndarray,
+    execution: ExecutionSpec,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Execute contiguous window shards concurrently and restore input order."""
+
+    backend_pool = tuple(backends)
+    if not backend_pool:
+        raise ValueError("A NVIDIA rate sweep requires at least one backend.")
+    if len(backend_pool) == 1:
+        result = backend_pool[0].execute_exact_rate_sweep(
+            program,
+            windows,
+            reset_rate_matrix,
+            execution,
+        ).as_numpy()
+        return (
+            np.asarray(result.values, dtype=np.float64),
+            dict(result.execution_metadata.details),
+        )
+    if execution.retain_device_array:
+        raise ValueError("Multi-process GPU execution cannot return device arrays.")
+
+    index_shards = [
+        shard
+        for shard in np.array_split(np.arange(windows.shape[0]), len(backend_pool))
+        if shard.size
+    ]
+    started = perf_counter()
+
+    with ProcessPoolExecutor(
+        max_workers=len(index_shards),
+        mp_context=get_context("spawn"),
+    ) as pool:
+        futures = [
+            pool.submit(
+                _execute_rate_sweep_worker,
+                int(backend.gpu_id),
+                int(backend.chunk_size),
+                program,
+                windows[indices],
+                reset_rate_matrix,
+                execution,
+            )
+            for backend, indices in zip(backend_pool, index_shards)
+        ]
+        shard_results = [future.result() for future in futures]
+
+    values = np.concatenate([result[0] for result in shard_results], axis=0)
+    shard_details = []
+    for backend, indices, (_, details) in zip(
+        backend_pool,
+        index_shards,
+        shard_results,
+    ):
+        shard_details.append(
+            {
+                "gpu_id": backend.gpu_id,
+                "chunk_size": backend.chunk_size,
+                "window_start": int(indices[0]),
+                "window_stop": int(indices[-1] + 1),
+                "window_count": int(indices.size),
+                "execution": details,
+            }
+        )
+    return values, {
+        "engine": "cupy-multi-gpu",
+        "channel_realization": "exact-shared-pure-history-rate-sweep",
+        "gpu_ids": [backend.gpu_id for backend in backend_pool],
+        "rate_count": int(reset_rate_matrix.shape[0]),
+        "window_count": int(windows.shape[0]),
+        "wall_seconds": perf_counter() - started,
+        "shards": shard_details,
+    }
 
 
 @dataclass(frozen=True)
@@ -145,14 +249,33 @@ class ExactQuaRKRepresentationProvider:
     backend_name: str
     gpu_id: int | None = None
     chunk_size: int | None = None
+    nvidia_backends: tuple[NvidiaBackend, ...] = ()
 
     @property
     def identity(self) -> ProviderIdentity:
         return ProviderIdentity(
             kind="exact_balanced_quark",
-            algorithm_version="balanced-random-axis-channel/v1",
+            algorithm_version="balanced-random-axis-channel/v2-multi-rate",
             backend_kind=self.backend_name,
             numerical_precision="complex128",
+        )
+
+    def _execute_nvidia_rate_sweep(
+        self,
+        program: QuaRKProgram,
+        windows: np.ndarray,
+        reset_rate_matrix: np.ndarray,
+        execution: ExecutionSpec,
+    ) -> tuple[np.ndarray, dict[str, Any]]:
+        backends = self.nvidia_backends or (
+            (self.backend,) if isinstance(self.backend, NvidiaBackend) else ()
+        )
+        return execute_nvidia_rate_sweep_sharded(
+            backends=backends,
+            program=program,
+            windows=windows,
+            reset_rate_matrix=reset_rate_matrix,
+            execution=execution,
         )
 
     def acquire(
@@ -169,7 +292,17 @@ class ExactQuaRKRepresentationProvider:
             raise ValueError("The memory numerical slice requires exact QuaRK acquisition.")
         resources = _parameters(spec.fixed_resources)
         n = int(resources["n"])
-        tau_plus = float(resources["tau_plus"])
+        if "tau_plus_values" in resources:
+            tau_plus_values = tuple(float(value) for value in resources["tau_plus_values"])
+        else:
+            tau_plus_values = (float(resources["tau_plus"]),)
+        if (
+            not tau_plus_values
+            or len(set(tau_plus_values)) != len(tau_plus_values)
+            or tuple(sorted(tau_plus_values)) != tau_plus_values
+            or tau_plus_values[0] <= 1.0
+        ):
+            raise ValueError("tau_plus_values must be unique, increasing, and greater than one.")
         branch_count = spec.limit(PrefixAxis.R) or int(resources.get("R", 0))
         if branch_count < 1:
             raise ValueError("Exact acquisition requires an explicit positive branch count.")
@@ -191,11 +324,11 @@ class ExactQuaRKRepresentationProvider:
             encoded_width=n,
             rng=seeds.generator(projection_path),
         )
-        lambda_plus = float(np.exp(-1.0 / tau_plus))
+        lambda_plus_values = np.exp(-1.0 / np.asarray(tau_plus_values, dtype=np.float64))
         parameters = sample_balanced_reservoirs(
             num_reservoirs=branch_count,
             topology=topology,
-            lambda_plus=lambda_plus,
+            lambda_plus=float(lambda_plus_values[-1]),
             gamma=self.manifest.pre_run.mixer_gamma,
             angle_distribution=self.manifest.pre_run.mixer_angle_distribution,
             mixer_rng=seeds.generator(mixer_path),
@@ -204,15 +337,27 @@ class ExactQuaRKRepresentationProvider:
         observables = ObservableSet.cycle_complete(
             num_qubits=n, edges=topology.edges
         )
-        program = QuaRKProgram(
-            projection=ProjectionSpec(projection, mode="gaussian_jl"),
-            topology=topology,
-            reservoirs=parameters,
-            reset_channel=ResetChannelSpec(),
-            observables=observables,
-            window_length=w,
-            angle_map="tanh",
-            angle_scale=np.pi,
+        lambda_0 = float(np.exp(-1.0))
+        memory_uniforms = np.log(parameters.reset_rates / lambda_0) / np.log(
+            float(lambda_plus_values[-1]) / lambda_0
+        )
+        reset_rate_matrix = lambda_0 * np.power(
+            lambda_plus_values[:, None] / lambda_0,
+            memory_uniforms[None, :],
+        )
+
+        programs = tuple(
+            QuaRKProgram(
+                projection=ProjectionSpec(projection, mode="gaussian_jl"),
+                topology=topology,
+                reservoirs=replace(parameters, reset_rates=reset_rates),
+                reset_channel=ResetChannelSpec(),
+                observables=observables,
+                window_length=w,
+                angle_map="tanh",
+                angle_scale=np.pi,
+            )
+            for reset_rates in reset_rate_matrix
         )
         estimator = ExactFeatureEstimator(
             precision=Precision.COMPLEX128, return_states=False
@@ -223,26 +368,51 @@ class ExactQuaRKRepresentationProvider:
             ),
             chunk_size=self.chunk_size,
         )
-        batch = estimator.estimate(program, windows, self.backend, execution).as_numpy()
-        values = np.asarray(batch.values, dtype=np.float64)
-        lambda_0 = float(np.exp(-1.0))
-        memory_uniforms = np.log(parameters.reset_rates / lambda_0) / np.log(
-            lambda_plus / lambda_0
-        )
+        if len(programs) > 1 and isinstance(self.backend, NvidiaBackend):
+            values, execution_details = self._execute_nvidia_rate_sweep(
+                programs[-1],
+                windows,
+                reset_rate_matrix,
+                execution,
+            )
+        else:
+            batches = tuple(
+                estimator.estimate(program, windows, self.backend, execution).as_numpy()
+                for program in programs
+            )
+            if len(batches) == 1:
+                values = np.asarray(batches[0].values, dtype=np.float64)
+                execution_details = dict(batches[0].execution_metadata.details)
+            else:
+                values = np.stack(
+                    [np.asarray(batch.values, dtype=np.float64) for batch in batches],
+                    axis=1,
+                )
+                execution_details = [
+                    dict(batch.execution_metadata.details) for batch in batches
+                ]
+        is_rate_sweep = len(tau_plus_values) > 1
         return NodePayload(
             metadata={
                 "provider": self.identity.kind,
                 "backend": self.backend_name,
                 "precision": "complex128",
                 "operational_gpu_id": self.gpu_id,
+                "operational_gpu_ids": [
+                    backend.gpu_id for backend in self.nvidia_backends
+                ],
                 "operational_chunk_size": self.chunk_size,
-                "program_fingerprint": program.fingerprint(),
-                "projection_mode": program.projection.mode,
+                "program_fingerprint": programs[-1].fingerprint(),
+                "projection_mode": programs[-1].projection.mode,
                 "projection_seed_path": projection_path,
                 "mixer_seed_path": mixer_path,
                 "memory_seed_path": memory_path,
-                "tau_plus": tau_plus,
-                "lambda_plus": lambda_plus,
+                "tau_plus_values": list(tau_plus_values),
+                "lambda_plus_values": lambda_plus_values.tolist(),
+                "tau_axis": 1 if is_rate_sweep else None,
+                "shared_history_evolution": (
+                    is_rate_sweep and isinstance(self.backend, NvidiaBackend)
+                ),
                 "n": n,
                 "R_max": branch_count,
                 "window_length": w,
@@ -252,7 +422,10 @@ class ExactQuaRKRepresentationProvider:
                 "reset_state": "plus_tensor_n",
                 "history_truncation": False,
                 "branch_pruning": False,
-                "execution_details": dict(batch.execution_metadata.details),
+                "program_fingerprints": [
+                    program.fingerprint() for program in programs
+                ],
+                "execution_details": execution_details,
             },
             assets={
                 "features": values,
@@ -263,7 +436,9 @@ class ExactQuaRKRepresentationProvider:
                 "edge_axes_right": parameters.edge_axes_right,
                 "edge_angles": parameters.edge_angles,
                 "matching_orders": parameters.matching_orders,
-                "reset_rates": parameters.reset_rates,
+                "reset_rates": (
+                    reset_rate_matrix if is_rate_sweep else reset_rate_matrix[0]
+                ),
                 "memory_uniforms": memory_uniforms,
             },
         )
@@ -289,7 +464,37 @@ class ExactQuaRKRepresentationProvider:
             int(acquisition.metadata["R_max"]),
         )
         features = acquisition.require_asset("features")
-        view = features.view((slice(None), slice(0, branch_count), slice(None)))
+        tau_plus_values = tuple(
+            float(value) for value in acquisition.metadata["tau_plus_values"]
+        )
+        view_parameters = _parameters(spec.parameters)
+        if len(tau_plus_values) == 1:
+            tau_plus = tau_plus_values[0]
+            view = features.view(
+                (slice(None), slice(0, branch_count), slice(None))
+            )
+        else:
+            if "tau_plus" not in view_parameters:
+                raise ValueError("A multi-rate feature view requires a tau_plus selector.")
+            tau_plus = float(view_parameters["tau_plus"])
+            matches = [
+                index
+                for index, value in enumerate(tau_plus_values)
+                if np.isclose(value, tau_plus, rtol=0.0, atol=1e-12)
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"tau_plus={tau_plus} is not present in the acquisition cache."
+                )
+            tau_index = matches[0]
+            view = features.view(
+                (
+                    slice(None),
+                    slice(tau_index, tau_index + 1),
+                    slice(0, branch_count),
+                    slice(None),
+                )
+            )
         return NodePayload(
             metadata={
                 "provider": self.identity.kind,
@@ -297,7 +502,11 @@ class ExactQuaRKRepresentationProvider:
                 "R": branch_count,
                 "R_max": int(acquisition.metadata["R_max"]),
                 "n": int(acquisition.metadata["n"]),
-                "tau_plus": float(acquisition.metadata["tau_plus"]),
+                "tau_plus": tau_plus,
+                "tau_plus_values": list(tau_plus_values),
+                "shared_history_evolution": bool(
+                    acquisition.metadata["shared_history_evolution"]
+                ),
                 "observable_labels": list(acquisition.metadata["observable_labels"]),
                 "feature_ordering": "reservoir-major-observable-minor/v1",
                 "prefix_is_view": True,
@@ -467,6 +676,7 @@ class NumericalProviderBundle:
         *,
         backend: str,
         gpu_id: int | None,
+        gpu_ids: Sequence[int] | None = None,
         chunk_size: int | None,
     ) -> "NumericalProviderBundle":
         if manifest.pre_run.floating_precision != "float64_complex128":
@@ -474,12 +684,42 @@ class NumericalProviderBundle:
         if manifest.pre_run.numerical_jitter_policy != "spectral_clip_1e-12":
             raise ValueError("Numerical execution requires spectral_clip_1e-12.")
         if backend == "nvidia":
-            execution_backend: AerCPUBackend | NvidiaBackend = NvidiaBackend(
-                gpu_id=gpu_id,
-                chunk_size=chunk_size or 512,
+            selected_gpu_ids = tuple(
+                int(value)
+                for value in (
+                    gpu_ids
+                    if gpu_ids is not None
+                    else ((gpu_id,) if gpu_id is not None else (0,))
+                )
             )
+            if (
+                not selected_gpu_ids
+                or len(set(selected_gpu_ids)) != len(selected_gpu_ids)
+                or min(selected_gpu_ids) < 0
+            ):
+                raise ValueError("NVIDIA GPU IDs must be unique and nonnegative.")
+            import cupy as cp
+
+            nvidia_backends = []
+            for selected_gpu_id in selected_gpu_ids:
+                if chunk_size is None:
+                    properties = cp.cuda.runtime.getDeviceProperties(selected_gpu_id)
+                    total_memory = int(properties["totalGlobalMem"])
+                    selected_chunk_size = 512 if total_memory >= 60 * 2**30 else 256
+                else:
+                    selected_chunk_size = int(chunk_size)
+                nvidia_backends.append(
+                    NvidiaBackend(
+                        gpu_id=selected_gpu_id,
+                        chunk_size=selected_chunk_size,
+                    )
+                )
+            backend_pool = tuple(nvidia_backends)
+            execution_backend: AerCPUBackend | NvidiaBackend = backend_pool[0]
         elif backend == "aer":
             execution_backend = AerCPUBackend(max_qubits=4, max_windows=32)
+            backend_pool = ()
+            selected_gpu_ids = ()
         else:
             raise ValueError("backend must be 'nvidia' or 'aer'.")
         return cls(
@@ -488,8 +728,9 @@ class NumericalProviderBundle:
                 manifest=manifest,
                 backend=execution_backend,
                 backend_name=backend,
-                gpu_id=gpu_id if backend == "nvidia" else None,
+                gpu_id=selected_gpu_ids[0] if selected_gpu_ids else None,
                 chunk_size=chunk_size,
+                nvidia_backends=backend_pool,
             ),
             readout=RmsMaternIvanovReadoutProvider(manifest),
         )
@@ -543,11 +784,16 @@ class NumericalProviderBundle:
             except ImportError as exc:
                 raise ValueError("NVIDIA numerical execution requires CuPy.") from exc
             count = int(cp.cuda.runtime.getDeviceCount())
-            gpu_id = self.representation.gpu_id
-            if gpu_id is None or not 0 <= gpu_id < count:
-                raise ValueError(
-                    f"Invalid NVIDIA GPU ID {gpu_id!r}; detected {count} devices."
-                )
-            with cp.cuda.Device(gpu_id):
-                cp.zeros(1, dtype=cp.complex128).sum().item()
-                cp.cuda.Stream.null.synchronize()
+            gpu_ids = tuple(
+                backend.gpu_id for backend in self.representation.nvidia_backends
+            )
+            if not gpu_ids:
+                gpu_ids = (self.representation.gpu_id,)
+            for gpu_id in gpu_ids:
+                if gpu_id is None or not 0 <= gpu_id < count:
+                    raise ValueError(
+                        f"Invalid NVIDIA GPU ID {gpu_id!r}; detected {count} devices."
+                    )
+                with cp.cuda.Device(gpu_id):
+                    cp.zeros(1, dtype=cp.complex128).sum().item()
+                    cp.cuda.Stream.null.synchronize()

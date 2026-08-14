@@ -45,7 +45,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--provider", choices=("fake", "numerical"), default="fake")
     run.add_argument("--backend", choices=("nvidia", "aer"), default="nvidia")
     run.add_argument("--study")
-    run.add_argument("--gpu-id", type=int, default=0)
+    gpu_selection = run.add_mutually_exclusive_group()
+    gpu_selection.add_argument("--gpu-id", type=int, default=0)
+    gpu_selection.add_argument("--gpu-ids", type=int, nargs="+")
     run.add_argument("--chunk-size", type=int)
 
     aggregate = subparsers.add_parser(
@@ -106,6 +108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             manifest,
             backend=args.backend,
             gpu_id=args.gpu_id,
+            gpu_ids=args.gpu_ids,
             chunk_size=args.chunk_size,
         )
         # Preflight happens before constructing a store or writing any artifact.

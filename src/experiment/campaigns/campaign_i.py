@@ -43,28 +43,29 @@ def plan_campaign_i(manifest: RunManifest, repetition):
 def _memory_vs_lag(builder: PlanBuilder) -> None:
     tasks = tuple(f"F_mem_{lag}" for lag in L_GRID)
     train, test, pairing = builder.add_paired_data("memory_vs_lag", study_id="memory_vs_lag", tasks=tasks, input_dim=1)
+    shared_resources = {"n": 8, "tau_plus_values": TAU_PLUS_GRID}
+    train_acq = builder.add_acquisition(
+        "memory_vs_lag/acquire/train",
+        data_id=train,
+        split="train",
+        kind=AcquisitionKind.EXACT,
+        pairing_key=pairing,
+        prefix_limits=limits(R=64),
+        fixed_resources=shared_resources,
+        randomness_path="design/branches",
+    )
+    test_acq = builder.add_acquisition(
+        "memory_vs_lag/acquire/test",
+        data_id=test,
+        split="test",
+        kind=AcquisitionKind.EXACT,
+        pairing_key=pairing,
+        prefix_limits=limits(R=64),
+        fixed_resources=shared_resources,
+        randomness_path="design/branches",
+    )
     for tau in TAU_PLUS_GRID:
         stem = f"memory_vs_lag/tau_plus={tau}"
-        train_acq = builder.add_acquisition(
-            f"{stem}/acquire/train",
-            data_id=train,
-            split="train",
-            kind=AcquisitionKind.EXACT,
-            pairing_key=pairing,
-            prefix_limits=limits(R=64),
-            fixed_resources={"n": 8, "tau_plus": tau},
-            randomness_path="design/branches",
-        )
-        test_acq = builder.add_acquisition(
-            f"{stem}/acquire/test",
-            data_id=test,
-            split="test",
-            kind=AcquisitionKind.EXACT,
-            pairing_key=pairing,
-            prefix_limits=limits(R=64),
-            fixed_resources={"n": 8, "tau_plus": tau},
-            randomness_path="design/branches",
-        )
         train_view = builder.add_view(
             f"{stem}/view/train/R=16",
             acquisition_id=train_acq,
@@ -73,6 +74,7 @@ def _memory_vs_lag(builder: PlanBuilder) -> None:
             tasks=tasks,
             pairing_key=pairing,
             prefixes=limits(R=16),
+            parameters={"tau_plus": tau},
         )
         test_view = builder.add_view(
             f"{stem}/view/test/R=16",
@@ -82,6 +84,7 @@ def _memory_vs_lag(builder: PlanBuilder) -> None:
             tasks=tasks,
             pairing_key=pairing,
             prefixes=limits(R=16),
+            parameters={"tau_plus": tau},
         )
         fit_id = f"{stem}/fit/memory_tasks"
         builder.fits.append(
@@ -432,4 +435,3 @@ def _task_atlas(builder: PlanBuilder) -> None:
             split="test", tasks=tasks, pairing_key=pairing
         )
         builder.add_predictive_pair(stem, train_view=train_view, test_view=test_view, tasks=tasks, pairing_key=pairing)
-

@@ -35,7 +35,10 @@ runner without a study performs separate global finalization.
 Numerical preflight runs before the artifact store is created. The current
 numerical provider rejects every study except `memory_vs_lag`; Aer is a bounded
 small correctness oracle, while NVIDIA/CuPy complex128 is the locked production
-path.
+path. NVIDIA execution may shard the window axis across explicit GPU IDs. Each
+shard computes all locked `tau_plus` values from one exact pure-history
+evolution, and shards are concatenated in the original window order before the
+node is written atomically.
 
 ## CLI
 
@@ -49,7 +52,7 @@ quark-experiment run \
   --study memory_vs_lag \
   --provider numerical \
   --backend nvidia \
-  --gpu-id 0
+  --gpu-ids 0 1 2 3
 
 quark-experiment aggregate storage/artifacts/empirical_evaluation \
   --campaign campaign_i \

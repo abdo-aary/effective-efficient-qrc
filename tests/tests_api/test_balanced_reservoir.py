@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -13,7 +16,6 @@ from src.api import (
     ProjectionSpec,
     QuaRKProgram,
     ResetChannelSpec,
-    ReservoirTopology,
     SeedBundle,
 )
 from src.backends.balanced import balanced_mixer_matrix
@@ -23,6 +25,12 @@ from src.core.factories import (
     ring_topology,
     sample_balanced_reservoirs,
 )
+from src.experiment.manifest import load_manifest
+from src.experiment.numerical import ExactQuaRKRepresentationProvider
+
+
+ROOT = Path(__file__).resolve().parents[2]
+SMOKE = ROOT / "experiments/empirical_evaluation/manifests/smoke.yaml"
 
 
 def _parameters(*, tau_plus: int, count: int = 5) -> BalancedReservoirParameters:
@@ -192,3 +200,110 @@ def test_balanced_nvidia_matches_independent_aer_oracle():
         execution,
     )
     np.testing.assert_allclose(gpu.values, cpu.values, atol=2e-10, rtol=0.0)
+
+
+@pytest.mark.gpu
+def test_balanced_nvidia_rate_sweep_matches_independent_endpoint_runs():
+    cp = pytest.importorskip("cupy")
+    try:
+        if cp.cuda.runtime.getDeviceCount() < 1:
+            pytest.skip("No CUDA device")
+    except cp.cuda.runtime.CUDARuntimeError as exc:
+        pytest.skip(str(exc))
+
+    base = _program()
+    lambda_0 = float(np.exp(-1.0))
+    base_lambda_plus = float(np.exp(-1.0 / 8.0))
+    uniforms = np.log(base.reservoirs.reset_rates / lambda_0) / np.log(
+        base_lambda_plus / lambda_0
+    )
+    tau_values = np.asarray((2.0, 8.0, 32.0))
+    lambda_plus_values = np.exp(-1.0 / tau_values)
+    rate_matrix = lambda_0 * np.power(
+        lambda_plus_values[:, None] / lambda_0,
+        uniforms[None, :],
+    )
+    programs = tuple(
+        replace(
+            base,
+            reservoirs=replace(base.reservoirs, reset_rates=reset_rates),
+        )
+        for reset_rates in rate_matrix
+    )
+    windows = np.random.default_rng(181).uniform(-1.0, 1.0, size=(2, 3, 1))
+    execution = ExecutionSpec(seeds=SeedBundle.from_root(182), chunk_size=2)
+    backend = NvidiaBackend(gpu_id=0, chunk_size=2)
+    estimator = ExactFeatureEstimator()
+    expected = np.stack(
+        [
+            estimator.estimate(program, windows, backend, execution).as_numpy().values
+            for program in programs
+        ],
+        axis=1,
+    )
+    result = backend.execute_exact_rate_sweep(
+        programs[-1],
+        windows,
+        rate_matrix,
+        execution,
+    ).as_numpy()
+
+    assert result.values.shape == expected.shape
+    assert result.execution_metadata.details["rate_count"] == len(tau_values)
+    np.testing.assert_allclose(result.values, expected, atol=2e-10, rtol=0.0)
+
+
+@pytest.mark.gpu
+def test_balanced_rate_sweep_shards_deterministically_across_two_gpus():
+    cp = pytest.importorskip("cupy")
+    try:
+        if cp.cuda.runtime.getDeviceCount() < 2:
+            pytest.skip("Two CUDA devices are required")
+    except cp.cuda.runtime.CUDARuntimeError as exc:
+        pytest.skip(str(exc))
+
+    base = _program()
+    lambda_0 = float(np.exp(-1.0))
+    lambda_anchor = float(np.exp(-1.0 / 8.0))
+    uniforms = np.log(base.reservoirs.reset_rates / lambda_0) / np.log(
+        lambda_anchor / lambda_0
+    )
+    lambda_plus_values = np.exp(-1.0 / np.asarray((2.0, 8.0)))
+    rate_matrix = lambda_0 * np.power(
+        lambda_plus_values[:, None] / lambda_0,
+        uniforms[None, :],
+    )
+    program = replace(
+        base,
+        reservoirs=replace(base.reservoirs, reset_rates=rate_matrix[-1]),
+    )
+    windows = np.random.default_rng(191).uniform(-1.0, 1.0, size=(4, 3, 1))
+    execution = ExecutionSpec(seeds=SeedBundle.from_root(192), chunk_size=2)
+    backends = (
+        NvidiaBackend(gpu_id=0, chunk_size=2),
+        NvidiaBackend(gpu_id=1, chunk_size=2),
+    )
+    expected = backends[0].execute_exact_rate_sweep(
+        program,
+        windows,
+        rate_matrix,
+        execution,
+    ).as_numpy()
+    provider = ExactQuaRKRepresentationProvider(
+        manifest=load_manifest(SMOKE),
+        backend=backends[0],
+        backend_name="nvidia",
+        gpu_id=0,
+        chunk_size=2,
+        nvidia_backends=backends,
+    )
+    values, details = provider._execute_nvidia_rate_sweep(
+        program,
+        windows,
+        rate_matrix,
+        execution,
+    )
+
+    assert details["gpu_ids"] == [0, 1]
+    assert [item["window_count"] for item in details["shards"]] == [2, 2]
+    np.testing.assert_allclose(values, expected.values, atol=2e-10, rtol=0.0)

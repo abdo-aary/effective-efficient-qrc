@@ -17,7 +17,7 @@ from src.core.capabilities import (
     Precision,
 )
 from src.core.exceptions import BackendDependencyError, CompilationError
-from src.core.program import QuaRKProgram
+from src.core.program import BalancedReservoirParameters, QuaRKProgram
 from src.core.requests import CompiledFeaturePlan, ExecutionSpec
 from src.core.results import ExecutionMetadata, FeatureBatch, StateBatch
 from src.estimators.csmom import CSMoMFeatureEstimator, reconstruct_csmom
@@ -28,6 +28,21 @@ from src.estimators.exact import ExactFeatureEstimator
 class _NvidiaPayload:
     program: QuaRKProgram
     estimator: ExactFeatureEstimator | CSMoMFeatureEstimator
+
+
+@dataclass(frozen=True)
+class ExactRateSweepResult:
+    """Exact features with shape (N, rate, R, observable)."""
+
+    values: Any
+    execution_metadata: ExecutionMetadata
+
+    def as_numpy(self) -> "ExactRateSweepResult":
+        values = self.values.get() if hasattr(self.values, "get") else self.values
+        return ExactRateSweepResult(
+            values=np.asarray(values),
+            execution_metadata=self.execution_metadata,
+        )
 
 
 class NvidiaBackend:
@@ -119,9 +134,9 @@ class NvidiaBackend:
             for label in program.observables.labels
         ]
         device = cp.cuda.Device(self.gpu_id) if self.gpu_id is not None else cp.cuda.Device()
-        pool = cp.get_default_memory_pool()
-        baseline_pool_bytes = int(pool.total_bytes())
         with device:
+            pool = cp.get_default_memory_pool()
+            baseline_pool_bytes = int(pool.total_bytes())
             cp.cuda.Stream.null.synchronize()
             gpu_started = perf_counter()
             values = runner._run_flat_cupy_expectation_output(
@@ -140,7 +155,7 @@ class NvidiaBackend:
             )
             cp.cuda.Stream.null.synchronize()
             gpu_seconds = perf_counter() - gpu_started
-        peak_pool_bytes = max(0, int(pool.total_bytes()) - baseline_pool_bytes)
+            peak_pool_bytes = max(0, int(pool.total_bytes()) - baseline_pool_bytes)
 
         diagnostic = None
         if estimator.return_states:
@@ -179,6 +194,108 @@ class NvidiaBackend:
             "gpu_peak_increment_bytes": peak_pool_bytes,
         }
         return values, diagnostic, timings, resources
+
+    def execute_exact_rate_sweep(
+        self,
+        program: QuaRKProgram,
+        windows: np.ndarray,
+        reset_rates: np.ndarray,
+        execution: ExecutionSpec | None = None,
+    ) -> ExactRateSweepResult:
+        """Reuse one exact pure-history evolution across multiple reset rates."""
+
+        if not isinstance(program.reservoirs, BalancedReservoirParameters):
+            raise CompilationError("Rate sweeps require balanced reservoir parameters.")
+        execution = execution or ExecutionSpec()
+        windows = program.validate_windows(windows)
+        rates = np.asarray(reset_rates, dtype=np.float64)
+        expected_shape = (rates.shape[0], program.num_reservoirs) if rates.ndim == 2 else ()
+        if rates.ndim != 2 or expected_shape != rates.shape:
+            raise ValueError("reset_rates must have shape (rate_count, num_reservoirs).")
+        if rates.shape[0] < 1 or np.any((rates <= 0.0) | (rates >= 1.0)):
+            raise ValueError("Every reset rate must lie strictly in (0, 1).")
+        try:
+            import cupy as cp
+        except ImportError as exc:
+            raise BackendDependencyError(
+                "NvidiaBackend requires CuPy built for the local CUDA runtime."
+            ) from exc
+
+        started = perf_counter()
+        pack_started = perf_counter()
+        flat, numeric_layout = pack_program(program, windows)
+        pack_seconds = perf_counter() - pack_started
+        flat_rates = np.broadcast_to(
+            rates.T[None, :, :],
+            (windows.shape[0], program.num_reservoirs, rates.shape[0]),
+        ).reshape(flat.shape[0], rates.shape[0])
+        output_backend = "cupy" if execution.retain_device_array else "numpy"
+        runner = make_runner(
+            program,
+            state_dtype=Precision.COMPLEX128.value,
+            chunk_size=execution.chunk_size or self.chunk_size,
+            gpu_id=self.gpu_id,
+            output_backend=output_backend,
+            output_kind="expectation",
+        )
+        masks = [
+            runner._masks_from_pauli_label(label)
+            for label in program.observables.labels
+        ]
+        device = cp.cuda.Device(self.gpu_id) if self.gpu_id is not None else cp.cuda.Device()
+        with device:
+            pool = cp.get_default_memory_pool()
+            baseline_pool_bytes = int(pool.total_bytes())
+            cp.cuda.Stream.null.synchronize()
+            gpu_started = perf_counter()
+            values = runner.run_multi_rate_expectations(
+                flat=flat,
+                layout=numeric_layout,
+                angle_positioning_name=program.angle_map,
+                plus_state=runner._plus_state(program.num_qubits).astype(
+                    Precision.COMPLEX128.value, copy=False
+                ),
+                chunk_size=execution.chunk_size or self.chunk_size,
+                pauli_masks=masks,
+                reset_rates=flat_rates,
+            ).reshape(
+                windows.shape[0],
+                program.num_reservoirs,
+                rates.shape[0],
+                program.observables.size,
+            ).transpose(0, 2, 1, 3)
+            cp.cuda.Stream.null.synchronize()
+            gpu_seconds = perf_counter() - gpu_started
+            peak_pool_bytes = max(0, int(pool.total_bytes()) - baseline_pool_bytes)
+
+        return ExactRateSweepResult(
+            values=values,
+            execution_metadata=ExecutionMetadata(
+                backend_kind=BackendKind.NVIDIA,
+                estimator_kind=EstimatorKind.EXACT,
+                exact=True,
+                program_fingerprint=program.fingerprint(),
+                details={
+                    "engine": self.engine,
+                    "gpu_id": self.gpu_id,
+                    "channel_realization": "exact-shared-pure-history-rate-sweep",
+                    "history_truncation": False,
+                    "branch_pruning": False,
+                    "rate_count": int(rates.shape[0]),
+                    "elapsed_seconds": perf_counter() - started,
+                    "chunk_size": execution.chunk_size or self.chunk_size,
+                    "device_output": bool(execution.retain_device_array),
+                    "timings": {
+                        "projection_pack_seconds": float(pack_seconds),
+                        "gpu_execution_seconds": float(gpu_seconds),
+                    },
+                    "resources": {
+                        "gpu_pool_baseline_bytes": baseline_pool_bytes,
+                        "gpu_peak_increment_bytes": peak_pool_bytes,
+                    },
+                },
+            ),
+        )
 
     def execute(
         self,

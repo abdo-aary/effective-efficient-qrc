@@ -86,7 +86,7 @@ therefore do not change either experiment or node identity.
 
 | Campaign | Maximal acquisition | Legal derived views |
 | --- | --- | --- |
-| I | `R=64` exact branch design | `R` prefixes, width and observable-bank views |
+| I | `tau_plus x R=64` exact branch design with shared pure histories | `tau_plus` selections, `R` prefixes, width and observable-bank views |
 | II | `M=8192` grouped outcomes or one causal proxy | `M`, `w`, or `N` prefixes |
 | III | exact `(S=256, R=32)` pool; separate measured `S=64` pool | `(S,R)`, `(S,N)`, or measured `S` prefixes |
 
@@ -117,10 +117,12 @@ class NumpyTrajectoryProvider:
 ```
 
 The first numerical implementation is intentionally study-local:
-`memory_vs_lag` uses one `R_max=64` exact balanced-reservoir acquisition per
-split and endpoint, derives the reportable `R=16` as an array slice, fits all
-eight memory tasks in one multi-output readout per endpoint, and retains
-separate NEMSE artifacts per lag.
+`memory_vs_lag` uses one `tau_plus x R_max=64` exact balanced-reservoir
+acquisition per split. The mixer and input-dependent pure reset histories do
+not depend on the reset rate, so they are evolved once and contracted against
+all locked geometric rate vectors. Endpoint views and the reportable `R=16`
+prefix are array slices. Each endpoint still receives its own multi-output
+readout and separate NEMSE artifacts per lag.
 
 Representation and readout providers follow the same rule: consume explicit
 specification fields and return typed payloads without reconstructing graph
