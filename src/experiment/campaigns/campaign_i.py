@@ -7,6 +7,9 @@ from ..domain import (
     CampaignId,
     ComparisonKind,
     ComparisonSpec,
+    EvaluationSpec,
+    FitSpec,
+    RiskRole,
     SelectionRule,
 )
 from ..manifest import RunManifest
@@ -39,7 +42,7 @@ def plan_campaign_i(manifest: RunManifest, repetition):
 
 def _memory_vs_lag(builder: PlanBuilder) -> None:
     tasks = tuple(f"F_mem_{lag}" for lag in L_GRID)
-    train, test, pairing = builder.add_paired_data("memory_vs_lag", tasks=tasks, input_dim=1)
+    train, test, pairing = builder.add_paired_data("memory_vs_lag", study_id="memory_vs_lag", tasks=tasks, input_dim=1)
     for tau in TAU_PLUS_GRID:
         stem = f"memory_vs_lag/tau_plus={tau}"
         train_acq = builder.add_acquisition(
@@ -80,12 +83,52 @@ def _memory_vs_lag(builder: PlanBuilder) -> None:
             pairing_key=pairing,
             prefixes=limits(R=16),
         )
-        builder.add_predictive_pair(stem, train_view=train_view, test_view=test_view, tasks=tasks, pairing_key=pairing)
+        fit_id = f"{stem}/fit/memory_tasks"
+        builder.fits.append(
+            FitSpec(
+                id=fit_id,
+                study_id="memory_vs_lag",
+                feature_view_id=train_view,
+                task_ids=tasks,
+                readout_key="fixed_rms_matern_ivanov",
+                pairing_key=pairing,
+                parameters={"tau_plus": tau, "n": 8, "R": 16, "multi_output": True},
+            )
+        )
+        for lag, task in zip(L_GRID, tasks):
+            evaluation_id = f"{stem}/eval/{task}"
+            denominator = f"{pairing}/labels/{task}"
+            reporting = {"tau_plus": tau, "lag": lag, "n": 8, "R": 16}
+            builder.evaluations.append(
+                EvaluationSpec(
+                    id=evaluation_id,
+                    study_id="memory_vs_lag",
+                    fit_id=fit_id,
+                    feature_view_id=test_view,
+                    data_id=test,
+                    task_ids=(task,),
+                    risk_role=RiskRole.TEST,
+                    denominator_key=denominator,
+                    pairing_key=pairing,
+                    parameters=reporting,
+                )
+            )
+            builder.comparisons.append(
+                ComparisonSpec(
+                    id=f"{stem}/nemse/{task}",
+                    study_id="memory_vs_lag",
+                    kind=ComparisonKind.NEMSE,
+                    evaluation_ids=(evaluation_id,),
+                    denominator_key=denominator,
+                    pairing_key=pairing,
+                    parameters=reporting,
+                )
+            )
 
 
 def _multiplex_vs_modes(builder: PlanBuilder) -> None:
     tasks = tuple(f"F_multi_{modes}" for modes in H_GRID)
-    train, test, pairing = builder.add_paired_data("multiplex_vs_modes", tasks=tasks, input_dim=1)
+    train, test, pairing = builder.add_paired_data("multiplex_vs_modes", study_id="multiplex_vs_modes", tasks=tasks, input_dim=1)
     variants = {
         "heterogeneous": ("quark", {"n": 8, "tau_plus": 32}),
         "homogeneous_center": (
@@ -190,7 +233,9 @@ def _width_vs_spatial(builder: PlanBuilder) -> None:
     for dimension in D_GRID:
         task = f"F_sp_{dimension}"
         study = f"width_vs_spatial/d={dimension}"
-        train, test, pairing = builder.add_paired_data(study, tasks=(task,), input_dim=dimension)
+        train, test, pairing = builder.add_paired_data(
+            study, study_id="width_vs_spatial", tasks=(task,), input_dim=dimension
+        )
         raw_train = builder.add_acquisition(
             f"{study}/raw/acquire/train", data_id=train, split="train",
             kind=AcquisitionKind.RAW_HISTORY, pairing_key=pairing,
@@ -274,7 +319,7 @@ def _mixer_mechanism(builder: PlanBuilder) -> None:
     independent = ("F_mem_8", "F_int_16", "F_C6")
     tasks = conditioned + independent
     train, test, pairing = builder.add_paired_data(
-        "mixer_mechanism", tasks=tasks, input_dim=16,
+        "mixer_mechanism", study_id="mixer_mechanism", tasks=tasks, input_dim=16,
         projection_conditioned_tasks=conditioned
     )
     for dynamics in ("identity", "local_only", "full_cycle"):
@@ -304,6 +349,7 @@ def _mixer_mechanism(builder: PlanBuilder) -> None:
             )
             builder.comparisons.append(
                 ComparisonSpec(
+                    study_id="mixer_mechanism",
                     id=f"{stem}/diagnostics",
                     kind=ComparisonKind.DIAGNOSTIC,
                     evaluation_ids=(evals[0],),
@@ -341,6 +387,7 @@ def _mixer_mechanism(builder: PlanBuilder) -> None:
         cost_evaluations.append(evaluations[0])
     builder.comparisons.append(
         ComparisonSpec(
+            study_id="mixer_mechanism",
             id="mixer_mechanism/cost_matched/bank_comparison",
             kind=ComparisonKind.DIAGNOSTIC,
             evaluation_ids=tuple(cost_evaluations),
@@ -353,7 +400,7 @@ def _mixer_mechanism(builder: PlanBuilder) -> None:
 
 def _task_atlas(builder: PlanBuilder) -> None:
     tasks = ATLAS_TASKS
-    train, test, pairing = builder.add_paired_data("task_atlas", tasks=tasks, input_dim=64)
+    train, test, pairing = builder.add_paired_data("task_atlas", study_id="task_atlas", tasks=tasks, input_dim=64)
     methods = {
         **{f"quark_{name}": (AcquisitionKind.EXACT, "quark", {"n": n, "R": r, "tau_plus": tau})
            for name, (n, r, tau) in ARCHITECTURE_TIERS.items()},

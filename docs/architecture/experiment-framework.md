@@ -49,6 +49,8 @@ classDiagram
 - `FitSpec` can reference training views only.
 - `EvaluationSpec` applies a frozen fit to a declared train or held-out view.
 - `ComparisonSpec` makes shared-readout and shared-denominator semantics explicit.
+- Every node carries an explicit `study_id`; dependency edges crossing studies
+  are invalid. Study selection never relies on node-name prefixes.
 
 The planners are pure deterministic functions. Numerical behavior is supplied
 through data, representation, and readout protocols. The initial fake provider
@@ -73,9 +75,12 @@ measurement streams.
 contract digest and pre-run choices. It excludes the artifact root. One
 experiment is the tuple `(campaign, repetition index, manifest digest)`.
 
-Every node adds its specification, plan digest, stage, and ordered upstream
-digests to that identity. Requested stopping stages therefore do not change
-either experiment or node identity.
+Every node adds its specification, plan digest, stage, versioned provider
+identity, and ordered upstream digests to that identity. Provider kind,
+algorithm version, backend kind, and numerical precision prevent fake and
+numerical artifacts from sharing a cache entry. GPU ID and chunk size are
+operational metadata and do not change identity. Requested stopping stages
+therefore do not change either experiment or node identity.
 
 ## Cache shapes
 
@@ -93,17 +98,30 @@ Providers consume validated specifications; they do not reconstruct semantics
 from node names. A data provider can start with this boundary:
 
 ```python
-from typing import Mapping
-
-from src.experiment import DataSpec
+from src.experiment import DataSpec, NodePayload, ProviderIdentity
 from src.experiment.seeding import PathSeedTree
 
 
 class NumpyTrajectoryProvider:
-    def prepare(self, spec: DataSpec, seeds: PathSeedTree) -> Mapping[str, object]:
-        rng = seeds.generator(f"data/{spec.split}/{spec.trajectory_id}")
+    identity = ProviderIdentity(
+        "example_data", "v1", "numpy_cpu", "float64"
+    )
+
+    def prepare(self, spec: DataSpec, seeds: PathSeedTree) -> NodePayload:
+        rng = seeds.generator(f"data/{spec.study_id}/{spec.split}")
         inputs = rng.normal(size=(spec.sample_count, spec.input_dim))
-        return {"inputs": inputs.tolist()}
+        return NodePayload(
+            metadata={"split": spec.split},
+            assets={"inputs": inputs},
+        )
 ```
 
-Representation and readout providers follow the same rule: use explicit spec
+The first numerical implementation is intentionally study-local:
+`memory_vs_lag` uses one `R_max=64` exact balanced-reservoir acquisition per
+split and endpoint, derives the reportable `R=16` as an array slice, fits all
+eight memory tasks in one multi-output readout per endpoint, and retains
+separate NEMSE artifacts per lag.
+
+Representation and readout providers follow the same rule: consume explicit
+specification fields and return typed payloads without reconstructing graph
+semantics from IDs.

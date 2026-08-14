@@ -15,6 +15,7 @@ from .exceptions import (
 )
 from .observables import ObservableSet
 from .program import (
+    BalancedReservoirParameters,
     ProjectionSpec,
     QuaRKProgram,
     ResetChannelSpec,
@@ -26,6 +27,7 @@ from .results import ExecutionMetadata, FeatureBatch, StateBatch
 from .seeds import SeedBundle
 
 __all__ = [
+    "BalancedReservoirParameters",
     "BackendCapabilities",
     "BackendDependencyError",
     "BackendKind",

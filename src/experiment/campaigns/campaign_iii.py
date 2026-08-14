@@ -37,7 +37,7 @@ def plan_campaign_iii(manifest: RunManifest, repetition):
 
 def _main_pool_search(builder: PlanBuilder) -> None:
     tasks = builder.manifest.pre_run.frozen_pool_tasks
-    train, test, pairing = builder.add_paired_data("frozen_pool/main", tasks=tasks, input_dim=64)
+    train, test, pairing = builder.add_paired_data("frozen_pool/main", study_id="frozen_pool_search", tasks=tasks, input_dim=64)
     resources = {"n": 8, "tau_plus": 32, "features": "exact"}
     train_acq = builder.add_acquisition(
         "frozen_pool/main/acquire/train", data_id=train, split="train",
@@ -67,14 +67,14 @@ def _main_pool_search(builder: PlanBuilder) -> None:
             for task in tasks:
                 _add_selection_cell(
                     builder, stem, train_view, test_view, test, pairing, task,
-                    pool_size=pool_size, sample_count=1024, branches=branches, measured_m=None
+                    study_id="frozen_pool_search", pool_size=pool_size, sample_count=1024, branches=branches, measured_m=None
                 )
 
 
 def _selection_pressure(builder: PlanBuilder) -> None:
     tasks = ("F_multi_8", "F_C6")
     train, test, pairing = builder.add_paired_data(
-        "frozen_pool/selection_pressure", tasks=tasks, input_dim=64,
+        "frozen_pool/selection_pressure", study_id="selection_pressure", tasks=tasks, input_dim=64,
         sample_count=max(SELECTION_N_GRID)
     )
     resources = {"n": 8, "R": 16, "tau_plus": 32, "features": "exact"}
@@ -106,13 +106,13 @@ def _selection_pressure(builder: PlanBuilder) -> None:
             for task in tasks:
                 _add_selection_cell(
                     builder, stem, train_view, test_view, test, pairing, task,
-                    pool_size=pool_size, sample_count=sample_count, branches=16, measured_m=None
+                    study_id="selection_pressure", pool_size=pool_size, sample_count=sample_count, branches=16, measured_m=None
                 )
 
 
 def _finite_shot_ranking(builder: PlanBuilder) -> None:
     tasks = builder.manifest.pre_run.frozen_pool_tasks
-    train, test, pairing = builder.add_paired_data("frozen_pool/finite_shot", tasks=tasks, input_dim=64)
+    train, test, pairing = builder.add_paired_data("frozen_pool/finite_shot", study_id="finite_shot_ranking", tasks=tasks, input_dim=64)
     shots = builder.manifest.pre_run.campaign_iii_finite_shot_m
     resources = {"n": 8, "R": 16, "tau_plus": 32, "M": shots, "settings": 9}
     train_acq = builder.add_acquisition(
@@ -140,7 +140,7 @@ def _finite_shot_ranking(builder: PlanBuilder) -> None:
         for task in tasks:
             _add_selection_cell(
                 builder, stem, train_view, test_view, test, pairing, task,
-                pool_size=pool_size, sample_count=1024, branches=16, measured_m=shots
+                study_id="finite_shot_ranking", pool_size=pool_size, sample_count=1024, branches=16, measured_m=shots
             )
 
 
@@ -153,6 +153,7 @@ def _add_selection_cell(
     pairing: str,
     task: str,
     *,
+    study_id: str,
     pool_size: int,
     sample_count: int,
     branches: int,
@@ -164,6 +165,7 @@ def _add_selection_cell(
     rule = SelectionRule.POOL_ERM if pool_size > 1 else SelectionRule.FULL_SAMPLE_ERM
     builder.fits.append(
         FitSpec(
+            study_id=study_id,
             id=fit_id, feature_view_id=train_view, task_ids=(task,),
             readout_key="fixed_rms_matern_ivanov", selection_rule=rule,
             candidate_count=pool_size, pairing_key=pairing,
@@ -174,11 +176,13 @@ def _add_selection_cell(
     builder.evaluations.extend(
         (
             EvaluationSpec(
+                study_id=study_id,
                 id=selected, fit_id=fit_id, feature_view_id=test_view, data_id=test_data,
                 task_ids=(task,), risk_role=RiskRole.TEST, denominator_key=denominator,
                 mode="selected", pairing_key=pairing
             ),
             EvaluationSpec(
+                study_id=study_id,
                 id=oracle, fit_id=fit_id, feature_view_id=test_view, data_id=test_data,
                 task_ids=(task,), risk_role=RiskRole.TEST, denominator_key=denominator,
                 mode="oracle", pairing_key=pairing
@@ -195,16 +199,19 @@ def _add_selection_cell(
     builder.comparisons.extend(
         (
             ComparisonSpec(
+                study_id=study_id,
                 id=f"{node}/selection_regret", kind=ComparisonKind.SELECTION_REGRET,
                 evaluation_ids=(selected, oracle), denominator_key=denominator,
                 pairing_key=pairing, parameters=params
             ),
             ComparisonSpec(
+                study_id=study_id,
                 id=f"{node}/selected_nemse", kind=ComparisonKind.NEMSE,
                 evaluation_ids=(selected,), denominator_key=denominator,
                 pairing_key=pairing, parameters=params
             ),
             ComparisonSpec(
+                study_id=study_id,
                 id=f"{node}/oracle_nemse", kind=ComparisonKind.NEMSE,
                 evaluation_ids=(oracle,), denominator_key=denominator,
                 pairing_key=pairing, parameters=params

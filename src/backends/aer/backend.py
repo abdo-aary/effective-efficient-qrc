@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from src.backends._legacy import template_pubs
+from src.backends.balanced import balanced_density_matrices
 from src.core.capabilities import (
     BackendCapabilities,
     BackendKind,
@@ -16,7 +17,7 @@ from src.core.capabilities import (
     Precision,
 )
 from src.core.exceptions import BackendDependencyError, CapabilityError, CompilationError
-from src.core.program import QuaRKProgram
+from src.core.program import BalancedReservoirParameters, QuaRKProgram
 from src.core.requests import CompiledFeaturePlan, ExecutionSpec
 from src.core.results import ExecutionMetadata, FeatureBatch, StateBatch
 from src.estimators.csmom import (
@@ -89,7 +90,11 @@ class AerCPUBackend:
             program_fingerprint=program.fingerprint(),
             payload=_AerPayload(program=program, estimator=estimator),
             compilation_metadata={
-                "channel_realization": "2n+1-qubit-swap-dilation",
+                "channel_realization": (
+                    "dense-balanced-replacement-channel"
+                    if isinstance(program.reservoirs, BalancedReservoirParameters)
+                    else "2n+1-qubit-swap-dilation"
+                ),
                 "simulator_method": "density_matrix",
                 "optimization_level": self.optimization_level,
             },
@@ -101,6 +106,8 @@ class AerCPUBackend:
         windows: np.ndarray,
         execution: ExecutionSpec,
     ) -> np.ndarray:
+        if isinstance(program.reservoirs, BalancedReservoirParameters):
+            return balanced_density_matrices(program, windows)
         try:
             from src.backends.aer.legacy_runner import ExactAerCircuitsRunner
         except ImportError as exc:

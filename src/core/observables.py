@@ -68,6 +68,32 @@ class ObservableSet:
         return cls(tuple(labels))
 
     @classmethod
+    def cycle_complete(
+        cls,
+        *,
+        num_qubits: int,
+        edges: tuple[tuple[int, int], ...],
+    ) -> "ObservableSet":
+        """Return vertex Paulis followed by all Pauli products on cycle edges."""
+
+        n = int(num_qubits)
+        if n < 3 or len(edges) != n:
+            raise ValueError("The complete cycle bank requires an n>=3 cycle with n edges.")
+        labels: list[str] = []
+        for qubit in range(n):
+            for letter in ("X", "Y", "Z"):
+                chars = ["I"] * n
+                chars[n - 1 - qubit] = letter
+                labels.append("".join(chars))
+        for left, right in edges:
+            for left_letter, right_letter in product(("X", "Y", "Z"), repeat=2):
+                chars = ["I"] * n
+                chars[n - 1 - int(left)] = left_letter
+                chars[n - 1 - int(right)] = right_letter
+                labels.append("".join(chars))
+        return cls(tuple(labels))
+
+    @classmethod
     def from_qiskit(cls, observables: object) -> "ObservableSet":
         """Boundary helper accepting single-term Qiskit Pauli-like objects.
 

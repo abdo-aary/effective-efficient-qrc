@@ -527,7 +527,6 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
     ) -> Any:
         cp = self._cupy or self._import_cupy()
         B = int(states.shape[0])
-        active_count = int(states.shape[1])
         dim = 1 << int(n)
         rows = cp.arange(dim, dtype=cp.uint32)
         out = cp.empty((B, len(pauli_masks)), dtype=cp.float64)
@@ -535,14 +534,16 @@ class ExactReservoirChannelRunner(BaseCircuitsRunner):
         for k, (xmask, zmask, ny) in enumerate(pauli_masks):
             cols = rows ^ cp.uint32(xmask)
             phase = self._pauli_phase_vector_cupy(zmask=zmask, ny=ny, dim=dim)
-            acc = cp.zeros((B,), dtype=cp.complex128)
-            for a in range(active_count):
-                psi = states[:, a, :]
-                # Mirrors ExactFeatureMapsRetriever's trace formula for
-                # rho = |psi><psi| without materializing rho.
-                exp_a = cp.sum(psi * cp.conj(psi[:, cols]) * phase[None, :], axis=1)
-                acc += weights[:, a] * exp_a
-            out[:, k] = acc.real
+            # Reduce every exact reset history in one GPU expression. This is
+            # mathematically identical to the history loop but avoids O(K*w)
+            # Python-dispatched kernels per chunk.
+            exp_by_history = cp.sum(
+                states
+                * cp.conj(states[:, :, cols])
+                * phase[None, None, :],
+                axis=2,
+            )
+            out[:, k] = cp.sum(weights * exp_by_history, axis=1).real
 
         return out
 

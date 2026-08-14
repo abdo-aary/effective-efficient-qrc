@@ -20,6 +20,7 @@ def minimal_plan(manifest_digest: str = "manifest") -> ExperimentPlan:
     pairing = "test/pair"
     tasks = ("task",)
     train = DataSpec(
+    study_id="minimal",
         id="data/train",
         split="train",
         trajectory_id="trajectory",
@@ -31,6 +32,7 @@ def minimal_plan(manifest_digest: str = "manifest") -> ExperimentPlan:
         pairing_key=pairing,
     )
     test = DataSpec(
+    study_id="minimal",
         id="data/test",
         split="test",
         trajectory_id="trajectory",
@@ -42,6 +44,7 @@ def minimal_plan(manifest_digest: str = "manifest") -> ExperimentPlan:
         pairing_key=pairing,
     )
     train_acq = AcquisitionSpec(
+    study_id="minimal",
         id="acquire/train",
         data_id=train.id,
         kind=AcquisitionKind.EXACT,
@@ -53,6 +56,7 @@ def minimal_plan(manifest_digest: str = "manifest") -> ExperimentPlan:
         program_key="fake",
     )
     test_acq = AcquisitionSpec(
+    study_id="minimal",
         id="acquire/test",
         data_id=test.id,
         kind=AcquisitionKind.EXACT,
@@ -64,6 +68,7 @@ def minimal_plan(manifest_digest: str = "manifest") -> ExperimentPlan:
         program_key="fake",
     )
     train_view = FeatureViewSpec(
+    study_id="minimal",
         id="view/train",
         acquisition_id=train_acq.id,
         data_id=train.id,
@@ -72,6 +77,7 @@ def minimal_plan(manifest_digest: str = "manifest") -> ExperimentPlan:
         pairing_key=pairing,
     )
     test_view = FeatureViewSpec(
+    study_id="minimal",
         id="view/test",
         acquisition_id=test_acq.id,
         data_id=test.id,
@@ -80,6 +86,7 @@ def minimal_plan(manifest_digest: str = "manifest") -> ExperimentPlan:
         pairing_key=pairing,
     )
     fit = FitSpec(
+    study_id="minimal",
         id="fit",
         feature_view_id=train_view.id,
         task_ids=tasks,
@@ -87,6 +94,7 @@ def minimal_plan(manifest_digest: str = "manifest") -> ExperimentPlan:
         pairing_key=pairing,
     )
     evaluation = EvaluationSpec(
+    study_id="minimal",
         id="evaluation",
         fit_id=fit.id,
         feature_view_id=test_view.id,
@@ -97,6 +105,7 @@ def minimal_plan(manifest_digest: str = "manifest") -> ExperimentPlan:
         pairing_key=pairing,
     )
     comparison = ComparisonSpec(
+    study_id="minimal",
         id="comparison",
         kind=ComparisonKind.NEMSE,
         evaluation_ids=(evaluation.id,),

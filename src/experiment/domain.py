@@ -140,6 +140,7 @@ class ResourceLimit:
 @dataclass(frozen=True)
 class DataSpec:
     id: str
+    study_id: str
     split: str
     trajectory_id: str
     task_ids: tuple[str, ...]
@@ -169,6 +170,7 @@ class DataSpec:
 @dataclass(frozen=True)
 class AcquisitionSpec:
     id: str
+    study_id: str
     data_id: str
     kind: AcquisitionKind
     split: str
@@ -200,6 +202,7 @@ class AcquisitionSpec:
 @dataclass(frozen=True)
 class FeatureViewSpec:
     id: str
+    study_id: str
     acquisition_id: str
     data_id: str
     split: str
@@ -222,6 +225,7 @@ class FeatureViewSpec:
 @dataclass(frozen=True)
 class FitSpec:
     id: str
+    study_id: str
     feature_view_id: str
     task_ids: tuple[str, ...]
     readout_key: str
@@ -244,6 +248,7 @@ class FitSpec:
 @dataclass(frozen=True)
 class EvaluationSpec:
     id: str
+    study_id: str
     fit_id: str
     feature_view_id: str
     data_id: str
@@ -263,6 +268,7 @@ class EvaluationSpec:
 @dataclass(frozen=True)
 class ComparisonSpec:
     id: str
+    study_id: str
     kind: ComparisonKind
     evaluation_ids: tuple[str, ...]
     denominator_key: str = ""
@@ -302,12 +308,18 @@ class ExperimentPlan:
     def to_dict(self) -> dict[str, Any]:
         return json_value(self)
 
+    @property
+    def study_ids(self) -> tuple[str, ...]:
+        return tuple(sorted({item.study_id for item in self.data}))
+
     def validate(self) -> None:
         groups = (self.data, self.acquisitions, self.feature_views, self.fits, self.evaluations, self.comparisons)
         for group in groups:
             ids = [item.id for item in group]
             if len(ids) != len(set(ids)):
                 raise ValueError(f"Plan contains duplicate IDs in {type(group[0]).__name__ if group else 'group'}.")
+            if any(not item.study_id.strip() for item in group):
+                raise ValueError("Every plan node requires an explicit nonempty study_id.")
 
         data = {item.id: item for item in self.data}
         acquisitions = {item.id: item for item in self.acquisitions}
@@ -321,6 +333,7 @@ class ExperimentPlan:
                 raise ValueError(f"Acquisition {acquisition.id!r} crosses data splits.")
             if source.pairing_key != acquisition.pairing_key:
                 raise ValueError(f"Acquisition {acquisition.id!r} breaks its data pairing.")
+            _same_study(acquisition, source)
 
         for view in self.feature_views:
             acquisition = _require(acquisitions, view.acquisition_id, "acquisition", view.id)
@@ -331,6 +344,7 @@ class ExperimentPlan:
                 raise ValueError(f"Feature view {view.id!r} breaks its data pairing.")
             if not set(view.task_ids).issubset(source.task_ids):
                 raise ValueError(f"Feature view {view.id!r} requests unknown tasks.")
+            _same_study(view, acquisition, source)
             for selection in view.prefixes:
                 limit = acquisition.limit(selection.axis)
                 if limit is None or selection.value > limit:
@@ -348,6 +362,7 @@ class ExperimentPlan:
                 raise ValueError(f"Fit {fit.id!r} breaks its feature pairing.")
             if not set(fit.task_ids).issubset(view.task_ids):
                 raise ValueError(f"Fit {fit.id!r} requests tasks missing from its feature view.")
+            _same_study(fit, view, source)
             pool_prefix = next((item.value for item in view.prefixes if item.axis is PrefixAxis.S), None)
             if pool_prefix is not None and fit.candidate_count != pool_prefix:
                 raise ValueError(f"Fit {fit.id!r} does not use its complete candidate prefix.")
@@ -366,12 +381,14 @@ class ExperimentPlan:
                 raise ValueError(f"Evaluation {evaluation.id!r} breaks its experiment pairing.")
             if not set(evaluation.task_ids).issubset(fit.task_ids):
                 raise ValueError(f"Evaluation {evaluation.id!r} requests tasks not fitted by {fit.id!r}.")
+            _same_study(evaluation, fit, view, source)
             expected_split = "train" if evaluation.risk_role is RiskRole.TRAIN else "test"
             if source.split != expected_split:
                 raise ValueError(f"Evaluation {evaluation.id!r} uses the wrong data split.")
 
         for comparison in self.comparisons:
             members = [_require(evaluations, item, "evaluation", comparison.id) for item in comparison.evaluation_ids]
+            _same_study(comparison, *members)
             if comparison.denominator_key and any(
                 member.denominator_key != comparison.denominator_key for member in members
             ):
@@ -410,6 +427,13 @@ class ExperimentPlan:
                     raise ValueError("Selection regret requires selected and oracle evaluations.")
                 if len({item.fit_id for item in members}) != 1:
                     raise ValueError("Selected and oracle risks must use one frozen candidate fit collection.")
+
+
+def _same_study(owner: Any, *dependencies: Any) -> None:
+    if any(item.study_id != owner.study_id for item in dependencies):
+        raise ValueError(
+            f"Node {owner.id!r} in study {owner.study_id!r} has a cross-study dependency."
+        )
 
 
 def _require(values: Mapping[str, Any], key: str, kind: str, owner: str) -> Any:

@@ -38,7 +38,7 @@ def plan_campaign_ii(manifest: RunManifest, repetition):
 
 def _shot_fidelity(builder: PlanBuilder) -> None:
     tasks = builder.manifest.pre_run.fidelity_tasks
-    train, test, pairing = builder.add_paired_data("shot_fidelity", tasks=tasks, input_dim=16)
+    train, test, pairing = builder.add_paired_data("shot_fidelity", study_id="shot_fidelity", tasks=tasks, input_dim=16)
     for width, branches in SHOT_ARCHITECTURES:
         stem = f"shot_fidelity/n={width}/R={branches}"
         resources = {"n": width, "R": branches, "tau_plus": 32, "settings": 9}
@@ -80,6 +80,7 @@ def _shot_fidelity(builder: PlanBuilder) -> None:
                 denominator = f"{pairing}/labels/{task}"
                 builder.fits.append(
                     FitSpec(
+                        study_id="shot_fidelity",
                         id=fit_id, feature_view_id=measured_train_view, task_ids=(task,),
                         readout_key="fixed_rms_matern_ivanov", pairing_key=pairing
                     )
@@ -89,11 +90,13 @@ def _shot_fidelity(builder: PlanBuilder) -> None:
                 builder.evaluations.extend(
                     (
                         EvaluationSpec(
+                            study_id="shot_fidelity",
                             id=measured_eval, fit_id=fit_id, feature_view_id=measured_test_view,
                             data_id=test, task_ids=(task,), risk_role=RiskRole.HELDOUT,
                             denominator_key=denominator, pairing_key=pairing
                         ),
                         EvaluationSpec(
+                            study_id="shot_fidelity",
                             id=exact_eval, fit_id=fit_id, feature_view_id=exact_view,
                             data_id=test, task_ids=(task,), risk_role=RiskRole.HELDOUT,
                             denominator_key=denominator, pairing_key=pairing
@@ -103,11 +106,13 @@ def _shot_fidelity(builder: PlanBuilder) -> None:
                 builder.comparisons.extend(
                     (
                         ComparisonSpec(
+                            study_id="shot_fidelity",
                             id=f"{node}/shot_gap", kind=ComparisonKind.SHOT_GAP,
                             evaluation_ids=(measured_eval, exact_eval), denominator_key=denominator,
                             pairing_key=pairing, parameters={"M": shots, "x_axis": "M^-1/2"}
                         ),
                         ComparisonSpec(
+                            study_id="shot_fidelity",
                             id=f"{node}/nemse", kind=ComparisonKind.NEMSE,
                             evaluation_ids=(measured_eval,), denominator_key=denominator,
                             pairing_key=pairing
@@ -118,7 +123,7 @@ def _shot_fidelity(builder: PlanBuilder) -> None:
 
 def _window_fidelity(builder: PlanBuilder) -> None:
     tasks = builder.manifest.pre_run.fidelity_tasks
-    train, test, pairing = builder.add_paired_data("window_fidelity", tasks=tasks, input_dim=16)
+    train, test, pairing = builder.add_paired_data("window_fidelity", study_id="window_fidelity", tasks=tasks, input_dim=16)
     for tau in TAU_PLUS_GRID:
         stem = f"window_fidelity/tau_plus={tau}"
         resources = {"n": 8, "R": 16, "tau_plus": tau}
@@ -161,6 +166,7 @@ def _window_fidelity(builder: PlanBuilder) -> None:
                 denominator = f"{pairing}/labels/{task}"
                 builder.fits.append(
                     FitSpec(
+                        study_id="window_fidelity",
                         id=fit_id, feature_view_id=finite_train_view, task_ids=(task,),
                         readout_key="fixed_rms_matern_ivanov", pairing_key=pairing
                     )
@@ -169,11 +175,13 @@ def _window_fidelity(builder: PlanBuilder) -> None:
                 builder.evaluations.extend(
                     (
                         EvaluationSpec(
+                            study_id="window_fidelity",
                             id=finite_eval, fit_id=fit_id, feature_view_id=finite_test_view,
                             data_id=test, task_ids=(task,), risk_role=RiskRole.HELDOUT,
                             denominator_key=denominator, pairing_key=pairing
                         ),
                         EvaluationSpec(
+                            study_id="window_fidelity",
                             id=proxy_eval, fit_id=fit_id, feature_view_id=proxy_view,
                             data_id=test, task_ids=(task,), risk_role=RiskRole.HELDOUT,
                             denominator_key=denominator, pairing_key=pairing
@@ -182,6 +190,7 @@ def _window_fidelity(builder: PlanBuilder) -> None:
                 )
                 builder.comparisons.append(
                     ComparisonSpec(
+                        study_id="window_fidelity",
                         id=f"{node}/window_gap", kind=ComparisonKind.WINDOW_GAP,
                         evaluation_ids=(finite_eval, proxy_eval), denominator_key=denominator,
                         pairing_key=pairing,
@@ -197,7 +206,7 @@ def _dependence_fidelity(builder: PlanBuilder) -> None:
         for gap in GAP_GRID:
             study = f"dependence/surface/tau_dep={dep_label}/g={gap}"
             train, test, pairing = builder.add_paired_data(
-                study, tasks=(task,), input_dim=1, sample_count=1024, gap=gap,
+                study, study_id="dependence", tasks=(task,), input_dim=1, sample_count=1024, gap=gap,
                 dependence_half_life=half_life
             )
             _add_generalization_cell(builder, study, train, test, pairing, task, sample_count=1024)
@@ -205,7 +214,7 @@ def _dependence_fidelity(builder: PlanBuilder) -> None:
     for gap in GAP_GRID:
         study = f"dependence/sample_size/tau_dep=16/g={gap}"
         train, test, pairing = builder.add_paired_data(
-            study, tasks=(task,), input_dim=1, sample_count=max(SAMPLE_GRID), gap=gap,
+            study, study_id="dependence", tasks=(task,), input_dim=1, sample_count=max(SAMPLE_GRID), gap=gap,
             dependence_half_life=16
         )
         resources = {"n": 8, "R": 16, "tau_plus": 32, "features": "exact"}
@@ -272,6 +281,7 @@ def _add_generalization_fit(
     denominator = f"{pairing}/labels/{task}"
     builder.fits.append(
         FitSpec(
+            study_id="dependence",
             id=fit_id, feature_view_id=train_view, task_ids=(task,),
             readout_key="fixed_rms_matern_ivanov", pairing_key=pairing
         )
@@ -280,11 +290,13 @@ def _add_generalization_fit(
     builder.evaluations.extend(
         (
             EvaluationSpec(
+                study_id="dependence",
                 id=train_eval, fit_id=fit_id, feature_view_id=train_view, data_id=train_data,
                 task_ids=(task,), risk_role=RiskRole.TRAIN, denominator_key=denominator,
                 pairing_key=pairing
             ),
             EvaluationSpec(
+                study_id="dependence",
                 id=test_eval, fit_id=fit_id, feature_view_id=test_view, data_id=test_data,
                 task_ids=(task,), risk_role=RiskRole.TEST, denominator_key=denominator,
                 pairing_key=pairing
@@ -293,6 +305,7 @@ def _add_generalization_fit(
     )
     builder.comparisons.append(
         ComparisonSpec(
+            study_id="dependence",
             id=f"{node}/generalization_gap/{task}", kind=ComparisonKind.GENERALIZATION_GAP,
             evaluation_ids=(train_eval, test_eval), denominator_key=denominator,
             pairing_key=pairing, parameters={"N": sample_count}

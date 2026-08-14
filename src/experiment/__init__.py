@@ -14,12 +14,20 @@ from .domain import (
     Stage,
 )
 from .manifest import RunManifest, load_manifest
+from .payload import ArrayAsset, ArraySlice, NodePayload
 from .planning import CampaignPlanner, plan_experiment
-from .providers import DataProvider, ReadoutProvider, RepresentationProvider
+from .providers import (
+    DataProvider,
+    ProviderIdentity,
+    ReadoutProvider,
+    RepresentationProvider,
+)
 from .runner import ExperimentResult, ExperimentRunner
 
 __all__ = [
     "AcquisitionSpec",
+    "ArrayAsset",
+    "ArraySlice",
     "ArtifactStore",
     "CampaignId",
     "CampaignPlanner",
@@ -33,6 +41,8 @@ __all__ = [
     "FeatureViewSpec",
     "FitSpec",
     "LocalArtifactStore",
+    "NodePayload",
+    "ProviderIdentity",
     "ReadoutProvider",
     "RepetitionSpec",
     "RepresentationProvider",

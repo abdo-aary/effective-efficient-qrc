@@ -224,7 +224,13 @@ min_a  ||K a-y||_2^2 / N
 s.t.   a^T K a <= Lambda^2.
 ```
 
-Use a deterministic numerical solver/tolerance and record both.  Candidate ties
+Use a deterministic spectral solver/tolerance and record both. Clip only
+kernel eigenvalues in `[-1e-12 ||K||,0)` and reject more negative values.
+Do not add diagonal jitter or ridge regularization to the mathematical kernel.
+Use the minimum-norm pseudoinverse solution when it lies in the Ivanov ball;
+otherwise bracket and solve the unique nonnegative Lagrange multiplier.
+
+Candidate ties
 are broken by the smallest candidate index; within a tied candidate choose the
 minimum-RKHS-norm minimizer.
 

@@ -34,6 +34,7 @@ def test_cartesian_r_s_m_prefix_cache_is_rejected():
     with pytest.raises(ValueError, match="R, S, and M"):
         AcquisitionSpec(
             id="bad",
+            study_id="bad",
             data_id="data/train",
             kind=AcquisitionKind.GROUPED_MEASUREMENT,
             split="train",
@@ -78,3 +79,10 @@ def test_mismatched_evaluation_pairing_is_rejected():
 
     with pytest.raises(ValueError, match="experiment pairing"):
         replace(plan, evaluations=(bad_evaluation,))
+
+
+def test_cross_study_dependency_is_rejected():
+    plan = minimal_plan()
+    bad = replace(plan.acquisitions[0], study_id="another-study")
+    with pytest.raises(ValueError, match="cross-study"):
+        replace(plan, acquisitions=(bad, plan.acquisitions[1]))

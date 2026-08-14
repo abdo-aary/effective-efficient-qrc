@@ -8,6 +8,7 @@ from src.backends.aer import AerCPUBackend
 from src.backends.ibm import IBMRuntimeBackend
 from src.backends.nvidia import NvidiaBackend
 from src.core import (
+    BalancedReservoirParameters,
     BackendCapabilities,
     BackendKind,
     CompiledFeaturePlan,
@@ -75,6 +76,7 @@ def program_from_legacy_components(
 
 __all__ = [
     "AerCPUBackend",
+    "BalancedReservoirParameters",
     "BackendCapabilities",
     "BackendKind",
     "CSMoMFeatureEstimator",

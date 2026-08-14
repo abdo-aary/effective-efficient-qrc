@@ -43,8 +43,9 @@ class PlanBuilder:
 
     def add_paired_data(
         self,
-        study: str,
+        node_stem: str,
         *,
+        study_id: str,
         tasks: Sequence[str],
         input_dim: int,
         sample_count: int = 1024,
@@ -54,10 +55,11 @@ class PlanBuilder:
         projection_conditioned_tasks: Sequence[str] = (),
         parameters: Mapping[str, Any] | None = None,
     ) -> tuple[str, str, str]:
-        pairing = f"{self.campaign.value}/{study}/rep={self.repetition.index}"
-        train_id, test_id = f"{study}/data/train", f"{study}/data/test"
+        pairing = f"{self.campaign.value}/{node_stem}/rep={self.repetition.index}"
+        train_id, test_id = f"{node_stem}/data/train", f"{node_stem}/data/test"
         common = dict(
-            trajectory_id=f"{study}/trajectory",
+            study_id=study_id,
+            trajectory_id=f"{node_stem}/trajectory",
             task_ids=tuple(tasks),
             window_length=int(window_length),
             gap=int(gap),
@@ -91,9 +93,11 @@ class PlanBuilder:
         randomness_path: str = "",
         program_key: str = "quark",
     ) -> str:
+        study_id = next(item.study_id for item in self.data if item.id == data_id)
         self.acquisitions.append(
             AcquisitionSpec(
                 id=node_id,
+                study_id=study_id,
                 data_id=data_id,
                 kind=kind,
                 split=split,
@@ -119,9 +123,13 @@ class PlanBuilder:
         observable_bank: str = "complete",
         parameters: Mapping[str, Any] | None = None,
     ) -> str:
+        study_id = next(
+            item.study_id for item in self.acquisitions if item.id == acquisition_id
+        )
         self.views.append(
             FeatureViewSpec(
                 id=node_id,
+                study_id=study_id,
                 acquisition_id=acquisition_id,
                 data_id=data_id,
                 split=split,
@@ -147,7 +155,12 @@ class PlanBuilder:
         fit_parameters: Mapping[str, Any] | None = None,
     ) -> tuple[str, ...]:
         evaluation_ids: list[str] = []
-        test_data_id = next(view.data_id for view in self.views if view.id == test_view)
+        train_feature = next(view for view in self.views if view.id == train_view)
+        test_feature = next(view for view in self.views if view.id == test_view)
+        if train_feature.study_id != test_feature.study_id:
+            raise ValueError("Predictive pairs cannot cross studies.")
+        study_id = train_feature.study_id
+        test_data_id = test_feature.data_id
         for task in tasks:
             fit_id = f"{node_id}/fit/{task}"
             eval_id = f"{node_id}/eval/{task}"
@@ -155,6 +168,7 @@ class PlanBuilder:
             self.fits.append(
                 FitSpec(
                     id=fit_id,
+                    study_id=study_id,
                     feature_view_id=train_view,
                     task_ids=(task,),
                     readout_key="fixed_rms_matern_ivanov",
@@ -167,6 +181,7 @@ class PlanBuilder:
             self.evaluations.append(
                 EvaluationSpec(
                     id=eval_id,
+                    study_id=study_id,
                     fit_id=fit_id,
                     feature_view_id=test_view,
                     data_id=test_data_id,
@@ -179,6 +194,7 @@ class PlanBuilder:
             self.comparisons.append(
                 ComparisonSpec(
                     id=f"{node_id}/nemse/{task}",
+                    study_id=study_id,
                     kind=ComparisonKind.NEMSE,
                     evaluation_ids=(eval_id,),
                     denominator_key=denominator,

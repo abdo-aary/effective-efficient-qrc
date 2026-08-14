@@ -4,7 +4,16 @@ import json
 
 import pytest
 
-from src.experiment import ExperimentRunner, LocalArtifactStore, Stage
+from pathlib import Path
+
+from src.experiment import (
+    CampaignId,
+    ExperimentRunner,
+    LocalArtifactStore,
+    Stage,
+    load_manifest,
+    plan_experiment,
+)
 from src.experiment.artifact_store import ArtifactIntegrityError
 from src.experiment.providers import FakeProviders
 
@@ -83,3 +92,53 @@ def test_stopping_stage_does_not_change_node_identity(tmp_path):
     assert providers.calls["prepare"] == prepare_calls
     assert dict(partial.node_digests).items() <= dict(complete.node_digests).items()
     assert partial.plan_digest == complete.plan_digest
+
+
+def test_selected_study_executes_and_finalizes_only_its_explicit_nodes(tmp_path):
+    root = Path(__file__).resolve().parents[2]
+    manifest = load_manifest(
+        root / "experiments/empirical_evaluation/manifests/smoke.yaml"
+    )
+    plan = plan_experiment(manifest, CampaignId.REPRESENTATION, 0)
+    providers = FakeProviders()
+    result = _runner(tmp_path, plan, providers).run(plan, study="memory_vs_lag")
+    selected_count = sum(
+        item.study_id == "memory_vs_lag"
+        for group in (
+            plan.data,
+            plan.acquisitions,
+            plan.feature_views,
+            plan.fits,
+            plan.evaluations,
+            plan.comparisons,
+        )
+        for item in group
+    )
+    assert result.finalization_scope == "study"
+    assert result.selected_studies == ("memory_vs_lag",)
+    assert len(result.node_digests) == selected_count + 1
+    assert all(
+        "multiplex_vs_modes" not in key and "task_atlas" not in key
+        for key, _ in result.node_digests
+    )
+
+    calls = providers.calls.copy()
+    resumed = _runner(tmp_path, plan, providers).run(plan, study="memory_vs_lag")
+    assert providers.calls == calls
+    assert resumed.reused_nodes == len(resumed.node_digests)
+
+
+def test_aggregation_requires_completed_study_finalization(tmp_path):
+    plan = minimal_plan("aggregation-completion")
+    providers = FakeProviders()
+    _runner(tmp_path, plan, providers).run(
+        plan, through=Stage.ANALYZE, study="minimal"
+    )
+    assert LocalArtifactStore.aggregate_comparisons(
+        tmp_path, study="minimal"
+    ) == []
+
+    _runner(tmp_path, plan, providers).run(plan, study="minimal")
+    rows = LocalArtifactStore.aggregate_comparisons(tmp_path, study="minimal")
+    assert len(rows) == 1
+    assert rows[0]["comparison_id"] == "comparison"

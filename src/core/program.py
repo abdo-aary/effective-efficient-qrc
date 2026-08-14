@@ -138,6 +138,93 @@ class ReservoirParameters:
 
 
 @dataclass(frozen=True)
+class BalancedReservoirParameters:
+    """Frozen branch parameters for the paper's balanced random mixer."""
+
+    local_axes: np.ndarray
+    local_angles: np.ndarray
+    edge_axes_left: np.ndarray
+    edge_axes_right: np.ndarray
+    edge_angles: np.ndarray
+    matching_orders: np.ndarray
+    reset_rates: np.ndarray
+    reservoir_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        local_axes = _readonly_array(
+            self.local_axes, dtype=np.float64, ndim=3, name="local_axes"
+        )
+        local_angles = _readonly_array(
+            self.local_angles, dtype=np.float64, ndim=2, name="local_angles"
+        )
+        edge_axes_left = _readonly_array(
+            self.edge_axes_left, dtype=np.float64, ndim=3, name="edge_axes_left"
+        )
+        edge_axes_right = _readonly_array(
+            self.edge_axes_right, dtype=np.float64, ndim=3, name="edge_axes_right"
+        )
+        edge_angles = _readonly_array(
+            self.edge_angles, dtype=np.float64, ndim=2, name="edge_angles"
+        )
+        matching_orders = _readonly_array(
+            self.matching_orders, dtype=np.int64, ndim=2, name="matching_orders"
+        )
+        reset_rates = _readonly_array(
+            self.reset_rates, dtype=np.float64, ndim=1, name="reset_rates"
+        )
+
+        R = int(reset_rates.shape[0])
+        if R < 1:
+            raise ValueError("At least one balanced reservoir realization is required.")
+        if local_axes.shape != (*local_angles.shape, 3):
+            raise ValueError("local_axes must have shape (R,n,3) matching local_angles.")
+        if local_angles.shape[0] != R:
+            raise ValueError("Balanced local parameters must have first dimension R.")
+        if edge_axes_left.shape != edge_axes_right.shape:
+            raise ValueError("Left and right edge-axis arrays must have identical shapes.")
+        if edge_axes_left.shape != (*edge_angles.shape, 3):
+            raise ValueError("Edge axes must have shape (R,E,3) matching edge_angles.")
+        if edge_angles.shape[0] != R or matching_orders.shape[0] != R:
+            raise ValueError("Balanced edge and matching arrays must have first dimension R.")
+        for name, axes in (
+            ("local_axes", local_axes),
+            ("edge_axes_left", edge_axes_left),
+            ("edge_axes_right", edge_axes_right),
+        ):
+            norms = np.linalg.norm(axes, axis=-1)
+            if not np.allclose(norms, 1.0, atol=1e-12, rtol=0.0):
+                raise ValueError(f"{name} rows must be unit vectors.")
+        J = int(matching_orders.shape[1])
+        expected_order = np.arange(J, dtype=np.int64)
+        if any(not np.array_equal(np.sort(row), expected_order) for row in matching_orders):
+            raise ValueError("Every matching order must be a permutation of range(J).")
+        if np.any((reset_rates <= 0.0) | (reset_rates >= 1.0)):
+            raise ValueError("Balanced reset_rates must lie strictly in (0,1).")
+        ids = self.reservoir_ids or tuple(
+            f"balanced-reservoir-{index}" for index in range(R)
+        )
+        if len(ids) != R or len(set(ids)) != R:
+            raise ValueError("reservoir_ids must be unique and match the number of reservoirs.")
+
+        object.__setattr__(self, "local_axes", local_axes)
+        object.__setattr__(self, "local_angles", local_angles)
+        object.__setattr__(self, "edge_axes_left", edge_axes_left)
+        object.__setattr__(self, "edge_axes_right", edge_axes_right)
+        object.__setattr__(self, "edge_angles", edge_angles)
+        object.__setattr__(self, "matching_orders", matching_orders)
+        object.__setattr__(self, "reset_rates", reset_rates)
+        object.__setattr__(self, "reservoir_ids", tuple(str(item) for item in ids))
+
+    @property
+    def count(self) -> int:
+        return int(self.reset_rates.shape[0])
+
+    @property
+    def num_qubits(self) -> int:
+        return int(self.local_angles.shape[1])
+
+
+@dataclass(frozen=True)
 class ResetChannelSpec:
     state: str = "plus"
 
@@ -150,7 +237,7 @@ class ResetChannelSpec:
 class QuaRKProgram:
     projection: ProjectionSpec
     topology: ReservoirTopology
-    reservoirs: ReservoirParameters
+    reservoirs: ReservoirParameters | BalancedReservoirParameters
     reset_channel: ResetChannelSpec
     observables: ObservableSet
     window_length: int
@@ -166,8 +253,11 @@ class QuaRKProgram:
             raise ValueError("Projection width must equal the reservoir qubit count.")
         if self.reservoirs.num_qubits != n:
             raise ValueError("Reservoir fields do not match the topology width.")
-        if self.reservoirs.zz.shape[1] != len(self.topology.edges):
-            raise ValueError("ZZ parameter width must equal the number of topology edges.")
+        if isinstance(self.reservoirs, ReservoirParameters):
+            if self.reservoirs.zz.shape[1] != len(self.topology.edges):
+                raise ValueError("ZZ parameter width must equal the number of topology edges.")
+        elif self.reservoirs.edge_angles.shape[1] != len(self.topology.edges):
+            raise ValueError("Balanced edge parameter width must equal the topology edges.")
         if self.observables.num_qubits != n:
             raise ValueError("Observable width must equal the reservoir qubit count.")
         if self.angle_map not in {"linear", "tanh"}:
@@ -211,17 +301,33 @@ class QuaRKProgram:
             "observable_labels": self.observables.labels,
             "reset_state": self.reset_channel.state,
             "reservoir_ids": self.reservoirs.reservoir_ids,
+            "reservoir_parameterization": (
+                "balanced_random_axis"
+                if isinstance(self.reservoirs, BalancedReservoirParameters)
+                else "legacy_ising"
+            ),
         }
         digest = hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
         )
-        for array in (
-            self.projection.matrix,
-            self.reservoirs.zz,
-            self.reservoirs.x_fields,
-            self.reservoirs.z_fields,
-            self.reservoirs.reset_rates,
-        ):
+        if isinstance(self.reservoirs, BalancedReservoirParameters):
+            reservoir_arrays = (
+                self.reservoirs.local_axes,
+                self.reservoirs.local_angles,
+                self.reservoirs.edge_axes_left,
+                self.reservoirs.edge_axes_right,
+                self.reservoirs.edge_angles,
+                self.reservoirs.matching_orders,
+                self.reservoirs.reset_rates,
+            )
+        else:
+            reservoir_arrays = (
+                self.reservoirs.zz,
+                self.reservoirs.x_fields,
+                self.reservoirs.z_fields,
+                self.reservoirs.reset_rates,
+            )
+        for array in (self.projection.matrix, *reservoir_arrays):
             digest.update(str(array.dtype).encode("ascii"))
             digest.update(str(array.shape).encode("ascii"))
             digest.update(array.tobytes(order="C"))

@@ -51,6 +51,10 @@ def test_campaign_i_expands_every_locked_surface_control_and_atlas_task(plans):
     for tau in TAU_PLUS_GRID:
         for lag in L_GRID:
             assert f"memory_vs_lag/tau_plus={tau}/nemse/F_mem_{lag}" in comparisons
+    memory_fits = [item for item in plan.fits if item.study_id == "memory_vs_lag"]
+    assert len(memory_fits) == len(TAU_PLUS_GRID)
+    assert all(len(item.task_ids) == len(L_GRID) for item in memory_fits)
+    assert all(dict(item.parameters)["multi_output"] is True for item in memory_fits)
     for variant in ("heterogeneous", "homogeneous_center"):
         for branches in R_GRID:
             for modes in H_GRID:

@@ -7,7 +7,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from src.backends._legacy import legacy_config
-from src.core.program import QuaRKProgram
+from src.core.factories import cycle_matchings
+from src.core.program import BalancedReservoirParameters, QuaRKProgram
 
 
 @dataclass(frozen=True)
@@ -23,10 +24,29 @@ class NumericProgramLayout:
         return int(self.z_cols.shape[0])
 
 
+@dataclass(frozen=True)
+class BalancedNumericProgramLayout:
+    z_cols: np.ndarray
+    local_axis_cols: np.ndarray
+    local_angle_cols: np.ndarray
+    edge_axis_left_cols: np.ndarray
+    edge_axis_right_cols: np.ndarray
+    edge_angle_cols: np.ndarray
+    matching_order_cols: np.ndarray
+    lam_col: int
+    matchings: tuple[tuple[int, ...], ...]
+
+    @property
+    def w(self) -> int:
+        return int(self.z_cols.shape[0])
+
+
 def pack_program(
     program: QuaRKProgram,
     windows: np.ndarray,
 ) -> tuple[np.ndarray, NumericProgramLayout]:
+    if isinstance(program.reservoirs, BalancedReservoirParameters):
+        return _pack_balanced_program(program, windows)
     projected = np.asarray(windows, dtype=float) @ program.projection.matrix
     N = int(projected.shape[0])
     R = program.num_reservoirs
@@ -70,6 +90,69 @@ def pack_program(
     )
 
 
+def _pack_balanced_program(
+    program: QuaRKProgram,
+    windows: np.ndarray,
+) -> tuple[np.ndarray, BalancedNumericProgramLayout]:
+    parameters = program.reservoirs
+    if not isinstance(parameters, BalancedReservoirParameters):
+        raise TypeError("Expected balanced reservoir parameters.")
+    projected = np.asarray(windows, dtype=float) @ program.projection.matrix
+    N, w, n = projected.shape
+    R = program.num_reservoirs
+    E = len(program.topology.edges)
+    J = parameters.matching_orders.shape[1]
+    cursor = 0
+
+    z_cols = np.arange(cursor, cursor + w * n, dtype=int).reshape(w, n)
+    cursor += w * n
+    local_axis_cols = np.arange(cursor, cursor + n * 3, dtype=int).reshape(n, 3)
+    cursor += n * 3
+    local_angle_cols = np.arange(cursor, cursor + n, dtype=int)
+    cursor += n
+    edge_axis_left_cols = np.arange(cursor, cursor + E * 3, dtype=int).reshape(E, 3)
+    cursor += E * 3
+    edge_axis_right_cols = np.arange(cursor, cursor + E * 3, dtype=int).reshape(E, 3)
+    cursor += E * 3
+    edge_angle_cols = np.arange(cursor, cursor + E, dtype=int)
+    cursor += E
+    matching_order_cols = np.arange(cursor, cursor + J, dtype=int)
+    cursor += J
+    lam_col = cursor
+
+    injection = projected.reshape(N, w * n)
+    reservoir = np.concatenate(
+        [
+            parameters.local_axes.reshape(R, n * 3),
+            parameters.local_angles,
+            parameters.edge_axes_left.reshape(R, E * 3),
+            parameters.edge_axes_right.reshape(R, E * 3),
+            parameters.edge_angles,
+            parameters.matching_orders,
+            parameters.reset_rates[:, None],
+        ],
+        axis=1,
+    )
+    values = np.concatenate(
+        [
+            np.broadcast_to(injection[:, None, :], (N, R, injection.shape[1])),
+            np.broadcast_to(reservoir[None, :, :], (N, R, reservoir.shape[1])),
+        ],
+        axis=2,
+    )
+    return values.reshape(N * R, values.shape[-1]), BalancedNumericProgramLayout(
+        z_cols=z_cols,
+        local_axis_cols=local_axis_cols,
+        local_angle_cols=local_angle_cols,
+        edge_axis_left_cols=edge_axis_left_cols,
+        edge_axis_right_cols=edge_axis_right_cols,
+        edge_angle_cols=edge_angle_cols,
+        matching_order_cols=matching_order_cols,
+        lam_col=lam_col,
+        matchings=cycle_matchings(program.topology),
+    )
+
+
 def make_runner(
     program: QuaRKProgram,
     *,
@@ -81,9 +164,16 @@ def make_runner(
 ):
     # Kept behind this boundary while the already-tested gate kernels are
     # The engine keeps the proven numerical recurrence behind the typed adapter.
-    from src.backends.nvidia.legacy_runner import ExactReservoirChannelRunner
+    if isinstance(program.reservoirs, BalancedReservoirParameters):
+        from src.backends.nvidia.balanced_runner import BalancedReservoirChannelRunner
 
-    return ExactReservoirChannelRunner(
+        runner_type = BalancedReservoirChannelRunner
+    else:
+        from src.backends.nvidia.legacy_runner import ExactReservoirChannelRunner
+
+        runner_type = ExactReservoirChannelRunner
+
+    return runner_type(
         legacy_config(program),
         state_dtype=state_dtype,
         chunk_size=chunk_size,

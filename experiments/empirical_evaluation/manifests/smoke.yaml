@@ -20,7 +20,7 @@ pre_run:
   classical_baseline_definition: smoke_frozen_leaky_reservoir_v1
   kernel_solver_tolerance: 1.0e-10
   floating_precision: float64_complex128
-  numerical_jitter_policy: fixed_1e-12
+  numerical_jitter_policy: spectral_clip_1e-12
   frozen_pool_tasks: [F_mem_1, F_mem_64, F_multi_8, F_sp_64, F_deg_16, F_C6]
   homogeneous_memory_slices: [F_multi_4, F_multi_8]
   fidelity_tasks: [F_multi_8]

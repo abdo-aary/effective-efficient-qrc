@@ -79,6 +79,14 @@ class PreRunConfig:
             raise ValueError("Exactly six unique frozen-pool task IDs are required.")
         if not self.homogeneous_memory_slices or not self.fidelity_tasks or not self.dependence_task:
             raise ValueError("Representative slices and fidelity/dependence tasks must be declared.")
+        if self.mixer_angle_distribution != "uniform_symmetric":
+            raise ValueError("The executable contract requires uniform_symmetric mixer angles.")
+        if self.floating_precision != "float64_complex128":
+            raise ValueError("The executable contract requires float64_complex128.")
+        if self.numerical_jitter_policy != "spectral_clip_1e-12":
+            raise ValueError(
+                "The executable contract permits spectral clipping only, not diagonal jitter."
+            )
         for name, value in (
             ("campaign_iii_finite_shot_m", self.campaign_iii_finite_shot_m),
             ("mixer_cost_match_m_edge", self.mixer_cost_match_m_edge),
